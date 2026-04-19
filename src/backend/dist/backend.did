@@ -1,0 +1,330 @@
+type _ImmutableObjectStorageRefillResult = 
+ record {
+   success: opt bool;
+   topped_up_amount: opt nat;
+ };
+type _ImmutableObjectStorageRefillInformation = record {
+                                                  proposed_top_up_amount:
+                                                   opt nat;};
+type _ImmutableObjectStorageCreateCertificateResult = 
+ record {
+   blob_hash: text;
+   method: text;
+ };
+type UserRole = 
+ variant {
+   admin;
+   guest;
+   user;
+ };
+type UserId = principal;
+type User = 
+ record {
+   branch: Branch;
+   department: Department;
+   email: text;
+   fullname: text;
+   id: principal;
+   imageFile: opt blob;
+   isActive: bool;
+   isArchived: bool;
+   isVerified: bool;
+   lastSeen: int;
+   phone: text;
+   position: text;
+   registrationTime: int;
+   role: Role;
+ };
+type UpdateStaffRequest = 
+ record {
+   branch: opt Branch;
+   department: opt Department;
+   position: opt text;
+   role: opt Role;
+ };
+type UpdateProfileRequest = 
+ record {
+   fullname: opt text;
+   imageFile: opt ExternalBlob;
+   phone: opt text;
+ };
+type UpdateFormInput = 
+ record {
+   category: FormCategory;
+   filename: text;
+   id: nat;
+   title: text;
+ };
+type UpdateAnnouncementInput = 
+ record {
+   allowDownload: bool;
+   body: text;
+   category: AnnouncementCategory;
+   id: nat;
+   imageFile: opt ExternalBlob;
+   title: text;
+ };
+type Timestamp = int;
+type StaffStats = 
+ record {
+   activeCount: nat;
+   archivedCount: nat;
+   branchesWithStaff: nat;
+ };
+type Role = 
+ variant {
+   GeneralStaff;
+   HRAdmin;
+   SuperAdmin;
+ };
+type RegisterRequest = 
+ record {
+   accessCode: opt text;
+   branch: Branch;
+   department: Department;
+   email: text;
+   fullname: text;
+   passwordHash: text;
+   phone: text;
+   position: text;
+ };
+type PollResult = 
+ record {
+   options: vec PollOptionResult;
+   pollId: nat;
+   question: text;
+ };
+type PollOptionResult = 
+ record {
+   optionId: nat;
+   optionText: text;
+   voteCount: nat;
+   votedByMe: bool;
+ };
+type Poll = 
+ record {
+   announcementId: nat;
+   id: nat;
+   question: text;
+ };
+type NotificationPublic = 
+ record {
+   createdAt: Timestamp;
+   id: nat;
+   isRead: bool;
+   link: opt text;
+   message: text;
+   title: text;
+   userId: text;
+ };
+type FormCategory = 
+ variant {
+   Finance;
+   General;
+   HR;
+   IT;
+   Operations;
+ };
+type Form = 
+ record {
+   category: FormCategory;
+   filename: text;
+   id: nat;
+   title: text;
+   uploadDate: Timestamp;
+ };
+type ExternalBlob = blob;
+type Department = 
+ variant {
+   Adeiso;
+   Admin;
+   Audit;
+   BankingOperations;
+   Bawjiase;
+   Compliance;
+   Credit;
+   EBanking;
+   HR;
+   HeadOffice;
+   IT;
+   KasoaMain;
+   KasoaNewMarket;
+   Microfinance;
+   Ofaakor;
+   Recovery;
+   Susu;
+ };
+type CreatePollInput = 
+ record {
+   announcementId: nat;
+   options: vec text;
+   question: text;
+ };
+type CreateNotificationInput = 
+ record {
+   link: opt text;
+   message: text;
+   title: text;
+   userId: UserId;
+ };
+type CreateFormInput = 
+ record {
+   category: FormCategory;
+   filename: text;
+   title: text;
+ };
+type CreateAnnouncementInput = 
+ record {
+   allowDownload: bool;
+   authorName: text;
+   body: text;
+   category: AnnouncementCategory;
+   imageFile: opt ExternalBlob;
+   title: text;
+ };
+type Branch = 
+ variant {
+   Adeiso;
+   Bawjiase;
+   HeadOffice;
+   KasoaMain;
+   KasoaNewMarket;
+   Ofaakor;
+ };
+type AuditLog = 
+ record {
+   action: text;
+   actorName: text;
+   id: nat;
+   ipAddress: text;
+   target: text;
+   timestamp: int;
+ };
+type AnnouncementWithPoll = 
+ record {
+   announcement: AnnouncementPublic;
+   poll: opt PollResult;
+ };
+type AnnouncementPublic = 
+ record {
+   allowDownload: bool;
+   authorId: text;
+   authorName: text;
+   body: text;
+   category: AnnouncementCategory;
+   datePosted: Timestamp;
+   id: nat;
+   imageFile: opt ExternalBlob;
+   isDeleted: bool;
+   title: text;
+ };
+type AnnouncementCategory = 
+ variant {
+   General;
+   HR;
+   IT;
+ };
+service : {
+  _immutableObjectStorageBlobsAreLive: (hashes: vec blob) -> (vec bool) query;
+  _immutableObjectStorageBlobsToDelete: () -> (vec blob) query;
+  _immutableObjectStorageConfirmBlobDeletion: (blobs: vec blob) -> ();
+  _immutableObjectStorageCreateCertificate: (blobHash: text) ->
+   (_ImmutableObjectStorageCreateCertificateResult);
+  _immutableObjectStorageRefillCashier: (refillInformation:
+   opt _ImmutableObjectStorageRefillInformation) ->
+   (_ImmutableObjectStorageRefillResult);
+  _immutableObjectStorageUpdateGatewayPrincipals: () -> ();
+  _initializeAccessControl: () -> ();
+  archiveStaff: (userId: principal) -> (variant {
+                                          err: text;
+                                          ok;
+                                        });
+  assignCallerUserRole: (user: principal, role: UserRole) -> ();
+  confirmPasswordReset: (token: text, newPasswordHash: text) ->
+   (variant {
+      err: text;
+      ok;
+    });
+  createAnnouncement: (input: CreateAnnouncementInput) ->
+   (AnnouncementPublic);
+  createForm: (input: CreateFormInput) -> (Form);
+  createNotification: (input: CreateNotificationInput) ->
+   (NotificationPublic);
+  createPoll: (input: CreatePollInput) -> (Poll);
+  deleteAnnouncement: (id: nat) -> (bool);
+  deleteAuditLog: (id: nat) -> (variant {
+                                  err: text;
+                                  ok;
+                                });
+  deleteAuditLogs: (ids: vec nat) -> (variant {
+                                        err: text;
+                                        ok;
+                                      });
+  deleteForm: (id: nat) -> (bool);
+  deleteStaff: (userId: principal) -> (variant {
+                                         err: text;
+                                         ok;
+                                       });
+  getActiveStaff: () -> (vec User) query;
+  getAnnouncements: () -> (vec AnnouncementWithPoll) query;
+  getArchivedStaff: () -> (vec User) query;
+  getAuditLogs: () -> (vec AuditLog) query;
+  getCallerUserRole: () -> (UserRole) query;
+  getForms: () -> (vec Form) query;
+  getMyProfile: () -> (opt User) query;
+  getNotifications: () -> (vec NotificationPublic) query;
+  getPollResult: (announcementId: nat) -> (opt PollResult) query;
+  getStaffMember: (userId: principal) -> (opt User) query;
+  getStaffStats: () -> (StaffStats) query;
+  getTrashedAnnouncements: () -> (vec AnnouncementPublic) query;
+  getUnreadNotificationCount: () -> (nat) query;
+  hideAnnouncement: (announcementId: nat) -> ();
+  isCallerAdmin: () -> (bool) query;
+  logAction: (actorName: text, action: text, target: text, ipAddress:
+   text) -> ();
+  logAnnouncementDownload: (announcementId: nat) -> ();
+  login: (email: text, passwordHash: text) -> (variant {
+                                                 err: text;
+                                                 ok: User;
+                                               });
+  logout: () -> ();
+  markAllNotificationsRead: () -> ();
+  markNotificationRead: (id: nat) -> (bool);
+  permanentDeleteAnnouncement: (id: nat) -> (bool);
+  register: (req: RegisterRequest) -> (variant {
+                                         err: text;
+                                         ok: User;
+                                       });
+  requestPasswordReset: (email: text) -> (variant {
+                                            err: text;
+                                            ok: text;
+                                          });
+  resendVerificationCode: (email: text) -> (variant {
+                                              err: text;
+                                              ok;
+                                            });
+  restoreAnnouncement: (id: nat) -> (bool);
+  restoreStaff: (userId: principal) -> (variant {
+                                          err: text;
+                                          ok;
+                                        });
+  updateAnnouncement: (input: UpdateAnnouncementInput) ->
+   (opt AnnouncementPublic);
+  updateForm: (input: UpdateFormInput) -> (opt Form);
+  updateLastSeen: () -> ();
+  updateMyProfile: (req: UpdateProfileRequest) ->
+   (variant {
+      err: text;
+      ok: User;
+    });
+  updateStaff: (userId: principal, req: UpdateStaffRequest) ->
+   (variant {
+      err: text;
+      ok: User;
+    });
+  verifyEmail: (email: text, code: text) -> (variant {
+                                               err: text;
+                                               ok;
+                                             });
+  vote: (pollId: nat, optionId: nat) -> (bool);
+}
