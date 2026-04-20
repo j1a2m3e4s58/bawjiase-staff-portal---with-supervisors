@@ -10,7 +10,10 @@ import type {
   AnnouncementWithPoll,
   ApiResult,
   AuditLog,
+<<<<<<< HEAD
   DashboardOverview,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   IncidentReport,
   Notification,
   PortalForm,
@@ -21,6 +24,7 @@ import type {
   User,
 } from "../types";
 
+<<<<<<< HEAD
 const OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com";
 const IT_ACCESS_CODE = "BARB-IT-2026";
 const HR_ACCESS_CODE = "BARB-HR-2026";
@@ -28,6 +32,8 @@ const MAIL_API_URL = (
   import.meta.env.VITE_MAIL_API_URL || "http://127.0.0.1:4185/api"
 ).replace(/\/$/, "");
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function ok<T>(value: T): ApiResult<T> {
@@ -38,6 +44,7 @@ function err<T>(message: string): ApiResult<T> {
   return { err: message };
 }
 
+<<<<<<< HEAD
 async function postMailApi(path: string, payload: Record<string, string>) {
   const response = await fetch(`${MAIL_API_URL}${path}`, {
     method: "POST",
@@ -60,6 +67,8 @@ async function sendPasswordResetEmail(email: string, resetUrl: string) {
   await postMailApi("/send-password-reset-email", { email, resetUrl });
 }
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── Auth / Registration ───────────────────────────────────────────────────────
 
 export interface RegisterRequest {
@@ -86,11 +95,15 @@ export interface UpdateProfileRequest {
 export interface UpdateStaffRequest extends UpdateProfileRequest {
   role?: string;
   isActive?: boolean;
+<<<<<<< HEAD
   accessCode?: string;
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 // Simulate backend calls — replace actor body when bindgen exposes methods
 
+<<<<<<< HEAD
 const IMPORTED_DB_TEMP_PASSWORD_HASH = "816495661"; // Barb@2026
 
 let _mockUsers: User[] = [
@@ -102,10 +115,22 @@ let _mockUsers: User[] = [
     role: "GeneralStaff",
     position: "Staff",
     department: "BANKING OPERATIONS",
+=======
+let _mockUsers: User[] = [
+  {
+    id: "mock-user-1",
+    fullname: "Sarah Mensah",
+    phone: "0244123456",
+    email: "sarah.mensah@bawjiasearearuralbank.com",
+    role: "SuperAdmin",
+    position: "Branch Manager",
+    department: "HEAD OFFICE",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     branch: "HEAD OFFICE",
     imageFile: null,
     isActive: true,
     isVerified: true,
+<<<<<<< HEAD
     lastSeen: BigInt(1772637593885),
     registrationTime: BigInt(0),
     isArchived: false,
@@ -220,11 +245,48 @@ let _mockUsers: User[] = [
     isVerified: true,
     lastSeen: BigInt(1769689048721),
     registrationTime: BigInt(0),
+=======
+    lastSeen: BigInt(Date.now()),
+    registrationTime: BigInt(Date.now() - 86400000),
+    isArchived: false,
+  },
+  {
+    id: "mock-user-2",
+    fullname: "Emmanuel Asante",
+    phone: "0201987654",
+    email: "e.asante@bawjiasearearuralbank.com",
+    role: "HRAdmin",
+    position: "HR Officer",
+    department: "HR",
+    branch: "BAWJIASE",
+    imageFile: null,
+    isActive: true,
+    isVerified: true,
+    lastSeen: BigInt(Date.now() - 3600000),
+    registrationTime: BigInt(Date.now() - 172800000),
+    isArchived: false,
+  },
+  {
+    id: "mock-user-3",
+    fullname: "Abena Ofori",
+    phone: "0557234789",
+    email: "a.ofori@bawjiasearearuralbank.com",
+    role: "GeneralStaff",
+    position: "Teller",
+    department: "BANKING OPERATIONS",
+    branch: "ADEISO",
+    imageFile: null,
+    isActive: true,
+    isVerified: true,
+    lastSeen: BigInt(Date.now() - 7200000),
+    registrationTime: BigInt(Date.now() - 259200000),
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     isArchived: false,
   },
 ];
 
 let _pendingVerification: Record<string, User> = {};
+<<<<<<< HEAD
 let _verificationCodes: Record<string, string> = {};
 let _passwordHashes: Record<string, string> = {
   "dquarshie@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
@@ -261,11 +323,14 @@ function roleFromDepartment(department: string): User["role"] {
 function isPortalStaff(user: User) {
   return !["MASTER ADMIN", "System Admin"].includes(user.fullname);
 }
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
 export async function apiRegister(
   req: RegisterRequest,
 ): Promise<ApiResult<User>> {
   await delay(600);
+<<<<<<< HEAD
   const email = normalizeEmail(req.email);
   if (!email.endsWith(OFFICIAL_EMAIL_DOMAIN)) {
     return err("Please use your official Bawjiase email address.");
@@ -286,6 +351,16 @@ export async function apiRegister(
     phone: req.phone,
     email,
     role: roleFromRegistration(req),
+=======
+  const existing = _mockUsers.find((u) => u.email === req.email);
+  if (existing) return err("Email already registered");
+  const newUser: User = {
+    id: `user-${Date.now()}`,
+    fullname: req.fullname,
+    phone: req.phone,
+    email: req.email,
+    role: req.role as User["role"],
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     position: req.position,
     department: req.department,
     branch: req.branch,
@@ -296,6 +371,7 @@ export async function apiRegister(
     registrationTime: BigInt(Date.now()),
     isArchived: false,
   };
+<<<<<<< HEAD
   _pendingVerification[email] = newUser;
   _verificationCodes[email] = verificationCodeFor(email);
   _passwordHashes[email] = req.passwordHash;
@@ -306,11 +382,15 @@ export async function apiRegister(
       error instanceof Error ? error.message : "Email could not be sent",
     );
   }
+=======
+  _pendingVerification[req.email] = newUser;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok(newUser);
 }
 
 export async function apiVerifyEmail(
   email: string,
+<<<<<<< HEAD
   code: string,
 ): Promise<ApiResult<null>> {
   await delay(400);
@@ -329,11 +409,22 @@ export async function apiVerifyEmail(
   }
   delete _pendingVerification[normalizedEmail];
   delete _verificationCodes[normalizedEmail];
+=======
+  _code: string,
+): Promise<ApiResult<null>> {
+  await delay(400);
+  const user = _pendingVerification[email];
+  if (!user) return err("No pending verification for this email");
+  user.isVerified = true;
+  _mockUsers.push(user);
+  delete _pendingVerification[email];
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok(null);
 }
 
 export async function apiResendCode(email: string): Promise<ApiResult<null>> {
   await delay(300);
+<<<<<<< HEAD
   const normalizedEmail = normalizeEmail(email);
   if (!_pendingVerification[normalizedEmail]) return err("Email not found");
   _verificationCodes[normalizedEmail] = verificationCodeFor(
@@ -349,11 +440,15 @@ export async function apiResendCode(email: string): Promise<ApiResult<null>> {
       error instanceof Error ? error.message : "Email could not be sent",
     );
   }
+=======
+  if (!_pendingVerification[email]) return err("Email not found");
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok(null);
 }
 
 export async function apiLogin(
   email: string,
+<<<<<<< HEAD
   passwordHash: string,
 ): Promise<ApiResult<User>> {
   await delay(700);
@@ -363,6 +458,13 @@ export async function apiLogin(
   }
   const user = _mockUsers.find(
     (u) => u.email === normalizedEmail && !u.isArchived && u.isActive,
+=======
+  _passwordHash: string,
+): Promise<ApiResult<User>> {
+  await delay(700);
+  const user = _mockUsers.find(
+    (u) => u.email === email && !u.isArchived && u.isActive,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   );
   if (!user) return err("Invalid email or password");
   if (!user.isVerified) return err("Email not verified");
@@ -378,6 +480,7 @@ export async function apiRequestPasswordReset(
   email: string,
 ): Promise<ApiResult<string>> {
   await delay(500);
+<<<<<<< HEAD
   const normalizedEmail = normalizeEmail(email);
   const user = _mockUsers.find((u) => u.email === normalizedEmail);
   if (!user) return err("Email not found");
@@ -389,10 +492,15 @@ export async function apiRequestPasswordReset(
       error instanceof Error ? error.message : "Email could not be sent",
     );
   }
+=======
+  const user = _mockUsers.find((u) => u.email === email);
+  if (!user) return err("Email not found");
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok("Password reset link sent to your email");
 }
 
 export async function apiConfirmPasswordReset(
+<<<<<<< HEAD
   token: string,
   newPasswordHash: string,
 ): Promise<ApiResult<null>> {
@@ -401,6 +509,12 @@ export async function apiConfirmPasswordReset(
   if (!_mockUsers.some((u) => u.email === email))
     return err("Invalid reset token");
   _passwordHashes[email] = newPasswordHash;
+=======
+  _token: string,
+  _newPasswordHash: string,
+): Promise<ApiResult<null>> {
+  await delay(500);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok(null);
 }
 
@@ -426,6 +540,7 @@ export async function apiUpdateMyProfile(
 
 export async function apiGetActiveStaff(): Promise<User[]> {
   await delay(400);
+<<<<<<< HEAD
   return _mockUsers
     .filter((u) => isPortalStaff(u) && !u.isArchived && u.isActive)
     .sort(
@@ -433,13 +548,20 @@ export async function apiGetActiveStaff(): Promise<User[]> {
         a.department.localeCompare(b.department) ||
         a.fullname.localeCompare(b.fullname),
     );
+=======
+  return _mockUsers.filter((u) => !u.isArchived && u.isActive);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetArchivedStaff(): Promise<User[]> {
   await delay(400);
+<<<<<<< HEAD
   return _mockUsers
     .filter((u) => isPortalStaff(u) && u.isArchived)
     .sort((a, b) => a.fullname.localeCompare(b.fullname));
+=======
+  return _mockUsers.filter((u) => u.isArchived);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetStaffMember(userId: string): Promise<User | null> {
@@ -454,6 +576,7 @@ export async function apiUpdateStaff(
   await delay(400);
   const idx = _mockUsers.findIndex((u) => u.id === userId);
   if (idx < 0) return err("Staff member not found");
+<<<<<<< HEAD
   const existing = _mockUsers[idx];
   if (
     req.department === "IT" &&
@@ -467,6 +590,9 @@ export async function apiUpdateStaff(
     ...req,
     role: req.department ? roleFromDepartment(req.department) : existing.role,
   } as User;
+=======
+  _mockUsers[idx] = { ..._mockUsers[idx], ...req } as User;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok(_mockUsers[idx]);
 }
 
@@ -476,7 +602,10 @@ export async function apiArchiveStaff(
   await delay(300);
   const user = _mockUsers.find((u) => u.id === userId);
   if (!user) return err("Staff member not found");
+<<<<<<< HEAD
   if (user.role === "SuperAdmin") return err("Cannot archive Super Admin.");
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   user.isArchived = true;
   user.isActive = false;
   return ok(null);
@@ -503,7 +632,11 @@ export async function apiDeleteStaff(userId: string): Promise<ApiResult<null>> {
 
 export async function apiGetStaffStats(): Promise<StaffStats> {
   await delay(300);
+<<<<<<< HEAD
   const active = _mockUsers.filter((u) => !u.isArchived && u.isActive);
+=======
+  const active = _mockUsers.filter((u) => !u.isArchived);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   const byDept: Record<string, number> = {};
   const byBranch: Record<string, number> = {};
   const byRole: Record<string, number> = {};
@@ -522,6 +655,7 @@ export async function apiGetStaffStats(): Promise<StaffStats> {
   };
 }
 
+<<<<<<< HEAD
 export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   await delay(350);
   const activeStaff = _mockUsers.filter(
@@ -601,6 +735,8 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   };
 }
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── Announcements ─────────────────────────────────────────────────────────────
 
 const _announcements: AnnouncementWithPoll[] = [
@@ -609,11 +745,16 @@ const _announcements: AnnouncementWithPoll[] = [
     title: "BARB Annual General Meeting 2026",
     content:
       "All staff are cordially invited to the Annual General Meeting scheduled for Friday, 24 April 2026 at the Head Office auditorium at 10:00 AM. Attendance is mandatory for all department heads.",
+<<<<<<< HEAD
     category: "HR",
     imageUrl: null,
     fileUrl: null,
     attachmentName: null,
     allowDownload: true,
+=======
+    imageUrl: null,
+    fileUrl: null,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     authorId: "mock-user-1",
     authorName: "Sarah Mensah",
     createdAt: BigInt(Date.now() - 86400000),
@@ -639,11 +780,16 @@ const _announcements: AnnouncementWithPoll[] = [
     title: "New Farm Loan Policy Effective May 2026",
     content:
       "The Credit Department has updated the farm loan policy. All loan officers should review the new guidelines before processing any farm loan applications from 1 May 2026.",
+<<<<<<< HEAD
     category: "HR",
     imageUrl: null,
     fileUrl: null,
     attachmentName: null,
     allowDownload: true,
+=======
+    imageUrl: null,
+    fileUrl: null,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     authorId: "mock-user-1",
     authorName: "Sarah Mensah",
     createdAt: BigInt(Date.now() - 172800000),
@@ -657,11 +803,16 @@ const _announcements: AnnouncementWithPoll[] = [
     title: "Mandatory IT Security Training — All Staff",
     content:
       "The IT Department has scheduled a mandatory cybersecurity awareness training for all staff. Sessions will run from Monday to Wednesday next week. Please confirm your preferred session slot.",
+<<<<<<< HEAD
     category: "IT",
     imageUrl: null,
     fileUrl: null,
     attachmentName: null,
     allowDownload: true,
+=======
+    imageUrl: null,
+    fileUrl: null,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     authorId: "mock-user-2",
     authorName: "Emmanuel Asante",
     createdAt: BigInt(Date.now() - 259200000),
@@ -672,6 +823,7 @@ const _announcements: AnnouncementWithPoll[] = [
   },
 ];
 
+<<<<<<< HEAD
 export interface CreateAnnouncementRequest {
   title: string;
   content: string;
@@ -697,10 +849,16 @@ export async function apiGetAnnouncements(): Promise<AnnouncementWithPoll[]> {
   return _announcements
     .filter((a) => !a.isTrashed)
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+=======
+export async function apiGetAnnouncements(): Promise<AnnouncementWithPoll[]> {
+  await delay(400);
+  return _announcements.filter((a) => !a.isTrashed);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetTrashedAnnouncements(): Promise<Announcement[]> {
   await delay(300);
+<<<<<<< HEAD
   return _announcements
     .filter((a) => a.isTrashed)
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
@@ -876,6 +1034,9 @@ export async function apiVoteAnnouncementPoll(
   announcement.poll.userVotedOptionId = optionId;
   _announcementVotes.set(voteKey, optionId);
   return ok({ ...announcement.poll, options: [...announcement.poll.options] });
+=======
+  return _announcements.filter((a) => a.isTrashed);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 // ── Notifications ─────────────────────────────────────────────────────────────
@@ -941,6 +1102,7 @@ export async function apiMarkAllNotificationsRead(): Promise<void> {
 
 let _forms: PortalForm[] = [
   {
+<<<<<<< HEAD
     id: 4,
     title: "OATH OF SECRECY",
     description: "",
@@ -1028,6 +1190,70 @@ let _forms: PortalForm[] = [
 ];
 
 let _formIdCounter = Math.max(..._forms.map((form) => form.id)) + 1;
+=======
+    id: 1,
+    title: "Staff Leave Application Form",
+    description: "Apply for annual, sick, or emergency leave",
+    fileUrl: "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs",
+    category: "HR",
+    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    createdAt: BigInt(Date.now() - 2592000000),
+    updatedAt: BigInt(Date.now() - 2592000000),
+  },
+  {
+    id: 2,
+    title: "IT Incident Report Form",
+    description: "Report hardware, software, or network issues",
+    fileUrl: "1FgT9nPqR7sKdLmVwXzBaYcEhNjUoIpQr",
+    category: "IT",
+    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    createdAt: BigInt(Date.now() - 1728000000),
+    updatedAt: BigInt(Date.now() - 1728000000),
+  },
+  {
+    id: 3,
+    title: "Profile Amendment Request",
+    description: "Request changes to your staff profile information",
+    fileUrl: "1KhJmNpQrStUvWxYzAbCdEfGhIjKlMnOp",
+    category: "HR",
+    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    createdAt: BigInt(Date.now() - 864000000),
+    updatedAt: BigInt(Date.now() - 864000000),
+  },
+  {
+    id: 4,
+    title: "Loan Application — Staff Welfare",
+    description: "Apply for a staff welfare loan through the credit department",
+    fileUrl: "https://forms.office.com/r/BarbStaffWelfareForm",
+    category: "Finance",
+    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    createdAt: BigInt(Date.now() - 432000000),
+    updatedAt: BigInt(Date.now() - 432000000),
+  },
+  {
+    id: 5,
+    title: "Branch Operations Daily Report",
+    description: "End-of-day operations summary for branch managers",
+    fileUrl: "1PqRsTuVwXyZaBcDeFgHiJkLmNoPqRsTu",
+    category: "Operations",
+    visibleTo: ["HRAdmin", "SuperAdmin"],
+    createdAt: BigInt(Date.now() - 172800000),
+    updatedAt: BigInt(Date.now() - 172800000),
+  },
+  {
+    id: 6,
+    title: "Staff Appraisal Form — Q2 2026",
+    description: "Quarterly performance appraisal submission for all staff",
+    fileUrl: "1VwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZa",
+    category: "General",
+    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    createdAt: BigInt(Date.now() - 86400000),
+    updatedAt: BigInt(Date.now() - 86400000),
+  },
+];
+
+let _formIdCounter = _forms.length + 1;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
 export interface CreateFormRequest {
   title: string;
@@ -1035,6 +1261,7 @@ export interface CreateFormRequest {
   fileUrl: string;
   category: string;
   visibleTo: PortalForm["visibleTo"];
+<<<<<<< HEAD
   visibility?: PortalForm["visibility"];
   department?: string | null;
 }
@@ -1091,6 +1318,13 @@ export async function apiGetForms(user?: User | null): Promise<PortalForm[]> {
       (a, b) =>
         a.category.localeCompare(b.category) || a.title.localeCompare(b.title),
     );
+=======
+}
+
+export async function apiGetForms(): Promise<PortalForm[]> {
+  await delay(350);
+  return [..._forms].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiCreateForm(
@@ -1101,12 +1335,18 @@ export async function apiCreateForm(
     id: _formIdCounter++,
     title: req.title,
     description: req.description,
+<<<<<<< HEAD
     fileUrl: apiExtractDriveFileId(req.fileUrl),
     category: req.category,
     visibleTo: req.visibleTo,
     visibility: req.visibility ?? "General",
     department:
       req.visibility === "Department" ? (req.department ?? null) : null,
+=======
+    fileUrl: req.fileUrl,
+    category: req.category,
+    visibleTo: req.visibleTo,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     createdAt: BigInt(Date.now()),
     updatedAt: BigInt(Date.now()),
   };
@@ -1121,6 +1361,7 @@ export async function apiUpdateForm(
   await delay(350);
   const idx = _forms.findIndex((f) => f.id === id);
   if (idx < 0) return err("Form not found");
+<<<<<<< HEAD
   _forms[idx] = {
     ..._forms[idx],
     ...req,
@@ -1135,6 +1376,9 @@ export async function apiUpdateForm(
           : _forms[idx].department,
     updatedAt: BigInt(Date.now()),
   };
+=======
+  _forms[idx] = { ..._forms[idx], ...req, updatedAt: BigInt(Date.now()) };
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return ok(_forms[idx]);
 }
 
@@ -1205,6 +1449,7 @@ export interface AdminTrainingOverview {
     openedCount: number;
     openedPct: number;
     isMandatory: boolean;
+<<<<<<< HEAD
     incompleteUsers: string[];
   }[];
 }
@@ -1335,6 +1580,11 @@ function eligibleUsersForDocument(doc: TrainingDocument) {
   );
 }
 
+=======
+  }[];
+}
+
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const _trainingVideos: TrainingVideo[] = [
   {
     id: 1,
@@ -1346,6 +1596,7 @@ const _trainingVideos: TrainingVideo[] = [
     duration: 1800,
     category: "IT Security",
     visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -1353,6 +1604,8 @@ const _trainingVideos: TrainingVideo[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Emmanuel Asante",
     uploadedAt: BigInt(Date.now() - 604800000),
     viewCount: 42,
@@ -1368,6 +1621,7 @@ const _trainingVideos: TrainingVideo[] = [
     duration: 2700,
     category: "Compliance",
     visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -1375,6 +1629,8 @@ const _trainingVideos: TrainingVideo[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1KhJmNpQrStUvWxYzAbCdEfGhIjKlMnOp5",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Sarah Mensah",
     uploadedAt: BigInt(Date.now() - 1209600000),
     viewCount: 67,
@@ -1390,6 +1646,7 @@ const _trainingVideos: TrainingVideo[] = [
     duration: 3600,
     category: "Banking Operations",
     visibleTo: ["HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "Department",
     department: "CREDIT",
     isMandatory: true,
@@ -1397,6 +1654,8 @@ const _trainingVideos: TrainingVideo[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1PqRsTuVwXyZaBcDeFgHiJkLmNoPqRsTu2",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Emmanuel Asante",
     uploadedAt: BigInt(Date.now() - 2592000000),
     viewCount: 18,
@@ -1407,11 +1666,16 @@ const _trainingVideos: TrainingVideo[] = [
     title: "Customer Service Excellence — BARB Standards",
     description:
       "Delivering world-class service at every touchpoint: greeting, problem resolution, escalation, and feedback management.",
+<<<<<<< HEAD
     videoUrl: "DRIVE:1CuSt0MerServ1ceExceL1ence2026",
+=======
+    videoUrl: "LOCAL:customer_service_excellence.mp4",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     thumbnailUrl: null,
     duration: 2100,
     category: "Customer Service",
     visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "General",
     department: null,
     isMandatory: false,
@@ -1419,6 +1683,8 @@ const _trainingVideos: TrainingVideo[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1CuSt0MerServ1ceExceL1ence2026",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Sarah Mensah",
     uploadedAt: BigInt(Date.now() - 432000000),
     viewCount: 55,
@@ -1436,6 +1702,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileType: "application/pdf",
     category: "HR",
     visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -1443,6 +1710,8 @@ const _trainingDocuments: TrainingDocument[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1VwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZaB",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Emmanuel Asante",
     uploadedAt: BigInt(Date.now() - 2592000000),
     downloadCount: 89,
@@ -1457,6 +1726,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileType: "application/pdf",
     category: "Compliance",
     visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -1464,6 +1734,8 @@ const _trainingDocuments: TrainingDocument[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfG",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Sarah Mensah",
     uploadedAt: BigInt(Date.now() - 1209600000),
     downloadCount: 72,
@@ -1479,6 +1751,7 @@ const _trainingDocuments: TrainingDocument[] = [
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     category: "Operations",
     visibleTo: ["HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "Department",
     department: "BANKING OPERATIONS",
     isMandatory: true,
@@ -1486,6 +1759,8 @@ const _trainingDocuments: TrainingDocument[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1HiJkLmNoPqRsTuVwXyZaBcDeFgHiJkLmN",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Sarah Mensah",
     uploadedAt: BigInt(Date.now() - 864000000),
     downloadCount: 23,
@@ -1500,6 +1775,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileType: "application/pdf",
     category: "IT Security",
     visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -1507,6 +1783,8 @@ const _trainingDocuments: TrainingDocument[] = [
     storageType: "Drive",
     driveRef: "DRIVE:1OpQrStUvWxYzAbCdEfGhIjKlMnOpQrStU",
     localFilename: null,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedBy: "Emmanuel Asante",
     uploadedAt: BigInt(Date.now() - 172800000),
     downloadCount: 61,
@@ -1515,6 +1793,7 @@ const _trainingDocuments: TrainingDocument[] = [
 ];
 
 const _videoProgress: Record<string, VideoProgress> = {};
+<<<<<<< HEAD
 const _documentOpens: Record<string, bigint> = {};
 let _videoIdCounter = _trainingVideos.length + 1;
 let _docIdCounter = _trainingDocuments.length + 1;
@@ -1565,17 +1844,31 @@ export async function apiGetTrainingVideos(): Promise<TrainingVideo[]> {
     .filter((video) => !video.isArchived)
     .filter((video) => canUserAccessVideo(video, user))
     .sort((a, b) => Number(b.uploadedAt) - Number(a.uploadedAt));
+=======
+let _videoIdCounter = _trainingVideos.length + 1;
+let _docIdCounter = _trainingDocuments.length + 1;
+
+export async function apiGetTrainingVideos(): Promise<TrainingVideo[]> {
+  await delay(400);
+  return [..._trainingVideos].sort(
+    (a, b) => Number(b.uploadedAt) - Number(a.uploadedAt),
+  );
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetTrainingVideo(
   id: number,
 ): Promise<TrainingVideo | null> {
   await delay(200);
+<<<<<<< HEAD
   const user = currentTrainingUser();
   const video =
     _trainingVideos.find((item) => item.id === id && !item.isArchived) ?? null;
   if (!video || !canUserAccessVideo(video, user)) return null;
   return video;
+=======
+  return _trainingVideos.find((v) => v.id === id) ?? null;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiUploadTrainingVideo(
@@ -1597,6 +1890,7 @@ export async function apiUploadTrainingVideo(
       req.visibility === "General"
         ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
         : ["HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: req.visibility,
     department:
       req.visibility === "Department" ? (req.department ?? null) : null,
@@ -1607,6 +1901,9 @@ export async function apiUploadTrainingVideo(
     localFilename:
       req.storageType === "Local" ? req.videoUrl.replace(/^LOCAL:/, "") : null,
     uploadedBy: currentTrainingUser()?.fullname ?? "Current User",
+=======
+    uploadedBy: "Current User",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedAt: BigInt(Date.now()),
     viewCount: 0,
     isArchived: false,
@@ -1620,33 +1917,45 @@ export async function apiUpdateTrainingProgress(
   progressPercent: number,
 ): Promise<void> {
   await delay(100);
+<<<<<<< HEAD
   const user = currentTrainingUser();
   if (!user) return;
   const key = videoProgressKey(user.id, videoId);
+=======
+  const key = `user-mock-${videoId}`;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   _videoProgress[key] = {
     videoId,
     progressPercent,
     isComplete: progressPercent >= 98,
     lastWatched: BigInt(Date.now()),
   };
+<<<<<<< HEAD
   const watchedCount = Object.values(_videoProgress).filter(
     (item) => item.videoId === videoId && item.progressPercent > 0,
   ).length;
   const video = _trainingVideos.find((item) => item.id === videoId);
   if (video) video.viewCount = watchedCount;
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetMyVideoProgress(
   videoId: number,
 ): Promise<VideoProgress | null> {
   await delay(150);
+<<<<<<< HEAD
   const user = currentTrainingUser();
   if (!user) return null;
   return _videoProgress[videoProgressKey(user.id, videoId)] ?? null;
+=======
+  return _videoProgress[`user-mock-${videoId}`] ?? null;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetVideoWatchStats(): Promise<VideoWatchStat[]> {
   await delay(300);
+<<<<<<< HEAD
   return _trainingVideos
     .filter((video) => !video.isArchived)
     .map((video) => ({
@@ -1659,27 +1968,45 @@ export async function apiGetVideoWatchStats(): Promise<VideoWatchStat[]> {
         (item) => item.videoId === video.id && item.isComplete,
       ).length,
     }));
+=======
+  return _trainingVideos.map((v) => ({
+    videoId: v.id,
+    title: v.title,
+    totalWatched: v.viewCount,
+    completedCount: Math.floor(v.viewCount * 0.7),
+  }));
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetTrainingDocuments(): Promise<TrainingDocument[]> {
   await delay(400);
+<<<<<<< HEAD
   const user = currentTrainingUser();
   return _trainingDocuments
     .filter((doc) => !doc.isArchived)
     .filter((doc) => canUserAccessDocument(doc, user))
     .sort((a, b) => Number(b.uploadedAt) - Number(a.uploadedAt));
+=======
+  return [..._trainingDocuments].sort(
+    (a, b) => Number(b.uploadedAt) - Number(a.uploadedAt),
+  );
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetTrainingDocument(
   id: number,
 ): Promise<TrainingDocument | null> {
   await delay(200);
+<<<<<<< HEAD
   const user = currentTrainingUser();
   const doc =
     _trainingDocuments.find((item) => item.id === id && !item.isArchived) ??
     null;
   if (!doc || !canUserAccessDocument(doc, user)) return null;
   return doc;
+=======
+  return _trainingDocuments.find((d) => d.id === id) ?? null;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiUploadTrainingDocument(
@@ -1700,6 +2027,7 @@ export async function apiUploadTrainingDocument(
       req.visibility === "General"
         ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
         : ["HRAdmin", "SuperAdmin"],
+<<<<<<< HEAD
     visibility: req.visibility,
     department:
       req.visibility === "Department" ? (req.department ?? null) : null,
@@ -1710,6 +2038,9 @@ export async function apiUploadTrainingDocument(
     localFilename:
       req.storageType === "Local" ? req.fileUrl.replace(/^LOCAL:/, "") : null,
     uploadedBy: currentTrainingUser()?.fullname ?? "Current User",
+=======
+    uploadedBy: "Current User",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     uploadedAt: BigInt(Date.now()),
     downloadCount: 0,
     isArchived: false,
@@ -1720,6 +2051,7 @@ export async function apiUploadTrainingDocument(
 
 export async function apiMarkDocumentOpened(id: number): Promise<void> {
   await delay(100);
+<<<<<<< HEAD
   const user = currentTrainingUser();
   if (!user) return;
   _documentOpens[documentOpenKey(user.id, id)] = BigInt(Date.now());
@@ -1729,12 +2061,17 @@ export async function apiMarkDocumentOpened(id: number): Promise<void> {
       key.endsWith(`-${id}`),
     ).length;
   }
+=======
+  const doc = _trainingDocuments.find((d) => d.id === id);
+  if (doc) doc.downloadCount += 1;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetDocumentViewStats(): Promise<
   { docId: number; title: string; openedCount: number }[]
 > {
   await delay(300);
+<<<<<<< HEAD
   return _trainingDocuments
     .filter((doc) => !doc.isArchived)
     .map((doc) => ({
@@ -1757,17 +2094,29 @@ export async function apiGetMyDocumentOpenState(
     isOpened: openedAt !== null,
     openedAt,
   };
+=======
+  return _trainingDocuments.map((d) => ({
+    docId: d.id,
+    title: d.title,
+    openedCount: d.downloadCount,
+  }));
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOverview> {
   await delay(500);
+<<<<<<< HEAD
   const totalStaff = getPortalActiveUsers().length;
+=======
+  const totalStaff = _mockUsers.filter((u) => !u.isArchived).length;
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   return {
     totalVideos: _trainingVideos.filter((v) => !v.isArchived).length,
     totalDocuments: _trainingDocuments.filter((d) => !d.isArchived).length,
     totalStaff,
     videoStats: _trainingVideos
       .filter((v) => !v.isArchived)
+<<<<<<< HEAD
       .map((v) => {
         const eligibleUsers = eligibleUsersForVideo(v);
         const completedUserIds = new Set(
@@ -1823,6 +2172,38 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
             .map((user) => user.fullname),
         };
       }),
+=======
+      .map((v) => ({
+        id: v.id,
+        title: v.title,
+        eligibleCount:
+          v.visibleTo.length >= 3 ? totalStaff : Math.floor(totalStaff * 0.5),
+        watchedCount: v.viewCount,
+        completionPct:
+          v.viewCount > 0 ? Math.min((v.viewCount / totalStaff) * 100, 100) : 0,
+        isMandatory: v.visibleTo.length >= 3,
+        incompleteUsers:
+          v.viewCount < totalStaff
+            ? _mockUsers
+                .slice(0, Math.max(0, totalStaff - v.viewCount))
+                .map((u) => u.fullname)
+            : [],
+      })),
+    docStats: _trainingDocuments
+      .filter((d) => !d.isArchived)
+      .map((d) => ({
+        id: d.id,
+        title: d.title,
+        eligibleCount:
+          d.visibleTo.length >= 3 ? totalStaff : Math.floor(totalStaff * 0.5),
+        openedCount: d.downloadCount,
+        openedPct:
+          d.downloadCount > 0
+            ? Math.min((d.downloadCount / totalStaff) * 100, 100)
+            : 0,
+        isMandatory: d.visibleTo.length >= 3,
+      })),
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   };
 }
 
@@ -1846,6 +2227,7 @@ export async function apiDeleteTrainingVideo(
   return ok(null);
 }
 
+<<<<<<< HEAD
 export async function apiArchiveTrainingDocument(
   id: number,
 ): Promise<ApiResult<null>> {
@@ -1866,6 +2248,8 @@ export async function apiDeleteTrainingDocument(
   return ok(null);
 }
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 export async function apiSendVideoTrainingReminder(
   _videoId: number,
 ): Promise<ApiResult<null>> {
@@ -1899,6 +2283,7 @@ const _incidents: IncidentReport[] = [
   {
     id: 1,
     reporterId: "mock-user-3",
+<<<<<<< HEAD
     reporterName: "Nathaniel Oglie Narh",
     agency: "ADEISO",
     contact: "0552571081",
@@ -1927,14 +2312,44 @@ const _incidents: IncidentReport[] = [
     resolution: "Resolved by IT Admin.",
     createdAt: BigInt(1768867200000),
     updatedAt: BigInt(1768870800000),
+=======
+    reporterName: "Abena Ofori",
+    subject: "T24 Core Banking",
+    description:
+      "Unable to process savings withdrawals — T24 module throwing error code 504 during peak hours. Affects all tellers at ADEISO branch.",
+    priority: "high",
+    status: "open",
+    assignedTo: null,
+    resolution: null,
+    createdAt: BigInt(Date.now() - 7200000),
+    updatedAt: BigInt(Date.now() - 7200000),
+  },
+  {
+    id: 2,
+    reporterId: "mock-user-2",
+    reporterName: "Emmanuel Asante",
+    subject: "Email/Password",
+    description:
+      "Staff member locked out of corporate email. Password reset not functioning via standard portal.",
+    priority: "medium",
+    status: "resolved",
+    assignedTo: "mock-user-1",
+    resolution:
+      "Password reset completed via admin panel. User regained access.",
+    createdAt: BigInt(Date.now() - 172800000),
+    updatedAt: BigInt(Date.now() - 86400000),
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   },
   {
     id: 3,
     reporterId: "mock-user-3",
     reporterName: "Abena Ofori",
+<<<<<<< HEAD
     agency: "ADEISO",
     contact: "0557234789",
     issueCategory: "NETWORK",
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     subject: "Network",
     description:
       "Intermittent internet connectivity at ADEISO branch affecting online banking transactions.",
@@ -1952,12 +2367,15 @@ const _amendments: ProfileAmendment[] = [
     id: 1,
     requesterId: "mock-user-3",
     requesterName: "Abena Ofori",
+<<<<<<< HEAD
     fullname: "Abena Ofori",
     phone: "0557234789",
     t24Username: "B01.AOFORI",
     agency: "KASOA MAIN",
     requestType: "DEPARTMENTAL CHANGE",
     deptChange: "BANKING OPERATIONS -> E-BANKING",
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     field: "Department Change",
     currentValue: "BANKING OPERATIONS",
     requestedValue: "E-BANKING",
@@ -1972,19 +2390,28 @@ const _amendments: ProfileAmendment[] = [
     id: 2,
     requesterId: "mock-user-2",
     requesterName: "Emmanuel Asante",
+<<<<<<< HEAD
     fullname: "Emmanuel Asante",
     phone: "0201987654",
     t24Username: "HO1.EASANTE",
     agency: "HEAD OFFICE",
     requestType: "ROLE CHANGE",
     newRole: "Senior HR Officer",
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     field: "T24 Amendment",
     currentValue: "HR Officer",
     requestedValue: "Senior HR Officer",
     reason: "Promotion effective April 2026",
+<<<<<<< HEAD
     status: "resolved",
     reviewedBy: "mock-user-1",
     reviewNote: "Resolved by IT Admin.",
+=======
+    status: "approved",
+    reviewedBy: "mock-user-1",
+    reviewNote: "Approved. T24 role updated.",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     createdAt: BigInt(Date.now() - 259200000),
     updatedAt: BigInt(Date.now() - 172800000),
   },
@@ -2002,9 +2429,12 @@ export async function apiSubmitIncidentReport(
     id: _incidentIdCounter++,
     reporterId,
     reporterName: req.reporterName,
+<<<<<<< HEAD
     agency: req.agency,
     contact: req.contact,
     issueCategory: req.issueCategory,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     subject: req.issueCategory,
     description: req.description,
     priority: "medium",
@@ -2028,6 +2458,7 @@ export async function apiSubmitProfileAmendment(
     id: _amendmentIdCounter++,
     requesterId,
     requesterName,
+<<<<<<< HEAD
     fullname: req.fullname,
     phone: req.phone,
     t24Username: req.t24Username,
@@ -2036,6 +2467,8 @@ export async function apiSubmitProfileAmendment(
     newRole: req.newRole,
     deptChange: req.deptChange,
     transferLocation: req.transferLocation,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     field: req.requestType,
     currentValue: "",
     requestedValue: req.additionalDetails ?? "",
@@ -2099,14 +2532,22 @@ export async function apiResolveIncidentReport(
 
 export async function apiResolveProfileAmendment(
   id: number,
+<<<<<<< HEAD
   _approved: boolean,
+=======
+  approved: boolean,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   note: string,
   reviewerId: string,
 ): Promise<ApiResult<null>> {
   await delay(300);
   const amendment = _amendments.find((a) => a.id === id);
   if (!amendment) return err("Amendment not found");
+<<<<<<< HEAD
   amendment.status = "resolved";
+=======
+  amendment.status = approved ? "approved" : "rejected";
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   amendment.reviewedBy = reviewerId;
   amendment.reviewNote = note;
   amendment.updatedAt = BigInt(Date.now());
@@ -2138,6 +2579,7 @@ export async function apiDeleteResolvedAmendments(
 export function apiExportIncidentsCsv(incidents: IncidentReport[]): string {
   const headers = [
     "ID",
+<<<<<<< HEAD
     "Date",
     "Agency",
     "Reporter",
@@ -2155,6 +2597,23 @@ export function apiExportIncidentsCsv(incidents: IncidentReport[]): string {
     i.issueCategory ?? i.subject,
     `"${i.description.replace(/"/g, '""')}"`,
     i.status,
+=======
+    "Reporter",
+    "Category",
+    "Description",
+    "Status",
+    "Priority",
+    "Date",
+  ];
+  const rows = incidents.map((i) => [
+    String(i.id),
+    i.reporterName,
+    i.subject,
+    `"${i.description.replace(/"/g, '""')}"`,
+    i.status,
+    i.priority,
+    new Date(Number(i.createdAt)).toLocaleDateString(),
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   ]);
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }
@@ -2162,6 +2621,7 @@ export function apiExportIncidentsCsv(incidents: IncidentReport[]): string {
 export function apiExportAmendmentsCsv(amendments: ProfileAmendment[]): string {
   const headers = [
     "ID",
+<<<<<<< HEAD
     "Date",
     "Agency",
     "Name",
@@ -2181,6 +2641,23 @@ export function apiExportAmendmentsCsv(amendments: ProfileAmendment[]): string {
     a.requestType ?? a.field,
     `"${`${a.newRole ?? ""} ${a.deptChange ?? ""} ${a.transferLocation ?? ""}`.trim().replace(/"/g, '""')}"`,
     a.status,
+=======
+    "Requester",
+    "Field",
+    "Current Value",
+    "Requested Value",
+    "Status",
+    "Date",
+  ];
+  const rows = amendments.map((a) => [
+    String(a.id),
+    a.requesterName,
+    a.field,
+    `"${a.currentValue.replace(/"/g, '""')}"`,
+    `"${a.requestedValue.replace(/"/g, '""')}"`,
+    a.status,
+    new Date(Number(a.createdAt)).toLocaleDateString(),
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   ]);
   return [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
 }

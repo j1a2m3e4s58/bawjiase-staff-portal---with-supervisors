@@ -17,7 +17,10 @@ import { useAuth } from "@/store/auth";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   Bell,
+<<<<<<< HEAD
   BookOpen,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   ChevronRight,
   ClipboardList,
   FileText,
@@ -34,8 +37,11 @@ import {
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
+<<<<<<< HEAD
 const BRAND_LOGO = "/assets/images/bcb-logo.png";
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── Nav Config ─────────────────────────────────────────────────────────────────
 
 interface NavItem {
@@ -103,13 +109,20 @@ const NAV_ITEMS: NavItem[] = [
 
 function BARBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const sizes = {
+<<<<<<< HEAD
     sm: "h-8 w-8",
     md: "h-12 w-12",
     lg: "h-16 w-16",
+=======
+    sm: "w-8 h-8 text-xs",
+    md: "w-12 h-12 text-sm",
+    lg: "w-16 h-16 text-base",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   };
   return (
     <div
       className={cn(
+<<<<<<< HEAD
         "overflow-hidden rounded-full border-2 border-primary/25 bg-white ring-2 ring-primary/10",
         sizes[size],
       )}
@@ -119,6 +132,14 @@ function BARBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
         alt="Bawjiase Community Bank logo"
         className="h-full w-full object-cover"
       />
+=======
+        "rounded-full flex items-center justify-center font-display font-bold",
+        "bg-primary/20 border-2 border-primary/40 text-primary ring-2 ring-primary/10",
+        sizes[size],
+      )}
+    >
+      B
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     </div>
   );
 }
@@ -279,8 +300,11 @@ function Sidebar({ collapsed = false }: SidebarProps) {
 
 // ── Mobile Bottom Nav ──────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 void Sidebar;
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 function MobileBottomNav() {
   const location = useLocation();
   const { user } = useAuth();
@@ -513,6 +537,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
 // ── AppShell ───────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 function DesktopTopNav() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -649,6 +674,8 @@ function DesktopTopNav() {
   );
 }
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 interface AppShellProps {
   children: ReactNode;
 }
@@ -659,6 +686,12 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-background flex">
+<<<<<<< HEAD
+=======
+      {/* Desktop Sidebar */}
+      {!isMobile && <Sidebar />}
+
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       {/* Mobile Drawer */}
       {isMobile && (
         <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
@@ -667,7 +700,17 @@ export function AppShell({ children }: AppShellProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {isMobile && <TopBar onMenuClick={() => setDrawerOpen(true)} />}
+<<<<<<< HEAD
         {!isMobile && <DesktopTopNav />}
+=======
+        {/* Desktop top notification bar */}
+        {!isMobile && (
+          <header className="sticky top-0 z-40 glass-card border-b border-border/30 flex items-center justify-end px-6 h-12 gap-2">
+            <NotificationBell />
+            <ThemeToggle />
+          </header>
+        )}
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         <main
           className={cn(
             "flex-1 overflow-y-auto p-4 md:p-6",

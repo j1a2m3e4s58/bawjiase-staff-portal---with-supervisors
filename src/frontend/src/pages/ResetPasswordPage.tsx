@@ -2,7 +2,10 @@ import { AuthShell } from "@/components/AuthShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+<<<<<<< HEAD
 import { hashPassword } from "@/lib/auth-crypto";
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 import { apiConfirmPasswordReset } from "@/lib/backend-client";
 import { isOk } from "@/types";
 import { Link, useNavigate, useSearch } from "@tanstack/react-router";
@@ -10,6 +13,17 @@ import { CheckCircle2, Eye, EyeOff, Loader2, Lock } from "lucide-react";
 import { useState } from "react";
 import { toast } from "sonner";
 
+<<<<<<< HEAD
+=======
+function simpleHash(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) {
+    h = (Math.imul(31, h) + s.charCodeAt(i)) | 0;
+  }
+  return String(Math.abs(h));
+}
+
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 export default function ResetPasswordPage() {
   const navigate = useNavigate();
   const search = useSearch({ strict: false }) as { token?: string };
@@ -39,7 +53,11 @@ export default function ResetPasswordPage() {
     try {
       const result = await apiConfirmPasswordReset(
         token,
+<<<<<<< HEAD
         hashPassword(newPassword),
+=======
+        simpleHash(newPassword),
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       );
       if (isOk(result)) {
         setDone(true);

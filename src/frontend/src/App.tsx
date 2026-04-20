@@ -18,9 +18,15 @@ const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
 const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
 const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
 const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
+<<<<<<< HEAD
 const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
 const AnnouncementsPage = lazy(() => import("@/pages/AnnouncementsPage"));
 const NewsPortalPage = lazy(() => import("@/pages/NewsPortalPage"));
+=======
+const PlaceholderPage = lazy(() => import("@/pages/PlaceholderPage"));
+const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
+const AnnouncementsPage = lazy(() => import("@/pages/AnnouncementsPage"));
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const AnnouncementsTrashPage = lazy(
   () => import("@/pages/AnnouncementsTrashPage"),
 );
@@ -31,7 +37,10 @@ const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
 const TrainingHubPage = lazy(() => import("@/pages/TrainingHubPage"));
 const TrainingVideoPage = lazy(() => import("@/pages/TrainingVideoPage"));
+<<<<<<< HEAD
 const TrainingDocumentPage = lazy(() => import("@/pages/TrainingDocumentPage"));
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const TrainingUploadVideoPage = lazy(
   () => import("@/pages/TrainingUploadVideoPage"),
 );
@@ -41,7 +50,10 @@ const TrainingUploadDocumentPage = lazy(
 const TrainingAdminPage = lazy(() => import("@/pages/TrainingAdminPage"));
 const SupportPage = lazy(() => import("@/pages/SupportPage"));
 const SupportAdminPage = lazy(() => import("@/pages/SupportAdminPage"));
+<<<<<<< HEAD
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
 // ── Loading Fallback ───────────────────────────────────────────────────────────
 
@@ -158,12 +170,15 @@ const announcementsRoute = createRoute({
   component: AnnouncementsPage,
 });
 
+<<<<<<< HEAD
 const newsPortalRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/news-portal",
   component: NewsPortalPage,
 });
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const announcementsTrashRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/announcements/trash",
@@ -194,12 +209,15 @@ const trainingVideoRoute = createRoute({
   component: TrainingVideoPage,
 });
 
+<<<<<<< HEAD
 const trainingDocumentRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/training/document/$id",
   component: TrainingDocumentPage,
 });
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const trainingUploadVideoRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/training/upload-video",
@@ -236,6 +254,7 @@ const supportRoute = createRoute({
   component: SupportPage,
 });
 
+<<<<<<< HEAD
 const supportIncidentRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/support/incident",
@@ -248,6 +267,8 @@ const supportAmendmentRoute = createRoute({
   component: SupportPage,
 });
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const supportAdminRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/support/admin",
@@ -257,7 +278,11 @@ const supportAdminRoute = createRoute({
 const auditRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/audit",
+<<<<<<< HEAD
   component: AuditLogsPage,
+=======
+  component: PlaceholderPage,
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 });
 
 const profileRoute = createRoute({
@@ -279,21 +304,30 @@ const routeTree = rootRoute.addChildren([
   protectedRoute.addChildren([
     dashboardRoute,
     announcementsRoute,
+<<<<<<< HEAD
     newsPortalRoute,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     announcementsTrashRoute,
     directoryRoute,
     directoryPastRoute,
     trainingRoute,
     trainingVideoRoute,
+<<<<<<< HEAD
     trainingDocumentRoute,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     trainingUploadVideoRoute,
     trainingUploadDocumentRoute,
     trainingAdminRoute,
     formsRoute,
     notificationsRoute,
     supportRoute,
+<<<<<<< HEAD
     supportIncidentRoute,
     supportAmendmentRoute,
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     supportAdminRoute,
     auditRoute,
     profileRoute,

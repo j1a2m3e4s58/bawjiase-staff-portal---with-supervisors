@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+<<<<<<< HEAD
 import {
   apiCreateAnnouncement,
   apiDismissAnnouncement,
@@ -43,13 +44,26 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+=======
+import { apiGetAnnouncements, apiLogAction } from "@/lib/backend-client";
+import type { AnnouncementWithPoll, PollOption } from "@/types";
+import { Link } from "@tanstack/react-router";
+import { Megaphone, Pencil, Plus, Search, Trash2, X } from "lucide-react";
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
 function getAnnouncementCategory(announcement: AnnouncementWithPoll): string {
   return announcement.category || "General";
+=======
+function getCategoryFromAuthorDept(authorId: string): string {
+  if (authorId.includes("user-2")) return "HR";
+  if (authorId.includes("user-3")) return "IT";
+  return "General";
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 }
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -93,6 +107,7 @@ function PollWidget({
   poll: NonNullable<AnnouncementWithPoll["poll"]>;
   announcementId: number;
 }) {
+<<<<<<< HEAD
   const { user } = useAuth();
   const [voted, setVoted] = useState<number | null>(poll.userVotedOptionId);
   const [options, setOptions] = useState<PollOption[]>(poll.options);
@@ -111,6 +126,19 @@ function PollWidget({
     setVoted(result.ok.userVotedOptionId);
     setTotal(result.ok.totalVotes);
     setOptions(result.ok.options);
+=======
+  const [voted, setVoted] = useState<number | null>(poll.userVotedOptionId);
+  const [options, setOptions] = useState<PollOption[]>(poll.options);
+  const [total, setTotal] = useState(poll.totalVotes);
+
+  function handleVote(optionId: number) {
+    if (voted !== null || !poll.isActive) return;
+    setVoted(optionId);
+    setTotal((t) => t + 1);
+    setOptions((opts) =>
+      opts.map((o) => (o.id === optionId ? { ...o, votes: o.votes + 1 } : o)),
+    );
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     toast.success("Vote recorded!");
   }
 
@@ -131,7 +159,11 @@ function PollWidget({
               key={String(opt.id)}
               type="button"
               onClick={() => handleVote(opt.id)}
+<<<<<<< HEAD
               disabled={voted !== null || !poll.isActive || submittingVote}
+=======
+              disabled={voted !== null || !poll.isActive}
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
               className={`w-full text-left rounded-lg overflow-hidden border transition-smooth ${
                 isVoted
                   ? "border-primary/50 bg-primary/10"
@@ -167,6 +199,7 @@ function PollWidget({
   );
 }
 
+<<<<<<< HEAD
 function AnnouncementAttachment({ ann }: { ann: AnnouncementWithPoll }) {
   if (!ann.fileUrl && !ann.imageUrl) return null;
 
@@ -222,6 +255,8 @@ function AnnouncementAttachment({ ann }: { ann: AnnouncementWithPoll }) {
   );
 }
 
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── Announcement Card ─────────────────────────────────────────────────────────
 
 function AnnouncementCard({
@@ -237,7 +272,11 @@ function AnnouncementCard({
   onTrash: (id: number) => void;
   isAdmin: boolean;
 }) {
+<<<<<<< HEAD
   const category = getAnnouncementCategory(ann);
+=======
+  const category = getCategoryFromAuthorDept(ann.authorId);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   const colorClass = CATEGORY_COLORS[category] ?? CATEGORY_COLORS.General;
   const date = new Date(Number(ann.createdAt)).toLocaleDateString("en-GH", {
     day: "numeric",
@@ -250,6 +289,18 @@ function AnnouncementCard({
       className="glass-card rounded-xl p-5 group relative"
       data-ocid={`announcements.item.${ann.id}`}
     >
+<<<<<<< HEAD
+=======
+      {ann.imageUrl && (
+        <div className="w-full h-48 rounded-lg overflow-hidden mb-4 bg-muted/40">
+          <img
+            src={ann.imageUrl}
+            alt={ann.title}
+            className="w-full h-full object-cover"
+          />
+        </div>
+      )}
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       <div className="flex items-start gap-2 mb-2">
         <Badge
           variant="outline"
@@ -267,7 +318,10 @@ function AnnouncementCard({
       <p className="text-sm text-muted-foreground leading-relaxed">
         {ann.content}
       </p>
+<<<<<<< HEAD
       <AnnouncementAttachment ann={ann} />
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       <p className="text-xs text-muted-foreground/70 mt-3">
         By {ann.authorName}
       </p>
@@ -337,7 +391,11 @@ function AnnouncementModal({
   const [form, setForm] = useState<AnnouncementFormData>({
     title: editing?.title ?? "",
     content: editing?.content ?? "",
+<<<<<<< HEAD
     category: editing ? getAnnouncementCategory(editing) : "General",
+=======
+    category: editing ? getCategoryFromAuthorDept(editing.authorId) : "General",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     pollQuestion: editing?.poll?.question ?? "",
     pollOptions: editing?.poll?.options.map((o) => o.text) ?? ["", ""],
   });
@@ -347,7 +405,13 @@ function AnnouncementModal({
     setForm({
       title: editing?.title ?? "",
       content: editing?.content ?? "",
+<<<<<<< HEAD
       category: editing ? getAnnouncementCategory(editing) : "General",
+=======
+      category: editing
+        ? getCategoryFromAuthorDept(editing.authorId)
+        : "General",
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       pollQuestion: editing?.poll?.question ?? "",
       pollOptions: editing?.poll?.options.map((o) => o.text) ?? ["", ""],
     });
@@ -524,7 +588,10 @@ function AnnouncementModal({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AnnouncementsPage() {
+<<<<<<< HEAD
   const { user } = useAuth();
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>(
     [],
   );
@@ -543,6 +610,7 @@ export default function AnnouncementsPage() {
     });
   }, []);
 
+<<<<<<< HEAD
   async function handleDismiss(id: number) {
     await apiDismissAnnouncement(id);
     setDismissed((d) => new Set([...d, id]));
@@ -555,6 +623,16 @@ export default function AnnouncementsPage() {
       return;
     }
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
+=======
+  function handleDismiss(id: number) {
+    setDismissed((d) => new Set([...d, id]));
+  }
+
+  function handleTrash(id: number) {
+    setAnnouncements((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, isTrashed: true } : a)),
+    );
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     toast.success("Moved to trash");
     apiLogAction("Admin", "TRASH_ANNOUNCEMENT", `ID:${id}`, "—");
   }
@@ -569,6 +647,7 @@ export default function AnnouncementsPage() {
     setModalOpen(true);
   }
 
+<<<<<<< HEAD
   async function handleSave(data: AnnouncementFormData) {
     if (!user) return;
     if (editing) {
@@ -607,13 +686,57 @@ export default function AnnouncementsPage() {
         return;
       }
       setAnnouncements((prev) => [result.ok, ...prev]);
+=======
+  function handleSave(data: AnnouncementFormData) {
+    if (editing) {
+      setAnnouncements((prev) =>
+        prev.map((a) =>
+          a.id === editing.id
+            ? { ...a, title: data.title, content: data.content }
+            : a,
+        ),
+      );
+      toast.success("Announcement updated");
+    } else {
+      const newAnn: AnnouncementWithPoll = {
+        id: Date.now(),
+        title: data.title,
+        content: data.content,
+        imageUrl: null,
+        fileUrl: null,
+        authorId: "mock-user-1",
+        authorName: "You",
+        createdAt: BigInt(Date.now()),
+        updatedAt: BigInt(Date.now()),
+        isDismissed: false,
+        isTrashed: false,
+        poll: data.pollQuestion
+          ? {
+              id: Date.now(),
+              question: data.pollQuestion,
+              options: data.pollOptions
+                .filter(Boolean)
+                .map((text, i) => ({ id: i + 1, text, votes: 0 })),
+              totalVotes: 0,
+              userVotedOptionId: null,
+              endDate: null,
+              isActive: true,
+            }
+          : null,
+      };
+      setAnnouncements((prev) => [newAnn, ...prev]);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       toast.success("Announcement published");
     }
   }
 
   const filtered = announcements.filter((a) => {
     if (a.isTrashed || dismissed.has(a.id)) return false;
+<<<<<<< HEAD
     const cat = getAnnouncementCategory(a);
+=======
+    const cat = getCategoryFromAuthorDept(a.authorId);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     if (filterCategory !== "all" && cat !== filterCategory) return false;
     if (search && !a.title.toLowerCase().includes(search.toLowerCase()))
       return false;
@@ -643,6 +766,7 @@ export default function AnnouncementsPage() {
             <RoleGuard roles={["SuperAdmin", "HRAdmin"]}>
               <Button
                 asChild
+<<<<<<< HEAD
                 size="sm"
                 data-ocid="announcements.news_portal.link"
               >
@@ -653,6 +777,8 @@ export default function AnnouncementsPage() {
               </Button>
               <Button
                 asChild
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                 variant="outline"
                 size="sm"
                 data-ocid="announcements.recycle_bin.link"

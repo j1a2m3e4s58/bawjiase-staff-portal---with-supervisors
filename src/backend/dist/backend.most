@@ -1,0 +1,184 @@
+// Version: 1.0.0
+type AnnouncementCategory__172515607 = {#General; #HR; #IT};
+type Announcement__778200823 =
+  {
+    allowDownload : Bool;
+    authorId : UserId__242062423;
+    authorName : Text;
+    body : Text;
+    category : AnnouncementCategory__172515607;
+    datePosted : Timestamp__249543813;
+    id : Nat;
+    imageFile : ?ExternalBlob__246066408;
+    isDeleted : Bool;
+    title : Text
+  };
+type AuditLog__1056230674 =
+  {
+    action : Text;
+    actorName : Text;
+    id : Nat;
+    ipAddress : Text;
+    target : Text;
+    timestamp : Int
+  };
+type Branch__954195352 =
+  {#Adeiso; #Bawjiase; #HeadOffice; #KasoaMain; #KasoaNewMarket; #Ofaakor};
+type Data__791452850<K, V> =
+  {var count : Nat__490723111; kvs : [var ?(K, V)]};
+type Department__159660679 =
+  {
+    #Adeiso;
+    #Admin;
+    #Audit;
+    #BankingOperations;
+    #Bawjiase;
+    #Compliance;
+    #Credit;
+    #EBanking;
+    #HR;
+    #HeadOffice;
+    #IT;
+    #KasoaMain;
+    #KasoaNewMarket;
+    #Microfinance;
+    #Ofaakor;
+    #Recovery;
+    #Susu
+  };
+type ExternalBlob__246066408 = Blob;
+type FormCategory__281859840 = {#Finance; #General; #HR; #IT; #Operations};
+type Form__71402682 =
+  {
+    category : FormCategory__281859840;
+    filename : Text;
+    id : Nat;
+    title : Text;
+    uploadDate : Timestamp__249543813
+  };
+type HiddenAnnouncement__1067332761 =
+  {announcementId : Nat; userId : UserId__242062423};
+type Internal__8484328<K, V> =
+  {children : [var ?Node__46230540<K, V>]; data : Data__791452850<K, V>};
+type Leaf__809889148<K, V> = {data : Data__791452850<K, V>};
+type Map__158565046<K, V> = Map__297112838<K, V>;
+type Map__297112838<K, V> =
+  {var root : Node__46230540<K, V>; var size : Nat__490723111};
+type Map__605269027<K, V> = Map__158565046<K, V>;
+type Nat__490723111 = Nat__920180692;
+type Nat__920180692 = Nat;
+type Node__46230540<K, V> =
+  {#internal : Internal__8484328<K, V>; #leaf : Leaf__809889148<K, V>};
+type Notification__155747301 =
+  {
+    createdAt : Timestamp__249543813;
+    id : Nat;
+    isRead : Bool;
+    link : ?Text;
+    message : Text;
+    title : Text;
+    userId : UserId__242062423
+  };
+type PollOption__632310786 = {id : Nat; optionText : Text; pollId : Nat};
+type PollVote__372724112 =
+  {
+    id : Nat;
+    optionId : Nat;
+    pollId : Nat;
+    userId : UserId__242062423;
+    votedAt : Timestamp__249543813
+  };
+type Poll__906520989 = {announcementId : Nat; id : Nat; question : Text};
+type Role__545918695 = {#GeneralStaff; #HRAdmin; #SuperAdmin};
+type Timestamp__249543813 = Int;
+type UserId__242062423 = Principal;
+type UserInternal__207054250 =
+  {
+    var branch : Branch__954195352;
+    var department : Department__159660679;
+    email : Text;
+    var fullname : Text;
+    id : Principal;
+    var imageFile : ?ExternalBlob__246066408;
+    var isActive : Bool;
+    var isArchived : Bool;
+    var isVerified : Bool;
+    var lastSeen : Int;
+    var passwordHash : Text;
+    var passwordResetExpiry : ?Int;
+    var passwordResetToken : ?Text;
+    var phone : Text;
+    var position : Text;
+    registrationTime : Int;
+    var role : Role__545918695;
+    var verificationCode : ?Text
+  };
+type UserRole__1054455867 = {#admin; #guest; #user};
+actor {
+  stable accessControlState :
+    {
+      var adminAssigned : Bool;
+      userRoles : Map__605269027<Principal, UserRole__1054455867>
+    };
+  stable announcements :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Announcement__778200823]];
+      var elementIndex : Nat__490723111
+    };
+  stable auditLogs :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?AuditLog__1056230674]];
+      var elementIndex : Nat__490723111
+    };
+  stable forms :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Form__71402682]];
+      var elementIndex : Nat__490723111
+    };
+  stable hiddenAnnouncements :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?HiddenAnnouncement__1067332761]];
+      var elementIndex : Nat__490723111
+    };
+  stable nextAuditIdCounter : {var value : Nat};
+  stable nextIdCounter : {var value : Nat};
+  stable notifications :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Notification__155747301]];
+      var elementIndex : Nat__490723111
+    };
+  stable pollOptions :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?PollOption__632310786]];
+      var elementIndex : Nat__490723111
+    };
+  stable pollVotes :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?PollVote__372724112]];
+      var elementIndex : Nat__490723111
+    };
+  stable polls :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?Poll__906520989]];
+      var elementIndex : Nat__490723111
+    };
+  stable resetTokens :
+    {
+      var root : Node__46230540<Text, (Principal, Int)>;
+      var size : Nat__490723111
+    };
+  stable users :
+    {
+      var blockIndex : Nat__490723111;
+      var blocks : [var [var ?UserInternal__207054250]];
+      var elementIndex : Nat__490723111
+    }
+};

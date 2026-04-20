@@ -153,6 +153,7 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
 }
+<<<<<<< HEAD
 
 .startup-splash {
   position: fixed;
@@ -501,3 +502,5 @@
     transition-duration: 0.01ms !important;
   }
 }
+=======
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58

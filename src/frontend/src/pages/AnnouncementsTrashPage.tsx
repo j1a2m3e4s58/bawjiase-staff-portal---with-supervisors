@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+<<<<<<< HEAD
 import {
   apiDeleteAnnouncement,
   apiEmptyAnnouncementTrash,
@@ -21,6 +22,9 @@ import {
   apiLogAction,
   apiRestoreAnnouncement,
 } from "@/lib/backend-client";
+=======
+import { apiGetTrashedAnnouncements, apiLogAction } from "@/lib/backend-client";
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 import type { Announcement } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
 import { ArchiveRestore, Trash2 } from "lucide-react";
@@ -29,6 +33,15 @@ import { toast } from "sonner";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
+<<<<<<< HEAD
+=======
+function getCategoryFromAuthorId(authorId: string): string {
+  if (authorId.includes("user-2")) return "HR";
+  if (authorId.includes("user-3")) return "IT";
+  return "General";
+}
+
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 const CATEGORY_COLORS: Record<string, string> = {
   HR: "bg-secondary/20 text-secondary border-secondary/30",
   IT: "bg-accent/20 text-accent-foreground border-accent/30",
@@ -46,7 +59,11 @@ function TrashedCard({
   onRestore: (id: number) => void;
   onDelete: (id: number) => void;
 }) {
+<<<<<<< HEAD
   const category = ann.category || "General";
+=======
+  const category = getCategoryFromAuthorId(ann.authorId);
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   const colorClass = CATEGORY_COLORS[category] ?? CATEGORY_COLORS.General;
   const date = new Date(Number(ann.createdAt)).toLocaleDateString("en-GH", {
     day: "numeric",
@@ -147,34 +164,46 @@ export default function AnnouncementsTrashPage() {
     });
   }, []);
 
+<<<<<<< HEAD
   async function handleRestore(id: number) {
     const result = await apiRestoreAnnouncement(id);
     if ("err" in result) {
       toast.error(result.err);
       return;
     }
+=======
+  function handleRestore(id: number) {
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     setTrashed((prev) => prev.filter((a) => a.id !== id));
     toast.success("Announcement restored");
     apiLogAction("Admin", "RESTORE_ANNOUNCEMENT", `ID:${id}`, "—");
   }
 
+<<<<<<< HEAD
   async function handleDelete(id: number) {
     const result = await apiDeleteAnnouncement(id);
     if ("err" in result) {
       toast.error(result.err);
       return;
     }
+=======
+  function handleDelete(id: number) {
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     setTrashed((prev) => prev.filter((a) => a.id !== id));
     toast.success("Announcement permanently deleted");
     apiLogAction("Admin", "DELETE_ANNOUNCEMENT", `ID:${id}`, "—");
   }
 
+<<<<<<< HEAD
   async function handleEmptyTrash() {
     const result = await apiEmptyAnnouncementTrash();
     if ("err" in result) {
       toast.error(result.err);
       return;
     }
+=======
+  function handleEmptyTrash() {
+>>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     setTrashed([]);
     setEmptyTrashOpen(false);
     toast.success("Trash emptied");
