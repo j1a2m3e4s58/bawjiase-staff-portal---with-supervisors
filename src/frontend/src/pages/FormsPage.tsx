@@ -1,0 +1,505 @@
+import { AppShell } from "@/components/AppShell";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { EmptyState } from "@/components/EmptyState";
+import { SkeletonCard } from "@/components/SkeletonCard";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  type CreateFormRequest,
+  apiCreateForm,
+  apiDeleteForm,
+  apiDownloadFormUrl,
+  apiExtractDriveFileId,
+  apiGetForms,
+  apiOpenFormUrl,
+  apiUpdateForm,
+} from "@/lib/backend-client";
+import { useAuth } from "@/store/auth";
+import type { PortalForm, Role } from "@/types";
+import { isOk } from "@/types";
+import {
+  Download,
+  Edit2,
+  Eye,
+  FileText,
+  FolderOpen,
+  Plus,
+  Search,
+  Trash2,
+} from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+
+const CATEGORIES = [
+  "General",
+  "HR",
+  "IT",
+  "SUSU",
+  "RECOVERY",
+  "AUDIT",
+  "CREDIT",
+  "COMPLIANCE",
+  "FINANCE",
+  "OPERATIONS",
+  "MICROFINANCE",
+  "E-BANKING",
+] as const;
+
+const CATEGORY_COLORS: Record<string, string> = {
+  General: "bg-muted text-muted-foreground",
+  HR: "bg-secondary/20 text-secondary",
+  IT: "bg-accent/20 text-accent",
+  SUSU: "bg-primary/15 text-primary",
+  RECOVERY: "bg-orange-500/15 text-orange-600 dark:text-orange-400",
+  AUDIT: "bg-red-500/15 text-red-600 dark:text-red-400",
+  CREDIT: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
+  COMPLIANCE: "bg-emerald-500/15 text-emerald-600 dark:text-emerald-400",
+  FINANCE: "bg-yellow-500/15 text-yellow-600 dark:text-yellow-400",
+  OPERATIONS: "bg-cyan-500/15 text-cyan-600 dark:text-cyan-400",
+  MICROFINANCE: "bg-teal-500/15 text-teal-600 dark:text-teal-400",
+  "E-BANKING": "bg-violet-500/15 text-violet-600 dark:text-violet-400",
+};
+
+function canManageForms(user: ReturnType<typeof useAuth>["user"]) {
+  return (
+    user?.role === "SuperAdmin" ||
+    user?.department === "IT" ||
+    user?.department === "HR"
+  );
+}
+
+interface FormDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  initial?: PortalForm;
+  onSave: (req: CreateFormRequest) => Promise<void>;
+  isSaving: boolean;
+}
+
+function FormDialog({
+  open,
+  onOpenChange,
+  initial,
+  onSave,
+  isSaving,
+}: FormDialogProps) {
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [category, setCategory] = useState<string>(
+    initial?.category ?? "General",
+  );
+  const [fileUrl, setFileUrl] = useState(initial?.fileUrl ?? "");
+
+  useEffect(() => {
+    setTitle(initial?.title ?? "");
+    setCategory(initial?.category ?? "General");
+    setFileUrl(initial?.fileUrl ?? "");
+  }, [initial]);
+
+  async function handleSubmit() {
+    if (!title.trim() || !category.trim() || !fileUrl.trim()) {
+      toast.error("Form title, category, and Google Drive link are required.");
+      return;
+    }
+
+    await onSave({
+      title: title.trim(),
+      description: "",
+      fileUrl: apiExtractDriveFileId(fileUrl),
+      category,
+      visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"] as Role[],
+      visibility: "General",
+      department: null,
+    });
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="glass-card-elevated sm:max-w-md"
+        data-ocid="forms.dialog"
+      >
+        <DialogHeader>
+          <DialogTitle className="font-display">
+            {initial ? "Rename Form" : "Upload New Form"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div className="space-y-1.5">
+            <Label htmlFor="form-title">Form Title</Label>
+            <Input
+              id="form-title"
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="e.g. 2025 Leave Request"
+              data-ocid="forms.title.input"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="form-category">Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger
+                id="form-category"
+                data-ocid="forms.category.select"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent
+                side="top"
+                align="start"
+                sideOffset={6}
+                collisionPadding={16}
+                className="max-h-72"
+              >
+                {CATEGORIES.map((item) => (
+                  <SelectItem key={item} value={item}>
+                    {item}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="form-url">Google Drive Link</Label>
+            <Input
+              id="form-url"
+              value={fileUrl}
+              onChange={(event) => setFileUrl(event.target.value)}
+              placeholder="Paste full Google Drive link or just the ID"
+              data-ocid="forms.url.input"
+            />
+            <p className="text-xs text-muted-foreground">
+              Drive file links are stored as file IDs. Google Docs, Sheets, and
+              Slides links stay as full links so they open correctly.
+            </p>
+          </div>
+        </div>
+        <DialogFooter className="gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => onOpenChange(false)}
+            data-ocid="forms.cancel_button"
+          >
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            onClick={handleSubmit}
+            disabled={isSaving}
+            data-ocid="forms.submit_button"
+          >
+            {isSaving ? "Saving..." : initial ? "Save Changes" : "Upload Form"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+interface FormCardProps {
+  form: PortalForm;
+  canAdmin: boolean;
+  onEdit: (form: PortalForm) => void;
+  onDelete: (form: PortalForm) => void;
+  index: number;
+}
+
+function FormCard({ form, canAdmin, onEdit, onDelete, index }: FormCardProps) {
+  const categoryColor =
+    CATEGORY_COLORS[form.category] ?? CATEGORY_COLORS.General;
+
+  return (
+    <div
+      className="glass-card group rounded-xl p-4 transition-smooth hover:shadow-glass"
+      data-ocid={`forms.item.${index}`}
+    >
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex items-start gap-3 sm:min-w-0 sm:flex-1">
+          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10">
+            <FolderOpen className="h-5 w-5 text-primary" />
+          </div>
+
+          <div className="min-w-0 flex-1">
+            <h3 className="line-clamp-2 text-sm font-semibold leading-snug text-foreground sm:truncate sm:line-clamp-1">
+              {form.title}
+            </h3>
+            <Badge className={`mt-2 text-[11px] ${categoryColor}`}>
+              {form.category}
+            </Badge>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-shrink-0 sm:items-center sm:gap-1.5">
+          {canAdmin && (
+            <>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 justify-start gap-2 sm:h-8 sm:w-8 sm:justify-center sm:px-0"
+                onClick={() => onEdit(form)}
+                title="Edit Form"
+                data-ocid={`forms.edit_button.${index}`}
+              >
+                <Edit2 className="h-3.5 w-3.5" />
+                <span className="sm:hidden">Edit</span>
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-9 justify-start gap-2 text-destructive hover:text-destructive sm:h-8 sm:w-8 sm:justify-center sm:px-0"
+                onClick={() => onDelete(form)}
+                title="Remove Form"
+                data-ocid={`forms.delete_button.${index}`}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+                <span className="sm:hidden">Delete</span>
+              </Button>
+            </>
+          )}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-9 justify-start gap-2 sm:h-8 sm:w-8 sm:justify-center sm:px-0"
+            onClick={() => window.open(apiOpenFormUrl(form.fileUrl), "_blank")}
+            title="View File"
+            data-ocid={`forms.view_button.${index}`}
+          >
+            <Eye className="h-3.5 w-3.5" />
+            <span className="sm:hidden">View</span>
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            className="h-9 justify-start gap-2 sm:h-8 sm:w-8 sm:justify-center sm:px-0"
+            onClick={() =>
+              window.open(apiDownloadFormUrl(form.fileUrl), "_blank")
+            }
+            title="Save / Print PDF"
+            data-ocid={`forms.download_button.${index}`}
+          >
+            <Download className="h-3.5 w-3.5" />
+            <span className="sm:hidden">Download</span>
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default function FormsPage() {
+  const { user } = useAuth();
+  const canAdmin = canManageForms(user);
+
+  const [forms, setForms] = useState<PortalForm[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingForm, setEditingForm] = useState<PortalForm | undefined>();
+  const [isSaving, setIsSaving] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<PortalForm | undefined>();
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    apiGetForms(user).then((data) => {
+      setForms(data);
+      setIsLoading(false);
+    });
+  }, [user]);
+
+  const filtered = useMemo(() => {
+    const query = search.trim().toLowerCase();
+    if (!query) return forms;
+    return forms.filter(
+      (form) =>
+        form.title.toLowerCase().includes(query) ||
+        form.category.toLowerCase().includes(query),
+    );
+  }, [forms, search]);
+
+  async function handleSave(req: CreateFormRequest) {
+    setIsSaving(true);
+    try {
+      if (editingForm) {
+        const result = await apiUpdateForm(editingForm.id, req);
+        if (isOk(result)) {
+          setForms((prev) =>
+            prev
+              .map((form) => (form.id === editingForm.id ? result.ok : form))
+              .sort(
+                (a, b) =>
+                  a.category.localeCompare(b.category) ||
+                  a.title.localeCompare(b.title),
+              ),
+          );
+          toast.success("Form updated");
+        } else {
+          toast.error(result.err);
+          return;
+        }
+      } else {
+        const result = await apiCreateForm(req);
+        if (isOk(result)) {
+          setForms((prev) =>
+            [result.ok, ...prev].sort(
+              (a, b) =>
+                a.category.localeCompare(b.category) ||
+                a.title.localeCompare(b.title),
+            ),
+          );
+          toast.success("New form added successfully");
+        } else {
+          toast.error(result.err);
+          return;
+        }
+      }
+      setDialogOpen(false);
+      setEditingForm(undefined);
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    const result = await apiDeleteForm(deleteTarget.id);
+    if (isOk(result)) {
+      setForms((prev) => prev.filter((form) => form.id !== deleteTarget.id));
+      toast.success(`Form "${deleteTarget.title}" has been removed.`);
+    } else {
+      toast.error(result.err);
+    }
+    setIsDeleting(false);
+    setDeleteTarget(undefined);
+  }
+
+  return (
+    <AppShell>
+      <div className="max-w-6xl mx-auto space-y-6" data-ocid="forms.page">
+        <div className="glass-card rounded-xl p-5 space-y-5">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+            <div>
+              <h1 className="font-display text-2xl font-bold text-foreground flex items-center gap-2">
+                <FolderOpen className="h-6 w-6 text-primary" />
+                Forms Library
+              </h1>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                View or download official forms.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3 lg:min-w-[520px]">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  className="pl-9"
+                  placeholder="Search forms..."
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  data-ocid="forms.search_input"
+                />
+              </div>
+              {canAdmin && (
+                <Button
+                  type="button"
+                  className="gap-2"
+                  onClick={() => {
+                    setEditingForm(undefined);
+                    setDialogOpen(true);
+                  }}
+                  data-ocid="forms.add_button"
+                >
+                  <Plus className="h-4 w-4" />
+                  New Form
+                </Button>
+              )}
+            </div>
+          </div>
+
+          {isLoading ? (
+            <div
+              className="grid md:grid-cols-2 gap-3"
+              data-ocid="forms.loading_state"
+            >
+              {[1, 2, 3, 4, 5, 6].map((item) => (
+                <SkeletonCard key={item} lines={2} />
+              ))}
+            </div>
+          ) : filtered.length === 0 ? (
+            <EmptyState
+              icon={<FileText className="h-7 w-7" />}
+              title="No forms match your search"
+              description="Try a different title or clear the current search text."
+              actionLabel={canAdmin ? "New Form" : undefined}
+              onAction={
+                canAdmin
+                  ? () => {
+                      setEditingForm(undefined);
+                      setDialogOpen(true);
+                    }
+                  : undefined
+              }
+              data-ocid="forms.empty_state"
+            />
+          ) : (
+            <div className="grid md:grid-cols-2 gap-3">
+              {filtered.map((form, index) => (
+                <FormCard
+                  key={form.id}
+                  form={form}
+                  canAdmin={canAdmin}
+                  onEdit={(item) => {
+                    setEditingForm(item);
+                    setDialogOpen(true);
+                  }}
+                  onDelete={setDeleteTarget}
+                  index={index + 1}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <FormDialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open);
+          if (!open) setEditingForm(undefined);
+        }}
+        initial={editingForm}
+        onSave={handleSave}
+        isSaving={isSaving}
+      />
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(undefined)}
+        title="Remove Form?"
+        description={`You are about to permanently remove "${deleteTarget?.title}". This action cannot be undone.`}
+        confirmLabel={isDeleting ? "Deleting..." : "Yes, Delete it"}
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
+    </AppShell>
+  );
+}
