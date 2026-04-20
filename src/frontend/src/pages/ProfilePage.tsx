@@ -1,7 +1,7 @@
 import { AppShell } from "@/components/AppShell";
+import { BrandLoader } from "@/components/BrandLoader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PortalCard } from "@/components/PortalCard";
-import { SkeletonCard } from "@/components/SkeletonCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   type UpdateProfileRequest,
   apiGetMyProfile,
@@ -89,25 +88,7 @@ function getInitials(name: string): string {
 
 function ProfileSkeleton() {
   return (
-    <div
-      className="space-y-6 max-w-2xl mx-auto"
-      data-ocid="profile.loading_state"
-    >
-      {/* Avatar + header */}
-      <div className="glass-card-elevated rounded-xl p-6 flex flex-col sm:flex-row items-center gap-5">
-        <Skeleton className="h-24 w-24 rounded-full flex-shrink-0" />
-        <div className="flex-1 space-y-2 w-full">
-          <Skeleton className="h-5 w-48" />
-          <Skeleton className="h-3.5 w-64" />
-          <div className="flex gap-2 mt-2">
-            <Skeleton className="h-6 w-24 rounded-full" />
-            <Skeleton className="h-6 w-20 rounded-full" />
-          </div>
-        </div>
-      </div>
-      <SkeletonCard lines={4} />
-      <SkeletonCard lines={4} />
-    </div>
+    <BrandLoader label="Loading profile..." compact />
   );
 }
 
@@ -141,22 +122,37 @@ export default function ProfilePage() {
 
   // Load profile on mount
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setIsLoading(false);
+      return;
+    }
+
+    setFullname(user.fullname);
+    setPhone(user.phone);
+    setDepartment(user.department);
+    setBranch(user.branch);
+    setIsLoading(false);
+
     let mounted = true;
     async function load() {
       if (!user) return;
-      setIsLoading(true);
-      const profile = await apiGetMyProfile(user.id);
-      if (!mounted) return;
-      setIsLoading(false);
-      if (profile) {
-        setFullname(profile.fullname);
-        setPhone(profile.phone);
-        setDepartment(profile.department);
-        setBranch(profile.branch);
+      try {
+        const profile = await apiGetMyProfile(user.id);
+        if (!mounted) return;
+        const resolvedProfile = profile ?? user;
+        setFullname(resolvedProfile.fullname);
+        setPhone(resolvedProfile.phone);
+        setDepartment(resolvedProfile.department);
+        setBranch(resolvedProfile.branch);
+      } catch {
+        if (!mounted) return;
+        setFullname(user.fullname);
+        setPhone(user.phone);
+        setDepartment(user.department);
+        setBranch(user.branch);
       }
     }
-    load();
+    void load();
     return () => {
       mounted = false;
     };
@@ -252,7 +248,7 @@ export default function ProfilePage() {
 
   function handleLogout() {
     logout();
-    router.navigate({ to: "/login" });
+    void router.navigate({ to: "/login", replace: true });
   }
 
   if (isLoading) {

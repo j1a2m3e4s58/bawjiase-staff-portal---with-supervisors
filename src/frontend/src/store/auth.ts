@@ -2,10 +2,12 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   useCallback,
 } from "react";
 import type { ReactNode } from "react";
+import { apiLogout, apiUpdateLastSeen } from "@/lib/backend-client";
 import type { User } from "../types";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -26,7 +28,14 @@ function applyTheme(mode: ThemeMode) {
 const AUTH_KEY = "barb_auth_user";
 const THEME_KEY = "barb_theme";
 const AUTH_EXPIRY_KEY = "barb_auth_expiry";
+const AUTH_ACTIVITY_KEY = "barb_last_activity";
 const REMEMBER_DAYS = 30;
+const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
+const PRESENCE_PING_MS = 60 * 1000;
+
+function markActivity(timestamp = Date.now()) {
+  localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
+}
 
 function loadStoredUser(): User | null {
   try {
@@ -34,6 +43,14 @@ function loadStoredUser(): User | null {
     if (expiry && Date.now() > Number(expiry)) {
       localStorage.removeItem(AUTH_KEY);
       localStorage.removeItem(AUTH_EXPIRY_KEY);
+      localStorage.removeItem(AUTH_ACTIVITY_KEY);
+      return null;
+    }
+    const lastActivity = localStorage.getItem(AUTH_ACTIVITY_KEY);
+    if (lastActivity && Date.now() - Number(lastActivity) > INACTIVITY_LIMIT_MS) {
+      localStorage.removeItem(AUTH_KEY);
+      localStorage.removeItem(AUTH_EXPIRY_KEY);
+      localStorage.removeItem(AUTH_ACTIVITY_KEY);
       return null;
     }
     const raw = localStorage.getItem(AUTH_KEY);
@@ -48,8 +65,11 @@ function loadStoredUser(): User | null {
   }
 }
 
-function saveStoredUser(user: User, remember: boolean) {
+function saveStoredUser(user: User, remember: boolean, updateActivity = true) {
   localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+  if (updateActivity) {
+    markActivity();
+  }
   if (remember) {
     const expiry = Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000;
     localStorage.setItem(AUTH_EXPIRY_KEY, String(expiry));
@@ -59,6 +79,7 @@ function saveStoredUser(user: User, remember: boolean) {
 function clearStoredUser() {
   localStorage.removeItem(AUTH_KEY);
   localStorage.removeItem(AUTH_EXPIRY_KEY);
+  localStorage.removeItem(AUTH_ACTIVITY_KEY);
 }
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -85,6 +106,7 @@ interface AuthProviderProps {
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const authSessionRef = useRef(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
     return stored ?? "dark";
@@ -100,15 +122,102 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setIsLoading(false);
   }, []);
 
+  useEffect(() => {
+    if (!user) return;
+
+    const sessionId = authSessionRef.current;
+    let cancelled = false;
+    let timeoutId: number | undefined;
+    let lastPing = 0;
+
+    const persistUser = (updatedUser: User) => {
+      if (cancelled || authSessionRef.current !== sessionId) return;
+      setUser(updatedUser);
+      const remember = !!localStorage.getItem(AUTH_EXPIRY_KEY);
+      saveStoredUser(updatedUser, remember, false);
+    };
+
+    const pingPresence = async () => {
+      const result = await apiUpdateLastSeen(user.id);
+      if (cancelled || authSessionRef.current !== sessionId) return;
+      if ("ok" in result) {
+        persistUser(result.ok);
+      }
+    };
+
+    const scheduleTimeout = () => {
+      if (timeoutId) window.clearTimeout(timeoutId);
+      timeoutId = window.setTimeout(() => {
+        if (cancelled || authSessionRef.current !== sessionId) return;
+        setUser(null);
+        clearStoredUser();
+      }, INACTIVITY_LIMIT_MS);
+    };
+
+    const handleActivity = () => {
+      const now = Date.now();
+      markActivity(now);
+      scheduleTimeout();
+      if (document.visibilityState === "visible" && now - lastPing >= PRESENCE_PING_MS) {
+        lastPing = now;
+        void pingPresence();
+      }
+    };
+
+    handleActivity();
+
+    const intervalId = window.setInterval(() => {
+      if (cancelled || authSessionRef.current !== sessionId) return;
+      const lastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
+      if (!lastActivity || Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
+        setUser(null);
+        clearStoredUser();
+        return;
+      }
+      if (document.visibilityState === "visible") {
+        void pingPresence();
+      }
+    }, PRESENCE_PING_MS);
+
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") handleActivity();
+    };
+
+    window.addEventListener("mousemove", handleActivity);
+    window.addEventListener("mousedown", handleActivity);
+    window.addEventListener("keydown", handleActivity);
+    window.addEventListener("touchstart", handleActivity);
+    window.addEventListener("focus", handleActivity);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
+      window.clearInterval(intervalId);
+      window.removeEventListener("mousemove", handleActivity);
+      window.removeEventListener("mousedown", handleActivity);
+      window.removeEventListener("keydown", handleActivity);
+      window.removeEventListener("touchstart", handleActivity);
+      window.removeEventListener("focus", handleActivity);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [user]);
+
   const login = useCallback((newUser: User, remember = true) => {
+    authSessionRef.current += 1;
     setUser(newUser);
     saveStoredUser(newUser, remember);
   }, []);
 
   const logout = useCallback(() => {
+    const currentUserId = user?.id;
+    authSessionRef.current += 1;
     setUser(null);
     clearStoredUser();
-  }, []);
+    if (currentUserId) {
+      void apiLogout(currentUserId);
+    }
+  }, [user]);
 
   const updateUser = useCallback((updatedUser: User) => {
     setUser(updatedUser);

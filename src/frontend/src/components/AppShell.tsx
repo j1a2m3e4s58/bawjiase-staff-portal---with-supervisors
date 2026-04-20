@@ -17,10 +17,7 @@ import { useAuth } from "@/store/auth";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
   Bell,
-<<<<<<< HEAD
   BookOpen,
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   ChevronRight,
   ClipboardList,
   FileText,
@@ -36,12 +33,10 @@ import {
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import type { User as PortalUser } from "@/types";
 
-<<<<<<< HEAD
 const BRAND_LOGO = "/assets/images/bcb-logo.png";
 
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── Nav Config ─────────────────────────────────────────────────────────────────
 
 interface NavItem {
@@ -49,6 +44,7 @@ interface NavItem {
   label: string;
   icon: ReactNode;
   roles?: string[];
+  departments?: string[];
   bottomNav?: boolean;
 }
 
@@ -96,7 +92,7 @@ const NAV_ITEMS: NavItem[] = [
     to: "/audit",
     label: "Audit Logs",
     icon: <ClipboardList className="h-5 w-5" />,
-    roles: ["SuperAdmin", "HRAdmin"],
+    departments: ["IT"],
   },
   {
     to: "/profile",
@@ -109,20 +105,13 @@ const NAV_ITEMS: NavItem[] = [
 
 function BARBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const sizes = {
-<<<<<<< HEAD
     sm: "h-8 w-8",
     md: "h-12 w-12",
     lg: "h-16 w-16",
-=======
-    sm: "w-8 h-8 text-xs",
-    md: "w-12 h-12 text-sm",
-    lg: "w-16 h-16 text-base",
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   };
   return (
     <div
       className={cn(
-<<<<<<< HEAD
         "overflow-hidden rounded-full border-2 border-primary/25 bg-white ring-2 ring-primary/10",
         sizes[size],
       )}
@@ -132,16 +121,24 @@ function BARBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
         alt="Bawjiase Community Bank logo"
         className="h-full w-full object-cover"
       />
-=======
-        "rounded-full flex items-center justify-center font-display font-bold",
-        "bg-primary/20 border-2 border-primary/40 text-primary ring-2 ring-primary/10",
-        sizes[size],
-      )}
-    >
-      B
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     </div>
   );
+}
+
+function canSeeNavItem(user: PortalUser | null, item: NavItem) {
+  if (item.roles && (!user || !item.roles.includes(user.role))) return false;
+  if (
+    item.departments &&
+    (!user || !item.departments.includes(user.department.toUpperCase()))
+  ) {
+    return false;
+  }
+  return true;
+}
+
+function logoutAndRedirect(logout: () => void) {
+  logout();
+  window.location.replace("/login");
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────────────────
@@ -162,9 +159,7 @@ function Sidebar({ collapsed = false }: SidebarProps) {
       .slice(0, 2)
       .toUpperCase() ?? "U";
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role)),
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => canSeeNavItem(user, item));
 
   return (
     <aside
@@ -300,11 +295,8 @@ function Sidebar({ collapsed = false }: SidebarProps) {
 
 // ── Mobile Bottom Nav ──────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 void Sidebar;
 
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 function MobileBottomNav() {
   const location = useLocation();
   const { user } = useAuth();
@@ -321,8 +313,7 @@ function MobileBottomNav() {
           item.to === "/"
             ? location.pathname === "/"
             : location.pathname.startsWith(item.to);
-        const isVisible =
-          !item.roles || (user && item.roles.includes(user.role));
+        const isVisible = canSeeNavItem(user, item);
         if (!isVisible) return null;
         return (
           <Link
@@ -376,9 +367,7 @@ function MobileDrawer({
 
   if (!open) return null;
 
-  const visibleItems = NAV_ITEMS.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role)),
-  );
+  const visibleItems = NAV_ITEMS.filter((item) => canSeeNavItem(user, item));
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -439,7 +428,7 @@ function MobileDrawer({
             className="w-full justify-start gap-3 text-destructive hover:text-destructive"
             onClick={() => {
               onClose();
-              logout();
+              logoutAndRedirect(logout);
             }}
             data-ocid="appshell.mobile_drawer.logout_button"
           >
@@ -455,7 +444,7 @@ function MobileDrawer({
 // ── Top Bar ────────────────────────────────────────────────────────────────────
 
 function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const isMobile = useIsMobile();
   const initials =
     user?.fullname
@@ -522,7 +511,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
-              onClick={useAuth().logout}
+              onClick={() => logoutAndRedirect(logout)}
               data-ocid="appshell.topbar.user_menu.logout_button"
             >
               <LogOut className="h-4 w-4 mr-2" />
@@ -537,7 +526,6 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
 
 // ── AppShell ───────────────────────────────────────────────────────────────────
 
-<<<<<<< HEAD
 function DesktopTopNav() {
   const { user, logout } = useAuth();
   const location = useLocation();
@@ -578,12 +566,10 @@ function DesktopTopNav() {
       to: "/audit",
       label: "Audit Logs",
       icon: <ClipboardList className="h-4 w-4" />,
-      roles: ["SuperAdmin", "HRAdmin"],
+      departments: ["IT"],
     },
   ];
-  const visibleItems = topNavItems.filter(
-    (item) => !item.roles || (user && item.roles.includes(user.role)),
-  );
+  const visibleItems = topNavItems.filter((item) => canSeeNavItem(user, item));
 
   return (
     <header className="sticky top-4 z-40 mx-4 mt-4 glass-card-elevated rounded-2xl border border-border/40 px-4 py-3">
@@ -661,7 +647,7 @@ function DesktopTopNav() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 className="text-destructive focus:text-destructive"
-                onClick={logout}
+                onClick={() => logoutAndRedirect(logout)}
               >
                 <LogOut className="h-4 w-4 mr-2" />
                 Sign Out
@@ -674,8 +660,6 @@ function DesktopTopNav() {
   );
 }
 
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 interface AppShellProps {
   children: ReactNode;
 }
@@ -686,12 +670,6 @@ export function AppShell({ children }: AppShellProps) {
 
   return (
     <div className="min-h-screen bg-background flex">
-<<<<<<< HEAD
-=======
-      {/* Desktop Sidebar */}
-      {!isMobile && <Sidebar />}
-
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       {/* Mobile Drawer */}
       {isMobile && (
         <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
@@ -700,17 +678,7 @@ export function AppShell({ children }: AppShellProps) {
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
         {isMobile && <TopBar onMenuClick={() => setDrawerOpen(true)} />}
-<<<<<<< HEAD
         {!isMobile && <DesktopTopNav />}
-=======
-        {/* Desktop top notification bar */}
-        {!isMobile && (
-          <header className="sticky top-0 z-40 glass-card border-b border-border/30 flex items-center justify-end px-6 h-12 gap-2">
-            <NotificationBell />
-            <ThemeToggle />
-          </header>
-        )}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         <main
           className={cn(
             "flex-1 overflow-y-auto p-4 md:p-6",

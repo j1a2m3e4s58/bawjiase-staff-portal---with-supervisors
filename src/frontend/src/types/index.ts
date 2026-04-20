@@ -3,15 +3,6 @@
 export const DEPARTMENTS = [
   "IT",
   "HR",
-<<<<<<< HEAD
-=======
-  "HEAD OFFICE",
-  "BAWJIASE",
-  "KASOA MAIN",
-  "KASOA NEW MARKET",
-  "ADEISO",
-  "OFAAKOR",
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   "BANKING OPERATIONS",
   "E-BANKING",
   "MICROFINANCE",
@@ -51,6 +42,7 @@ export interface User {
   isActive: boolean;
   isVerified: boolean;
   lastSeen: bigint;
+  isOnlineNow?: boolean;
   registrationTime: bigint;
   isArchived: boolean;
 }
@@ -77,16 +69,11 @@ export interface Announcement {
   id: number;
   title: string;
   content: string;
-<<<<<<< HEAD
   category: string;
   imageUrl: string | null;
   fileUrl: string | null;
   attachmentName: string | null;
   allowDownload: boolean;
-=======
-  imageUrl: string | null;
-  fileUrl: string | null;
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   authorId: string;
   authorName: string;
   createdAt: bigint;
@@ -128,11 +115,8 @@ export interface PortalForm {
   fileUrl: string;
   category: string;
   visibleTo: Role[];
-<<<<<<< HEAD
   visibility?: "General" | "Department";
   department?: string | null;
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   createdAt: bigint;
   updatedAt: bigint;
 }
@@ -148,7 +132,6 @@ export interface TrainingVideo {
   duration: number;
   category: string;
   visibleTo: Role[];
-<<<<<<< HEAD
   visibility?: "General" | "Department";
   department?: string | null;
   isMandatory?: boolean;
@@ -156,8 +139,6 @@ export interface TrainingVideo {
   storageType?: "Drive" | "Local";
   driveRef?: string | null;
   localFilename?: string | null;
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   uploadedBy: string;
   uploadedAt: bigint;
   viewCount: number;
@@ -172,7 +153,6 @@ export interface TrainingDocument {
   fileType: string;
   category: string;
   visibleTo: Role[];
-<<<<<<< HEAD
   visibility?: "General" | "Department";
   department?: string | null;
   isMandatory?: boolean;
@@ -180,8 +160,6 @@ export interface TrainingDocument {
   storageType?: "Drive" | "Local";
   driveRef?: string | null;
   localFilename?: string | null;
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   uploadedBy: string;
   uploadedAt: bigint;
   downloadCount: number;
@@ -197,12 +175,9 @@ export interface IncidentReport {
   id: number;
   reporterId: string;
   reporterName: string;
-<<<<<<< HEAD
   agency?: string;
   contact?: string;
   issueCategory?: string;
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   subject: string;
   description: string;
   priority: IncidentPriority;
@@ -217,7 +192,6 @@ export interface ProfileAmendment {
   id: number;
   requesterId: string;
   requesterName: string;
-<<<<<<< HEAD
   fullname?: string;
   phone?: string;
   t24Username?: string;
@@ -226,17 +200,11 @@ export interface ProfileAmendment {
   newRole?: string;
   deptChange?: string;
   transferLocation?: string;
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   field: string;
   currentValue: string;
   requestedValue: string;
   reason: string;
-<<<<<<< HEAD
   status: "pending" | "approved" | "rejected" | "resolved";
-=======
-  status: "pending" | "approved" | "rejected";
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   reviewedBy: string | null;
   reviewNote: string | null;
   createdAt: bigint;
@@ -266,7 +234,6 @@ export interface StaffStats {
   byRole: Record<string, number>;
 }
 
-<<<<<<< HEAD
 export interface DistributionPoint {
   name: string;
   value: number;
@@ -289,8 +256,6 @@ export interface DashboardOverview {
   supportResolved: number;
 }
 
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 // ── API Results ───────────────────────────────────────────────────────────────
 
 export type ApiResult<T> = { ok: T } | { err: string };

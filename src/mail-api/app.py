@@ -1,5 +1,7 @@
 import os
 import smtplib
+import json
+import time
 from email.message import EmailMessage
 from flask import Flask, jsonify, request
 from dotenv import load_dotenv
@@ -8,6 +10,8 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com"
+PRESENCE_STORE_PATH = os.path.join(BASE_DIR, "presence_store.json")
+PRESENCE_TTL_SECONDS = 15 * 60
 
 app = Flask(__name__)
 
@@ -43,6 +47,37 @@ def validate_email(email: str) -> str:
     return normalized
 
 
+def load_presence_store() -> dict[str, int]:
+    if not os.path.exists(PRESENCE_STORE_PATH):
+        return {}
+    try:
+        with open(PRESENCE_STORE_PATH, "r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+        if not isinstance(raw, dict):
+            return {}
+        return {
+            str(user_id): int(timestamp)
+            for user_id, timestamp in raw.items()
+            if str(user_id) and isinstance(timestamp, (int, float, str))
+        }
+    except Exception:
+        return {}
+
+
+def save_presence_store(store: dict[str, int]) -> None:
+    with open(PRESENCE_STORE_PATH, "w", encoding="utf-8") as handle:
+        json.dump(store, handle)
+
+
+def prune_presence(store: dict[str, int]) -> dict[str, int]:
+    cutoff = int(time.time()) - PRESENCE_TTL_SECONDS
+    return {
+        str(user_id): int(timestamp)
+        for user_id, timestamp in store.items()
+        if int(timestamp) >= cutoff
+    }
+
+
 def mail_config() -> dict[str, str | int]:
     required = {
         "MAIL_SERVER": os.getenv("MAIL_SERVER", ""),
@@ -75,6 +110,45 @@ def send_mail(to_email: str, subject: str, text_body: str, html_body: str):
 
 @app.route("/api/health", methods=["GET"])
 def health():
+    return jsonify({"ok": True})
+
+
+@app.route("/api/presence", methods=["GET"])
+def get_presence():
+    store = prune_presence(load_presence_store())
+    save_presence_store(store)
+    return jsonify({"presence": store})
+
+
+@app.route("/api/presence/ping", methods=["POST", "OPTIONS"])
+def ping_presence():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    data, error = require_json()
+    if error:
+        return error
+    user_id = str(data.get("userId", "")).strip()
+    if not user_id:
+        return jsonify({"error": "userId is required"}), 400
+    store = prune_presence(load_presence_store())
+    store[user_id] = int(time.time())
+    save_presence_store(store)
+    return jsonify({"ok": True, "lastSeen": store[user_id]})
+
+
+@app.route("/api/presence/logout", methods=["POST", "OPTIONS"])
+def logout_presence():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    data, error = require_json()
+    if error:
+        return error
+    user_id = str(data.get("userId", "")).strip()
+    if not user_id:
+        return jsonify({"error": "userId is required"}), 400
+    store = prune_presence(load_presence_store())
+    store.pop(user_id, None)
+    save_presence_store(store)
     return jsonify({"ok": True})
 
 

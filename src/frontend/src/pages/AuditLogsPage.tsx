@@ -1,10 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
-<<<<<<< HEAD
-=======
-import { useHasRole } from "@/components/RoleGuard";
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,7 +11,6 @@ import {
   apiDeleteAuditLogs,
   apiGetAuditLogs,
 } from "@/lib/backend-client";
-<<<<<<< HEAD
 import { useAuth } from "@/store/auth";
 import type { AuditLog } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
@@ -30,16 +25,6 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-=======
-import type { AuditLog } from "@/types";
-import { useNavigate } from "@tanstack/react-router";
-import { ClipboardList, Search, Shield, Trash2 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 function formatTime(ts: bigint) {
   return new Date(Number(ts)).toLocaleTimeString("en-GB", {
     hour: "2-digit",
@@ -74,7 +59,6 @@ function groupByDate(logs: AuditLog[]): [string, AuditLog[]][] {
   return Array.from(map.entries());
 }
 
-<<<<<<< HEAD
 function isKnownActor(actorName: string) {
   const actor = actorName.toLowerCase();
   return !actor.includes("anonymous") && !actor.includes("unknown");
@@ -175,8 +159,6 @@ function printLogs(logs: AuditLog[]) {
   printable.print();
 }
 
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 function ActionBadge({ action }: { action: string }) {
   const colorMap: Record<string, string> = {
     LOGIN:
@@ -208,11 +190,6 @@ function ActionBadge({ action }: { action: string }) {
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── Log Row ────────────────────────────────────────────────────────────────────
-
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 function LogRow({
   log,
   index,
@@ -228,13 +205,9 @@ function LogRow({
 }) {
   return (
     <div
-<<<<<<< HEAD
       className={`flex items-start gap-3 px-4 py-3 border-b border-border/30 hover:bg-muted/20 transition-colors group ${
         selected ? "bg-primary/5" : ""
       }`}
-=======
-      className={`flex items-start gap-3 px-4 py-3 border-b border-border/30 hover:bg-muted/20 transition-colors group ${selected ? "bg-primary/5" : ""}`}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       data-ocid={`audit.row.${index}`}
     >
       <div className="mt-0.5 flex-shrink-0">
@@ -246,7 +219,6 @@ function LogRow({
       </div>
       <div className="flex-1 min-w-0 space-y-0.5">
         <div className="flex items-center gap-2 flex-wrap">
-<<<<<<< HEAD
           <span
             className={`text-sm font-semibold truncate ${
               isKnownActor(log.actorName)
@@ -254,9 +226,6 @@ function LogRow({
                 : "text-destructive"
             }`}
           >
-=======
-          <span className="text-sm font-semibold text-foreground truncate">
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
             {log.actorName}
           </span>
           <ActionBadge action={log.action} />
@@ -266,15 +235,9 @@ function LogRow({
             Target:{" "}
             <span className="text-foreground/70 font-medium">{log.target}</span>
           </span>
-<<<<<<< HEAD
           <span className="text-border">.</span>
           <span>IP: {log.ipAddress}</span>
           <span className="text-border">.</span>
-=======
-          <span className="text-border">·</span>
-          <span>IP: {log.ipAddress}</span>
-          <span className="text-border">·</span>
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
           <span>{formatTime(log.timestamp)}</span>
         </div>
       </div>
@@ -293,44 +256,26 @@ function LogRow({
   );
 }
 
-<<<<<<< HEAD
 export default function AuditLogsPage() {
   const { user } = useAuth();
-  const canViewAudit =
-    user?.role === "SuperAdmin" || user?.department?.toUpperCase() === "IT";
-=======
-// ── Page ───────────────────────────────────────────────────────────────────────
-
-export default function AuditLogsPage() {
-  const isAdmin = useHasRole(["SuperAdmin", "HRAdmin"]);
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
+  const canViewAudit = user?.department?.toUpperCase() === "IT";
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [logs, setLogs] = useState<AuditLog[]>([]);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
-<<<<<<< HEAD
   const [selectionNotice, setSelectionNotice] = useState(false);
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   const [confirmDeleteSelected, setConfirmDeleteSelected] = useState(false);
   const [confirmDeleteAll, setConfirmDeleteAll] = useState(false);
   const [deleteSingle, setDeleteSingle] = useState<number | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
-<<<<<<< HEAD
     if (!canViewAudit) {
       toast.error("Audit logs are restricted to IT and Super Admin users.");
       navigate({ to: "/" });
     }
   }, [canViewAudit, navigate]);
-=======
-    if (!isAdmin) {
-      navigate({ to: "/" });
-    }
-  }, [isAdmin, navigate]);
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
   const loadLogs = useCallback(async () => {
     setLoading(true);
@@ -351,23 +296,17 @@ export default function AuditLogsPage() {
       (l) =>
         l.action.toLowerCase().includes(q) ||
         l.actorName.toLowerCase().includes(q) ||
-<<<<<<< HEAD
         l.ipAddress.toLowerCase().includes(q) ||
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         l.target.toLowerCase().includes(q),
     );
   }, [logs, search]);
 
   const grouped = useMemo(() => groupByDate(filtered), [filtered]);
-<<<<<<< HEAD
   const selectedVisibleCount = filtered.filter((log) =>
     selected.has(log.id),
   ).length;
   const allVisibleSelected =
     filtered.length > 0 && selectedVisibleCount === filtered.length;
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
   function toggleSelect(id: number) {
     setSelected((prev) => {
@@ -378,7 +317,6 @@ export default function AuditLogsPage() {
     });
   }
 
-<<<<<<< HEAD
   function toggleSelectVisible() {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -389,10 +327,6 @@ export default function AuditLogsPage() {
       }
       return next;
     });
-=======
-  function selectAll() {
-    setSelected(new Set(filtered.map((l) => l.id)));
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   }
 
   function clearSelection() {
@@ -413,13 +347,10 @@ export default function AuditLogsPage() {
   }
 
   async function handleDeleteSelected() {
-<<<<<<< HEAD
     if (selected.size === 0) {
       setSelectionNotice(true);
       return;
     }
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     setActionLoading(true);
     const ids = Array.from(selected);
     const res = await apiDeleteAuditLogs(ids);
@@ -447,61 +378,36 @@ export default function AuditLogsPage() {
     setConfirmDeleteAll(false);
   }
 
-<<<<<<< HEAD
   if (!canViewAudit) return null;
-=======
-  if (!isAdmin) return null;
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
   return (
     <AppShell>
       <div className="max-w-5xl mx-auto space-y-5" data-ocid="audit.page">
-<<<<<<< HEAD
-=======
-        {/* Header */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
             <Shield className="h-5 w-5 text-primary" />
           </div>
           <div>
             <h1 className="text-xl font-display font-bold text-foreground">
-<<<<<<< HEAD
               IT Security Center
             </h1>
             <p className="text-sm text-muted-foreground">
               System security audit logs from the most recent 150 entries.
-=======
-              Audit Logs
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              System activity log — last 150 entries
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
             </p>
           </div>
         </div>
 
-<<<<<<< HEAD
         <div className="glass-card rounded-xl p-3 flex flex-wrap items-center gap-3">
-=======
-        {/* Controls */}
-        <div className="flex flex-wrap items-center gap-3">
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-<<<<<<< HEAD
               placeholder="Filter by actor, action, IP, or details..."
-=======
-              placeholder="Filter by action or actor..."
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
               className="pl-9"
               data-ocid="audit.search_input"
             />
           </div>
-<<<<<<< HEAD
           <Badge variant="outline" className="bg-primary/10 text-primary">
             Recent 150 logs
           </Badge>
@@ -516,56 +422,20 @@ export default function AuditLogsPage() {
           </div>
           <div className="flex flex-wrap gap-2 ml-auto">
             {selected.size > 0 && (
-=======
-          <div className="flex gap-2 ml-auto">
-            {selected.size > 0 ? (
-              <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  onClick={clearSelection}
-                  data-ocid="audit.deselect_button"
-                >
-                  Deselect
-                </Button>
-                <Button
-                  type="button"
-                  variant="destructive"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => setConfirmDeleteSelected(true)}
-                  data-ocid="audit.delete_selected_button"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  Delete ({selected.size})
-                </Button>
-              </>
-            ) : (
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
               <Button
                 type="button"
                 variant="ghost"
                 size="sm"
-<<<<<<< HEAD
                 onClick={clearSelection}
                 data-ocid="audit.deselect_button"
               >
                 Deselect
-=======
-                onClick={selectAll}
-                disabled={filtered.length === 0}
-                data-ocid="audit.select_all_button"
-              >
-                Select All
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
               </Button>
             )}
             <Button
               type="button"
               variant="outline"
               size="sm"
-<<<<<<< HEAD
               className="gap-1.5"
               onClick={() => exportLogsCsv(filtered)}
               disabled={filtered.length === 0}
@@ -607,8 +477,6 @@ export default function AuditLogsPage() {
               type="button"
               variant="outline"
               size="sm"
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
               className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
               onClick={() => setConfirmDeleteAll(true)}
               disabled={logs.length === 0 || actionLoading}
@@ -620,10 +488,6 @@ export default function AuditLogsPage() {
           </div>
         </div>
 
-<<<<<<< HEAD
-=======
-        {/* Log Groups */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         {loading ? (
           <div className="space-y-4">
             <SkeletonCard lines={4} />
@@ -643,19 +507,11 @@ export default function AuditLogsPage() {
         ) : (
           <div className="space-y-5" data-ocid="audit.log_groups">
             {grouped.map(([dateLabel, groupLogs]) => {
-<<<<<<< HEAD
-=======
-              // Get the global index offset for this group
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
               const groupStart = filtered.findIndex(
                 (l) => l.id === groupLogs[0]?.id,
               );
               return (
                 <div key={dateLabel} className="space-y-1.5">
-<<<<<<< HEAD
-=======
-                  {/* Date header */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                   <div className="flex items-center gap-2 px-1">
                     <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                       {dateLabel}
@@ -666,10 +522,6 @@ export default function AuditLogsPage() {
                     </span>
                   </div>
 
-<<<<<<< HEAD
-=======
-                  {/* Rows */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                   <div className="glass-card rounded-xl overflow-hidden">
                     {groupLogs.map((log, i) => (
                       <LogRow
@@ -688,10 +540,6 @@ export default function AuditLogsPage() {
           </div>
         )}
 
-<<<<<<< HEAD
-=======
-        {/* Footer count */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         {!loading && filtered.length > 0 && (
           <p className="text-xs text-muted-foreground text-center">
             Showing {filtered.length} of {logs.length} entries
@@ -700,7 +548,6 @@ export default function AuditLogsPage() {
         )}
       </div>
 
-<<<<<<< HEAD
       <ConfirmDialog
         open={selectionNotice}
         onOpenChange={setSelectionNotice}
@@ -710,9 +557,6 @@ export default function AuditLogsPage() {
         cancelLabel="Close"
         onConfirm={() => setSelectionNotice(false)}
       />
-=======
-      {/* Dialogs */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       <ConfirmDialog
         open={deleteSingle !== null}
         onOpenChange={() => setDeleteSingle(null)}

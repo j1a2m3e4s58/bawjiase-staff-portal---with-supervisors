@@ -141,7 +141,7 @@
     @apply bg-white/30 dark:bg-[rgba(30,30,40,0.4)] backdrop-blur-sm border border-white/20 dark:border-white/10;
   }
 
-  .glass-button {
+.glass-button {
     @apply bg-primary/90 hover:bg-primary transition-smooth backdrop-blur-sm;
   }
 
@@ -153,7 +153,86 @@
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
   }
 }
-<<<<<<< HEAD
+
+.brand-loader__shell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 132px;
+  height: 132px;
+}
+
+.brand-loader__shell--compact {
+  width: 110px;
+  height: 110px;
+}
+
+.brand-loader__logo {
+  position: relative;
+  z-index: 2;
+  width: 76px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 4px rgba(255, 255, 255, 0.14),
+    0 10px 30px rgba(0, 0, 0, 0.28);
+  animation: brandLoaderSpin 1s linear infinite;
+}
+
+.brand-loader__shell--compact .brand-loader__logo {
+  width: 68px;
+  height: 68px;
+}
+
+.brand-loader__ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 999px;
+  border: 2px solid transparent;
+}
+
+.brand-loader__ring--outer {
+  border-top-color: rgba(35, 204, 109, 0.95);
+  border-right-color: rgba(35, 204, 109, 0.5);
+  animation: brandLoaderOrbit 1.15s linear infinite;
+}
+
+.brand-loader__ring--inner {
+  inset: 16px;
+  border-bottom-color: rgba(98, 170, 255, 0.92);
+  border-left-color: rgba(98, 170, 255, 0.45);
+  animation: brandLoaderOrbitReverse 1.4s linear infinite;
+}
+
+@keyframes brandLoaderSpin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brandLoaderOrbit {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes brandLoaderOrbitReverse {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(-360deg);
+  }
+}
 
 .startup-splash {
   position: fixed;
@@ -502,5 +581,3 @@
     transition-duration: 0.01ms !important;
   }
 }
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58

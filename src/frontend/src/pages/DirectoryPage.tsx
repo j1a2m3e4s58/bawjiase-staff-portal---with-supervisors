@@ -1,9 +1,5 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-<<<<<<< HEAD
-=======
-import { useHasRole } from "@/components/RoleGuard";
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -33,7 +29,6 @@ import {
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS, type User } from "@/types";
-<<<<<<< HEAD
 import { useNavigate } from "@tanstack/react-router";
 import {
   Archive,
@@ -50,29 +45,7 @@ import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const IT_ACCESS_CODE = "BARB-IT-2026";
-=======
-import { Archive, Building2, MapPin, Search, Users } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import { toast } from "sonner";
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function isOnline(lastSeen: bigint): boolean {
-  const fiveMinutesAgo = BigInt(Date.now() - 5 * 60 * 1000);
-  return lastSeen > fiveMinutesAgo;
-}
-
-function getInitials(fullname: string): string {
-  return fullname
-    .split(" ")
-    .map((n) => n[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
-}
-
-const IT_ACCESS_CODE = "IT2024";
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
+const DIRECTORY_REFRESH_MS = 1000;
 
 const ROLE_LABELS: Record<User["role"], string> = {
   SuperAdmin: "Super Admin",
@@ -87,9 +60,11 @@ const ROLE_VARIANT: Record<User["role"], "default" | "secondary" | "outline"> =
     GeneralStaff: "outline",
   };
 
-<<<<<<< HEAD
-function isOnline(lastSeen: bigint): boolean {
-  return lastSeen > BigInt(Date.now() - 5 * 60 * 1000);
+function isOnline(staff: User): boolean {
+  return (
+    staff.isOnlineNow ??
+    (staff.lastSeen > BigInt(Date.now() - 15 * 60 * 1000))
+  );
 }
 
 function getInitials(fullname: string): string {
@@ -125,19 +100,11 @@ function canManageDirectory(user: User | null) {
 }
 
 function OnlineSummary({ staff }: { staff: User[] }) {
-  const online = staff.filter((user) => isOnline(user.lastSeen));
+  const online = staff.filter((user) => isOnline(user));
   const byBranch = BRANCHES.reduce<Record<string, number>>((acc, branch) => {
     acc[branch] = online.filter(
       (user) => normalizeBranch(user.branch) === branch,
     ).length;
-=======
-// ── Online Status Summary ──────────────────────────────────────────────────────
-
-function OnlineSummary({ staff }: { staff: User[] }) {
-  const online = staff.filter((u) => isOnline(u.lastSeen));
-  const byBranch = BRANCHES.reduce<Record<string, number>>((acc, b) => {
-    acc[b] = online.filter((u) => u.branch === b).length;
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     return acc;
   }, {});
 
@@ -150,7 +117,6 @@ function OnlineSummary({ staff }: { staff: User[] }) {
         <span className="inline-block w-2 h-2 rounded-full bg-green-500 animate-pulse" />
         {online.length} staff online
       </span>
-<<<<<<< HEAD
       {BRANCHES.map((branch) => (
         <span
           key={branch}
@@ -165,31 +131,14 @@ function OnlineSummary({ staff }: { staff: User[] }) {
           </Badge>
         </span>
       ))}
-=======
-      {BRANCHES.map((b) =>
-        byBranch[b] > 0 ? (
-          <span key={b} className="text-muted-foreground">
-            · {byBranch[b]} in {b}
-          </span>
-        ) : null,
-      )}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     </div>
   );
 }
 
-<<<<<<< HEAD
 interface StaffCardProps {
   staff: User;
   canEdit: boolean;
   canSeeLastSeen: boolean;
-=======
-// ── Staff Card ─────────────────────────────────────────────────────────────────
-
-interface StaffCardProps {
-  staff: User;
-  canEdit: boolean;
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   isSelf: boolean;
   onEdit: (staff: User) => void;
   onArchive: (staff: User) => void;
@@ -199,16 +148,13 @@ interface StaffCardProps {
 function StaffCard({
   staff,
   canEdit,
-<<<<<<< HEAD
   canSeeLastSeen,
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   isSelf,
   onEdit,
   onArchive,
   index,
 }: StaffCardProps) {
-  const online = isOnline(staff.lastSeen);
+  const online = isOnline(staff);
   const initials = getInitials(staff.fullname);
   const canArchive = canEdit && !isSelf && staff.role !== "SuperAdmin";
 
@@ -217,10 +163,6 @@ function StaffCard({
       className="glass-card rounded-xl p-4 flex flex-col gap-3 hover:glass-card-elevated transition-smooth cursor-default group"
       data-ocid={`directory.staff_card.item.${index}`}
     >
-<<<<<<< HEAD
-=======
-      {/* Avatar + name row */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       <div className="flex items-start gap-3">
         <div className="relative flex-shrink-0">
           <Avatar className="h-11 w-11 ring-2 ring-border/40">
@@ -231,7 +173,6 @@ function StaffCard({
               {initials}
             </AvatarFallback>
           </Avatar>
-<<<<<<< HEAD
           <span
             className={`absolute bottom-0 right-0 block w-3 h-3 rounded-full ring-2 ring-card ${
               online ? "bg-green-500" : "bg-destructive"
@@ -267,23 +208,6 @@ function StaffCard({
           </div>
         </div>
 
-=======
-          {online && (
-            <span
-              className="absolute bottom-0 right-0 block w-3 h-3 rounded-full bg-green-500 ring-2 ring-card"
-              title="Online"
-            />
-          )}
-        </div>
-        <div className="min-w-0 flex-1">
-          <div className="font-semibold text-foreground text-sm truncate leading-tight">
-            {staff.fullname}
-          </div>
-          <div className="text-xs text-muted-foreground truncate mt-0.5">
-            {staff.position || "—"}
-          </div>
-        </div>
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         <Badge
           variant={ROLE_VARIANT[staff.role]}
           className="text-[10px] flex-shrink-0 mt-0.5"
@@ -292,18 +216,10 @@ function StaffCard({
         </Badge>
       </div>
 
-<<<<<<< HEAD
       <div className="flex items-center gap-3 text-xs text-muted-foreground">
         <span className="flex items-center gap-1 truncate">
           <Building2 className="h-3 w-3 flex-shrink-0" />
           <span className="truncate">{staff.department || "Other"}</span>
-=======
-      {/* Meta */}
-      <div className="flex items-center gap-3 text-xs text-muted-foreground">
-        <span className="flex items-center gap-1 truncate">
-          <Building2 className="h-3 w-3 flex-shrink-0" />
-          <span className="truncate">{staff.department}</span>
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         </span>
         <span className="flex items-center gap-1 truncate">
           <MapPin className="h-3 w-3 flex-shrink-0" />
@@ -311,7 +227,6 @@ function StaffCard({
         </span>
       </div>
 
-<<<<<<< HEAD
       <div className="space-y-1.5 text-xs text-muted-foreground border-t border-border/30 pt-3">
         <a
           href={`mailto:${staff.email}`}
@@ -329,9 +244,6 @@ function StaffCard({
         </a>
       </div>
 
-=======
-      {/* Actions — admin only */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       {canEdit && (
         <div className="flex gap-2 pt-1 border-t border-border/30">
           <Button
@@ -363,11 +275,6 @@ function StaffCard({
   );
 }
 
-<<<<<<< HEAD
-=======
-// ── Edit Staff Modal ───────────────────────────────────────────────────────────
-
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 interface EditStaffModalProps {
   staff: User | null;
   open: boolean;
@@ -389,15 +296,9 @@ function EditStaffModal({
 
   useEffect(() => {
     if (staff) {
-<<<<<<< HEAD
       setDepartment(staff.department || "ADMIN");
       setBranch(staff.branch || "HEAD OFFICE");
       setPosition(staff.position || "");
-=======
-      setDepartment(staff.department);
-      setBranch(staff.branch);
-      setPosition(staff.position);
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       setItCode("");
     }
   }, [staff]);
@@ -410,7 +311,6 @@ function EditStaffModal({
       toast.error("Invalid IT access code");
       return;
     }
-<<<<<<< HEAD
 
     setSaving(true);
     const req: UpdateStaffRequest = {
@@ -422,12 +322,6 @@ function EditStaffModal({
     const result = await apiUpdateStaff(staff.id, req);
     setSaving(false);
 
-=======
-    setSaving(true);
-    const req: UpdateStaffRequest = { department, branch, position };
-    const result = await apiUpdateStaff(staff.id, req);
-    setSaving(false);
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     if ("ok" in result) {
       toast.success("Staff member updated successfully");
       onSaved(result.ok);
@@ -444,21 +338,14 @@ function EditStaffModal({
         data-ocid="directory.edit_staff.dialog"
       >
         <DialogHeader>
-<<<<<<< HEAD
           <DialogTitle>Update Staff Details</DialogTitle>
           <DialogDescription>
             Update position, branch, or department for {staff?.fullname}.
-=======
-          <DialogTitle>Edit Staff Member</DialogTitle>
-          <DialogDescription>
-            Update department, branch, or position for {staff?.fullname}.
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
           </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-<<<<<<< HEAD
             <Label htmlFor="edit-position">Position / Job Title</Label>
             <Input
               id="edit-position"
@@ -469,45 +356,6 @@ function EditStaffModal({
             />
           </div>
 
-=======
-            <Label htmlFor="edit-dept">Department</Label>
-            <Select value={department} onValueChange={setDepartment}>
-              <SelectTrigger
-                id="edit-dept"
-                data-ocid="directory.edit_staff.department.select"
-              >
-                <SelectValue placeholder="Select department" />
-              </SelectTrigger>
-              <SelectContent>
-                {DEPARTMENTS.map((d) => (
-                  <SelectItem key={d} value={d}>
-                    {d}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-
-          {needsItCode && (
-            <div className="space-y-1.5">
-              <Label htmlFor="edit-it-code">
-                IT Access Code <span className="text-destructive">*</span>
-              </Label>
-              <Input
-                id="edit-it-code"
-                type="password"
-                placeholder="Enter IT department access code"
-                value={itCode}
-                onChange={(e) => setItCode(e.target.value)}
-                data-ocid="directory.edit_staff.it_code.input"
-              />
-              <p className="text-xs text-muted-foreground">
-                Required when assigning a staff member to the IT department.
-              </p>
-            </div>
-          )}
-
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
           <div className="space-y-1.5">
             <Label htmlFor="edit-branch">Branch</Label>
             <Select value={branch} onValueChange={setBranch}>
@@ -518,15 +366,9 @@ function EditStaffModal({
                 <SelectValue placeholder="Select branch" />
               </SelectTrigger>
               <SelectContent>
-<<<<<<< HEAD
                 {BRANCHES.map((item) => (
                   <SelectItem key={item} value={item}>
                     {item}
-=======
-                {BRANCHES.map((b) => (
-                  <SelectItem key={b} value={b}>
-                    {b}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -534,7 +376,6 @@ function EditStaffModal({
           </div>
 
           <div className="space-y-1.5">
-<<<<<<< HEAD
             <Label htmlFor="edit-dept">Department</Label>
             <Select value={department} onValueChange={setDepartment}>
               <SelectTrigger
@@ -572,17 +413,6 @@ function EditStaffModal({
               </p>
             </div>
           )}
-=======
-            <Label htmlFor="edit-position">Position</Label>
-            <Input
-              id="edit-position"
-              placeholder="e.g. Teller, Loan Officer"
-              value={position}
-              onChange={(e) => setPosition(e.target.value)}
-              data-ocid="directory.edit_staff.position.input"
-            />
-          </div>
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         </div>
 
         <DialogFooter>
@@ -600,11 +430,7 @@ function EditStaffModal({
             disabled={saving}
             data-ocid="directory.edit_staff.save_button"
           >
-<<<<<<< HEAD
             {saving ? "Saving..." : "Save Changes"}
-=======
-            {saving ? "Saving…" : "Save Changes"}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -612,18 +438,10 @@ function EditStaffModal({
   );
 }
 
-<<<<<<< HEAD
 export default function DirectoryPage() {
   const { user: currentUser } = useAuth();
   const navigate = useNavigate();
   const canEdit = canManageDirectory(currentUser);
-=======
-// ── Directory Page ─────────────────────────────────────────────────────────────
-
-export default function DirectoryPage() {
-  const { user: currentUser } = useAuth();
-  const canEdit = useHasRole(["SuperAdmin", "HRAdmin"]);
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
 
   const [staff, setStaff] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
@@ -633,18 +451,54 @@ export default function DirectoryPage() {
   const [archiving, setArchiving] = useState(false);
 
   useEffect(() => {
-    void (async () => {
+    let mounted = true;
+
+    const loadStaff = async () => {
       const data = await apiGetActiveStaff();
+      if (!mounted) return;
       setStaff(data);
       setLoading(false);
-    })();
+    };
+
+    void loadStaff();
+
+    const intervalId = window.setInterval(() => {
+      void loadStaff();
+    }, DIRECTORY_REFRESH_MS);
+
+    const handleFocus = () => {
+      void loadStaff();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void loadStaff();
+      }
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === null || event.key === "barb_mock_users") {
+        void loadStaff();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    window.addEventListener("storage", handleStorage);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      mounted = false;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      window.removeEventListener("storage", handleStorage);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
   }, []);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return staff;
     return staff.filter(
-<<<<<<< HEAD
       (user) =>
         user.fullname.toLowerCase().includes(q) ||
         user.department.toLowerCase().includes(q) ||
@@ -652,45 +506,27 @@ export default function DirectoryPage() {
         user.position.toLowerCase().includes(q) ||
         user.email.toLowerCase().includes(q) ||
         user.phone.toLowerCase().includes(q),
-=======
-      (u) =>
-        u.fullname.toLowerCase().includes(q) ||
-        u.department.toLowerCase().includes(q) ||
-        u.branch.toLowerCase().includes(q) ||
-        u.position.toLowerCase().includes(q),
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     );
   }, [staff, search]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, User[]>();
-<<<<<<< HEAD
     for (const user of filtered) {
       const department = user.department || "Other";
       if (!map.has(department)) map.set(department, []);
       map.get(department)!.push(user);
-=======
-    for (const u of filtered) {
-      if (!map.has(u.department)) map.set(u.department, []);
-      map.get(u.department)!.push(u);
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [filtered]);
 
   function handleSaved(updated: User) {
-<<<<<<< HEAD
     setStaff((prev) =>
       prev.map((member) => (member.id === updated.id ? updated : member)),
     );
-=======
-    setStaff((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   }
 
   async function handleArchiveConfirm() {
     if (!archiveTarget) return;
-<<<<<<< HEAD
     if (archiveTarget.id === currentUser?.id) {
       toast.error("You cannot archive yourself.");
       setArchiveTarget(null);
@@ -704,33 +540,17 @@ export default function DirectoryPage() {
     if ("ok" in result) {
       toast.success(`${archiveTarget.fullname} moved to Past Staff records.`);
       setStaff((prev) => prev.filter((user) => user.id !== archiveTarget.id));
-=======
-    setArchiving(true);
-    const result = await apiArchiveStaff(archiveTarget.id);
-    setArchiving(false);
-    if ("ok" in result) {
-      toast.success(`${archiveTarget.fullname} has been archived`);
-      setStaff((prev) => prev.filter((u) => u.id !== archiveTarget.id));
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
     } else {
       toast.error(result.err ?? "Failed to archive staff member");
     }
     setArchiveTarget(null);
   }
 
-<<<<<<< HEAD
-=======
-  // Running index across all cards for deterministic data-ocid
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
   let cardIndex = 0;
 
   return (
     <AppShell>
       <div className="space-y-6 max-w-7xl mx-auto" data-ocid="directory.page">
-<<<<<<< HEAD
-=======
-        {/* Header */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-2">
@@ -741,7 +561,6 @@ export default function DirectoryPage() {
               {staff.length} active staff member{staff.length !== 1 ? "s" : ""}
             </p>
           </div>
-<<<<<<< HEAD
           {canEdit && (
             <Button
               type="button"
@@ -754,13 +573,10 @@ export default function DirectoryPage() {
               Past Staff
             </Button>
           )}
-=======
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         </div>
 
         {loading ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-<<<<<<< HEAD
             {Array.from({ length: 6 }, (_, index) => `sk-${index}`).map(
               (key) => (
                 <SkeletonCard key={key} lines={2} hasAvatar />
@@ -775,22 +591,6 @@ export default function DirectoryPage() {
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Search staff directory..."
-=======
-            {Array.from({ length: 6 }, (_, i) => `sk-${i}`).map((k) => (
-              <SkeletonCard key={k} lines={2} hasAvatar />
-            ))}
-          </div>
-        ) : (
-          <>
-            {/* Online Summary */}
-            {staff.length > 0 && <OnlineSummary staff={staff} />}
-
-            {/* Search */}
-            <div className="relative max-w-md">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search by name, department, or branch…"
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                 className="pl-9"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -798,35 +598,22 @@ export default function DirectoryPage() {
               />
             </div>
 
-<<<<<<< HEAD
-=======
-            {/* Grouped Results */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
             {grouped.length === 0 ? (
               <div
                 className="text-center py-16 glass-card rounded-xl"
                 data-ocid="directory.empty_state"
               >
                 <Users className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-<<<<<<< HEAD
                 <p className="text-foreground font-medium">
                   No staff match your search
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   Try a different name, branch, department, email, or phone
                   number.
-=======
-                <p className="text-foreground font-medium">No staff found</p>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {search
-                    ? "Try a different search term"
-                    : "No active staff members"}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                 </p>
               </div>
             ) : (
               <div className="space-y-8">
-<<<<<<< HEAD
                 {grouped.map(([department, members]) => (
                   <section
                     key={department}
@@ -836,18 +623,6 @@ export default function DirectoryPage() {
                       <div className="flex items-center gap-2">
                         <span className="font-display font-semibold text-foreground text-sm uppercase tracking-wider">
                           {department}
-=======
-                {grouped.map(([dept, members]) => (
-                  <section
-                    key={dept}
-                    data-ocid={`directory.dept_section.${dept.toLowerCase().replace(/\s+/g, "_")}`}
-                  >
-                    {/* Dept header */}
-                    <div className="flex items-center gap-3 mb-4">
-                      <div className="flex items-center gap-2">
-                        <span className="font-display font-semibold text-foreground text-sm uppercase tracking-wider">
-                          {dept}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                         </span>
                         <Badge
                           variant="secondary"
@@ -859,33 +634,19 @@ export default function DirectoryPage() {
                       <div className="flex-1 h-px bg-border/50" />
                     </div>
 
-<<<<<<< HEAD
                     <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
                       {members.map((member) => {
                         const index = ++cardIndex;
-=======
-                    {/* Staff grid */}
-                    <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                      {members.map((member) => {
-                        const idx = ++cardIndex;
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                         return (
                           <StaffCard
                             key={member.id}
                             staff={member}
                             canEdit={canEdit}
-<<<<<<< HEAD
                             canSeeLastSeen={canEdit}
                             isSelf={currentUser?.id === member.id}
                             onEdit={setEditTarget}
                             onArchive={setArchiveTarget}
                             index={index}
-=======
-                            isSelf={currentUser?.id === member.id}
-                            onEdit={setEditTarget}
-                            onArchive={setArchiveTarget}
-                            index={idx}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
                           />
                         );
                       })}
@@ -898,10 +659,6 @@ export default function DirectoryPage() {
         )}
       </div>
 
-<<<<<<< HEAD
-=======
-      {/* Edit Modal */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       <EditStaffModal
         staff={editTarget}
         open={!!editTarget}
@@ -911,24 +668,14 @@ export default function DirectoryPage() {
         onSaved={handleSaved}
       />
 
-<<<<<<< HEAD
-=======
-      {/* Archive Confirm */}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
       <ConfirmDialog
         open={!!archiveTarget}
         onOpenChange={(open) => {
           if (!open) setArchiveTarget(null);
         }}
-<<<<<<< HEAD
         title="Remove Staff Member"
         description={`You are about to remove ${archiveTarget?.fullname} from the active directory and move the record to Past Staff.`}
         confirmLabel={archiving ? "Removing..." : "Yes, Remove"}
-=======
-        title="Archive Staff Member"
-        description={`Are you sure you want to archive ${archiveTarget?.fullname}? They will be moved to Past Staff and lose portal access.`}
-        confirmLabel={archiving ? "Archiving…" : "Archive"}
->>>>>>> 6f4511c08c8765a8e39dafb1e43a08a3658dea58
         cancelLabel="Cancel"
         variant="destructive"
         onConfirm={handleArchiveConfirm}
