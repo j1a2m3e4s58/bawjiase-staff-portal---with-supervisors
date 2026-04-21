@@ -127,6 +127,27 @@ function deserializeUser(user: WireUser): User {
   };
 }
 
+function deserializeNotification(raw: Record<string, unknown>): Notification {
+  const kindValue = String(raw.kind ?? "system");
+  const kind: Notification["kind"] =
+    kindValue === "announcement" ||
+    kindValue === "poll" ||
+    kindValue === "training" ||
+    kindValue === "support"
+      ? kindValue
+      : "system";
+  return {
+    id: Number(raw.id ?? 0),
+    userId: String(raw.userId ?? ""),
+    kind,
+    title: String(raw.title ?? ""),
+    message: String(raw.message ?? ""),
+    linkTo: typeof raw.linkTo === "string" ? raw.linkTo : null,
+    isRead: !!raw.isRead,
+    createdAt: contentBigInt(raw.createdAt),
+  };
+}
+
 // ── Auth / Registration ───────────────────────────────────────────────────────
 
 export interface RegisterRequest {
@@ -1552,18 +1573,38 @@ const _notifications: Notification[] = [
 
 export async function apiGetUnreadNotificationCount(): Promise<number> {
   await delay(200);
-  return _notifications.filter((n) => !n.isRead).length;
+  try {
+    const payload = await getMailApiJson("/notifications/unread-count");
+    return Number(payload.count ?? 0);
+  } catch {
+    return _notifications.filter((n) => !n.isRead).length;
+  }
 }
 
 export async function apiGetNotifications(): Promise<Notification[]> {
   await delay(300);
-  return [..._notifications].sort(
-    (a, b) => Number(b.createdAt) - Number(a.createdAt),
-  );
+  try {
+    const payload = await getMailApiJson("/notifications");
+    const items = Array.isArray(payload.notifications)
+      ? (payload.notifications as Array<Record<string, unknown>>).map(
+          deserializeNotification,
+        )
+      : [];
+    return items.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+  } catch {
+    return [..._notifications].sort(
+      (a, b) => Number(b.createdAt) - Number(a.createdAt),
+    );
+  }
 }
 
 export async function apiMarkNotificationRead(id: number): Promise<boolean> {
   await delay(150);
+  try {
+    await postMailApi(`/notifications/${id}/read`, {});
+  } catch {
+    // Fall back to local state below.
+  }
   const notif = _notifications.find((n) => n.id === id);
   if (notif) notif.isRead = true;
   return !!notif;
@@ -1571,6 +1612,11 @@ export async function apiMarkNotificationRead(id: number): Promise<boolean> {
 
 export async function apiMarkAllNotificationsRead(): Promise<void> {
   await delay(200);
+  try {
+    await postMailApi("/notifications/read-all", {});
+  } catch {
+    // Fall back to local state below.
+  }
   for (const n of _notifications) n.isRead = true;
 }
 
@@ -2312,6 +2358,21 @@ export async function apiUpdateTrainingProgress(
   await delay(100);
   const user = currentTrainingUser();
   if (!user) return;
+  try {
+    await postMailApiJson(`/content/training/videos/${videoId}/progress`, {
+      progressPercent,
+    });
+    const videosPayload = await getMailApiJson("/content/training/videos");
+    const sharedItems = Array.isArray(videosPayload.videos)
+      ? (videosPayload.videos as Array<Record<string, unknown>>).map(
+          deserializeTrainingVideo,
+        )
+      : [];
+    replaceSharedTrainingVideos(sharedItems);
+    return;
+  } catch {
+    // Fall back to local state below.
+  }
   const key = videoProgressKey(user.id, videoId);
   _videoProgress[key] = {
     videoId,
@@ -2332,11 +2393,38 @@ export async function apiGetMyVideoProgress(
   await delay(150);
   const user = currentTrainingUser();
   if (!user) return null;
+  try {
+    const payload = await getMailApiJson(`/content/training/videos/${videoId}/progress`);
+    const raw = payload.progress as Record<string, unknown> | null | undefined;
+    if (!raw) return null;
+    return {
+      videoId: Number(raw.videoId ?? videoId),
+      progressPercent: Number(raw.progressPercent ?? 0),
+      isComplete: !!raw.isComplete,
+      lastWatched: contentBigInt(raw.lastWatched),
+    };
+  } catch {
+    // Fall back to local state below.
+  }
   return _videoProgress[videoProgressKey(user.id, videoId)] ?? null;
 }
 
 export async function apiGetVideoWatchStats(): Promise<VideoWatchStat[]> {
   await delay(300);
+  try {
+    const payload = await getMailApiJson("/content/training/videos/stats");
+    const stats = Array.isArray(payload.stats)
+      ? (payload.stats as Array<Record<string, unknown>>).map((item) => ({
+          videoId: Number(item.videoId ?? 0),
+          title: String(item.title ?? ""),
+          totalWatched: Number(item.totalWatched ?? 0),
+          completedCount: Number(item.completedCount ?? 0),
+        }))
+      : [];
+    return stats;
+  } catch {
+    // Fall back to local state below.
+  }
   return _trainingVideos
     .filter((video) => !video.isArchived)
     .map((video) => ({
@@ -2426,6 +2514,19 @@ export async function apiMarkDocumentOpened(id: number): Promise<void> {
   await delay(100);
   const user = currentTrainingUser();
   if (!user) return;
+  try {
+    await postMailApiJson(`/content/training/documents/${id}/open`, {});
+    const documentsPayload = await getMailApiJson("/content/training/documents");
+    const sharedItems = Array.isArray(documentsPayload.documents)
+      ? (documentsPayload.documents as Array<Record<string, unknown>>).map(
+          deserializeTrainingDocument,
+        )
+      : [];
+    replaceSharedTrainingDocuments(sharedItems);
+    return;
+  } catch {
+    // Fall back to local state below.
+  }
   _documentOpens[documentOpenKey(user.id, id)] = BigInt(Date.now());
   const doc = _trainingDocuments.find((item) => item.id === id);
   if (doc) {
@@ -2439,6 +2540,19 @@ export async function apiGetDocumentViewStats(): Promise<
   { docId: number; title: string; openedCount: number }[]
 > {
   await delay(300);
+  try {
+    const payload = await getMailApiJson("/content/training/documents/stats");
+    const stats = Array.isArray(payload.stats)
+      ? (payload.stats as Array<Record<string, unknown>>).map((item) => ({
+          docId: Number(item.docId ?? 0),
+          title: String(item.title ?? ""),
+          openedCount: Number(item.openedCount ?? 0),
+        }))
+      : [];
+    return stats;
+  } catch {
+    // Fall back to local state below.
+  }
   return _trainingDocuments
     .filter((doc) => !doc.isArchived)
     .map((doc) => ({
@@ -2456,6 +2570,19 @@ export async function apiGetMyDocumentOpenState(
   await delay(120);
   const user = currentTrainingUser();
   if (!user) return { isOpened: false, openedAt: null };
+  try {
+    const payload = await getMailApiJson(`/content/training/documents/${docId}/open-state`);
+    const raw = payload.state as Record<string, unknown> | undefined;
+    return {
+      isOpened: !!raw?.isOpened,
+      openedAt:
+        raw && raw.openedAt !== null && raw.openedAt !== undefined
+          ? contentBigInt(raw.openedAt)
+          : null,
+    };
+  } catch {
+    // Fall back to local state below.
+  }
   const openedAt = _documentOpens[documentOpenKey(user.id, docId)] ?? null;
   return {
     isOpened: openedAt !== null,
@@ -2465,6 +2592,45 @@ export async function apiGetMyDocumentOpenState(
 
 export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOverview> {
   await delay(500);
+  try {
+    const payload = await getMailApiJson("/content/training/admin-overview");
+    const raw = payload.overview as Record<string, unknown> | undefined;
+    if (raw) {
+      return {
+        totalVideos: Number(raw.totalVideos ?? 0),
+        totalDocuments: Number(raw.totalDocuments ?? 0),
+        totalStaff: Number(raw.totalStaff ?? 0),
+        videoStats: Array.isArray(raw.videoStats)
+          ? (raw.videoStats as Array<Record<string, unknown>>).map((item) => ({
+              id: Number(item.id ?? 0),
+              title: String(item.title ?? ""),
+              eligibleCount: Number(item.eligibleCount ?? 0),
+              watchedCount: Number(item.watchedCount ?? 0),
+              completionPct: Number(item.completionPct ?? 0),
+              isMandatory: !!item.isMandatory,
+              incompleteUsers: Array.isArray(item.incompleteUsers)
+                ? item.incompleteUsers.map((name) => String(name))
+                : [],
+            }))
+          : [],
+        docStats: Array.isArray(raw.docStats)
+          ? (raw.docStats as Array<Record<string, unknown>>).map((item) => ({
+              id: Number(item.id ?? 0),
+              title: String(item.title ?? ""),
+              eligibleCount: Number(item.eligibleCount ?? 0),
+              openedCount: Number(item.openedCount ?? 0),
+              openedPct: Number(item.openedPct ?? 0),
+              isMandatory: !!item.isMandatory,
+              incompleteUsers: Array.isArray(item.incompleteUsers)
+                ? item.incompleteUsers.map((name) => String(name))
+                : [],
+            }))
+          : [],
+      };
+    }
+  } catch {
+    // Fall back to local state below.
+  }
   await Promise.all([apiGetTrainingVideos(), apiGetTrainingDocuments()]);
   const totalStaff = getPortalActiveUsers().length;
   return {
@@ -2604,10 +2770,27 @@ export async function apiDeleteTrainingDocument(
 }
 
 export async function apiSendVideoTrainingReminder(
-  _videoId: number,
+  videoId: number,
 ): Promise<ApiResult<null>> {
   await delay(400);
-  return ok(null);
+  try {
+    await postMailApi(`/content/training/videos/${videoId}/remind`, {});
+    return ok(null);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Reminder could not be sent");
+  }
+}
+
+export async function apiSendDocumentTrainingReminder(
+  documentId: number,
+): Promise<ApiResult<null>> {
+  await delay(400);
+  try {
+    await postMailApi(`/content/training/documents/${documentId}/remind`, {});
+    return ok(null);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Reminder could not be sent");
+  }
 }
 
 // ── IT Support ────────────────────────────────────────────────────────────────

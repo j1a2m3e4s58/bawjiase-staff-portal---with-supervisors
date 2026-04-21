@@ -25,10 +25,15 @@ ANNOUNCEMENTS_STORE_PATH = os.path.join(BASE_DIR, "announcements_store.json")
 FORMS_STORE_PATH = os.path.join(BASE_DIR, "forms_store.json")
 TRAINING_VIDEOS_STORE_PATH = os.path.join(BASE_DIR, "training_videos_store.json")
 TRAINING_DOCUMENTS_STORE_PATH = os.path.join(BASE_DIR, "training_documents_store.json")
+NOTIFICATIONS_STORE_PATH = os.path.join(BASE_DIR, "notifications_store.json")
+TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(BASE_DIR, "training_video_progress_store.json")
+TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(BASE_DIR, "training_document_opens_store.json")
+TRAINING_REMINDERS_STORE_PATH = os.path.join(BASE_DIR, "training_reminders_store.json")
 PRESENCE_TTL_SECONDS = 15 * 60
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
+TRAINING_REMINDER_COOLDOWN_SECONDS = 24 * 60 * 60
 DEFAULT_PASSWORD_HASH = "403784255"  # Bcb@2026
 IT_ACCESS_CODE = "BCB-IT-2026"
 HR_ACCESS_CODE = "BCB-HR-2026"
@@ -453,6 +458,76 @@ def next_content_id(items: list[dict], floor: int = 1000) -> int:
     return current + 1
 
 
+def load_training_video_progress_store() -> list[dict]:
+    items = load_json_list_store(TRAINING_VIDEO_PROGRESS_STORE_PATH)
+    normalized = []
+    for item in items:
+        try:
+            normalized.append(
+                {
+                    "userId": str(item.get("userId", "")).strip(),
+                    "videoId": int(item.get("videoId", 0) or 0),
+                    "progressPercent": max(0, min(100, int(item.get("progressPercent", 0) or 0))),
+                    "isComplete": bool(item.get("isComplete", False)),
+                    "lastWatched": int(item.get("lastWatched", 0) or 0),
+                }
+            )
+        except Exception:
+            continue
+    return [item for item in normalized if item["userId"] and item["videoId"] > 0]
+
+
+def save_training_video_progress_store(items: list[dict]) -> None:
+    atomic_write_json(TRAINING_VIDEO_PROGRESS_STORE_PATH, items)
+
+
+def load_training_document_opens_store() -> list[dict]:
+    items = load_json_list_store(TRAINING_DOCUMENT_OPENS_STORE_PATH)
+    normalized = []
+    for item in items:
+        try:
+            normalized.append(
+                {
+                    "userId": str(item.get("userId", "")).strip(),
+                    "documentId": int(item.get("documentId", 0) or 0),
+                    "openedAt": int(item.get("openedAt", 0) or 0),
+                }
+            )
+        except Exception:
+            continue
+    return [item for item in normalized if item["userId"] and item["documentId"] > 0]
+
+
+def save_training_document_opens_store(items: list[dict]) -> None:
+    atomic_write_json(TRAINING_DOCUMENT_OPENS_STORE_PATH, items)
+
+
+def load_training_reminders_store() -> list[dict]:
+    items = load_json_list_store(TRAINING_REMINDERS_STORE_PATH)
+    normalized = []
+    for item in items:
+        try:
+            normalized.append(
+                {
+                    "kind": str(item.get("kind", "")).strip(),
+                    "itemId": int(item.get("itemId", 0) or 0),
+                    "userId": str(item.get("userId", "")).strip(),
+                    "sentAt": int(item.get("sentAt", 0) or 0),
+                }
+            )
+        except Exception:
+            continue
+    return [
+        item
+        for item in normalized
+        if item["kind"] and item["itemId"] > 0 and item["userId"] and item["sentAt"] > 0
+    ]
+
+
+def save_training_reminders_store(items: list[dict]) -> None:
+    atomic_write_json(TRAINING_REMINDERS_STORE_PATH, items)
+
+
 def load_sessions() -> dict[str, dict]:
     raw = read_json_file(SESSIONS_STORE_PATH, {})
     if not isinstance(raw, dict):
@@ -635,6 +710,322 @@ def send_password_reset_link_email(email: str, reset_url: str) -> None:
     send_mail(email, "Bawjiase Staff Portal - Password Reset", text_body, html_body)
 
 
+def portal_public_url() -> str:
+    return os.getenv("PORTAL_PUBLIC_URL", "").strip().rstrip("/")
+
+
+def build_portal_link(path: str) -> str | None:
+    base = portal_public_url()
+    if not base:
+        return None
+    return f"{base}{path if path.startswith('/') else f'/{path}'}"
+
+
+def eligible_users_for_visibility(visibility: str, department: str | None = None) -> list[dict]:
+    normalized_visibility = str(visibility or "General").strip()
+    normalized_department = str(department or "").strip().upper()
+    users = load_user_store()
+    eligible = [
+        user
+        for user in users
+        if user["isActive"] and user["isVerified"] and not user["isArchived"]
+    ]
+    if normalized_visibility == "Department" and normalized_department:
+        return [
+            user
+            for user in eligible
+            if str(user.get("department", "")).strip().upper() == normalized_department
+        ]
+    return eligible
+
+
+def create_notifications_for_users(
+    users: list[dict],
+    *,
+    kind: str,
+    title: str,
+    message: str,
+    link_to: str | None,
+) -> int:
+    items = load_json_list_store(NOTIFICATIONS_STORE_PATH)
+    created_at = now_ms()
+    count = 0
+    for user in users:
+        items.insert(
+            0,
+            {
+                "id": next_content_id(items, floor=1),
+                "userId": user["id"],
+                "kind": kind,
+                "title": title,
+                "message": message,
+                "linkTo": link_to,
+                "isRead": False,
+                "createdAt": created_at,
+            },
+        )
+        count += 1
+    save_json_list_store(NOTIFICATIONS_STORE_PATH, items)
+    return count
+
+
+def send_content_notification_email(
+    *,
+    to_email: str,
+    subject: str,
+    headline: str,
+    intro: str,
+    item_title: str,
+    link_to: str | None,
+) -> None:
+    action_line = f"Open the portal here: {link_to}" if link_to else "Open the staff portal to view the new item."
+    text_body = (
+        "Dear Staff,\n\n"
+        f"{intro}\n\n"
+        f"Item: {item_title}\n"
+        f"{action_line}\n\n"
+        "Bawjiase Community Bank PLC"
+    )
+    action_html = (
+        f'<p style="text-align: center; margin: 28px 0;">'
+        f'<a href="{link_to}" style="background: #15803d; color: #ffffff; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-weight: 700;">Open Portal</a>'
+        f"</p>"
+        if link_to
+        else "<p>Open the staff portal to view the new item.</p>"
+    )
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
+          <h2 style="color: #15803d; text-align: center;">{headline}</h2>
+          <p>Dear Staff,</p>
+          <p>{intro}</p>
+          <div style="margin: 18px 0; padding: 16px; background: #f0fdf4; border-radius: 10px; border: 1px solid #bbf7d0;">
+            <strong>{item_title}</strong>
+          </div>
+          {action_html}
+          <p style="font-weight: 700; color: #4b5563;">Bawjiase Community Bank PLC</p>
+        </div>
+      </body>
+    </html>
+    """
+    send_mail(to_email, subject, text_body, html_body)
+
+
+def fanout_content_notification(
+    *,
+    kind: str,
+    title: str,
+    message: str,
+    email_subject: str,
+    email_headline: str,
+    email_intro: str,
+    item_title: str,
+    visibility: str,
+    department: str | None,
+    link_to: str | None,
+) -> dict[str, int]:
+    users = eligible_users_for_visibility(visibility, department)
+    notification_count = create_notifications_for_users(
+        users,
+        kind=kind,
+        title=title,
+        message=message,
+        link_to=link_to,
+    )
+    email_count = 0
+    for user in users:
+        email = str(user.get("email", "")).strip().lower()
+        if not email:
+            continue
+        try:
+            send_content_notification_email(
+                to_email=email,
+                subject=email_subject,
+                headline=email_headline,
+                intro=email_intro,
+                item_title=item_title,
+                link_to=build_portal_link(link_to) if link_to else None,
+            )
+            email_count += 1
+        except Exception:
+            app.logger.exception("Failed sending content notification email", extra={"email": email})
+    return {
+        "notifications": notification_count,
+        "emails": email_count,
+    }
+
+
+def serialize_video_progress(item: dict) -> dict:
+    return {
+        "videoId": int(item.get("videoId", 0) or 0),
+        "progressPercent": int(item.get("progressPercent", 0) or 0),
+        "isComplete": bool(item.get("isComplete", False)),
+        "lastWatched": int(item.get("lastWatched", 0) or 0),
+    }
+
+
+def serialize_document_open_state(item: dict | None) -> dict:
+    opened_at = int(item.get("openedAt", 0) or 0) if item else 0
+    return {
+        "isOpened": opened_at > 0,
+        "openedAt": opened_at or None,
+    }
+
+
+def get_video_watched_user_ids(video_id: int) -> set[str]:
+    return {
+        item["userId"]
+        for item in load_training_video_progress_store()
+        if int(item.get("videoId", 0) or 0) == video_id and int(item.get("progressPercent", 0) or 0) > 0
+    }
+
+
+def get_video_completed_user_ids(video_id: int) -> set[str]:
+    return {
+        item["userId"]
+        for item in load_training_video_progress_store()
+        if int(item.get("videoId", 0) or 0) == video_id and bool(item.get("isComplete", False))
+    }
+
+
+def get_document_opened_user_ids(document_id: int) -> set[str]:
+    return {
+        item["userId"]
+        for item in load_training_document_opens_store()
+        if int(item.get("documentId", 0) or 0) == document_id and int(item.get("openedAt", 0) or 0) > 0
+    }
+
+
+def refresh_training_video_counts(items: list[dict]) -> list[dict]:
+    watched_by_video: dict[int, set[str]] = {}
+    for entry in load_training_video_progress_store():
+        if int(entry.get("progressPercent", 0) or 0) <= 0:
+            continue
+        video_id = int(entry.get("videoId", 0) or 0)
+        watched_by_video.setdefault(video_id, set()).add(entry["userId"])
+    changed = False
+    for item in items:
+        video_id = int(item.get("id", 0) or 0)
+        count = len(watched_by_video.get(video_id, set()))
+        if int(item.get("viewCount", 0) or 0) != count:
+            item["viewCount"] = count
+            changed = True
+    if changed:
+        save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
+    return items
+
+
+def refresh_training_document_counts(items: list[dict]) -> list[dict]:
+    opened_by_document: dict[int, set[str]] = {}
+    for entry in load_training_document_opens_store():
+        if int(entry.get("openedAt", 0) or 0) <= 0:
+            continue
+        document_id = int(entry.get("documentId", 0) or 0)
+        opened_by_document.setdefault(document_id, set()).add(entry["userId"])
+    changed = False
+    for item in items:
+        document_id = int(item.get("id", 0) or 0)
+        count = len(opened_by_document.get(document_id, set()))
+        if int(item.get("downloadCount", 0) or 0) != count:
+            item["downloadCount"] = count
+            changed = True
+    if changed:
+        save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
+    return items
+
+
+def get_training_video_by_id(item_id: int) -> dict | None:
+    items = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
+    return next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+
+
+def get_training_document_by_id(item_id: int) -> dict | None:
+    items = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
+    return next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+
+
+def reminder_link_for_kind(kind: str, item_id: int) -> str:
+    if kind == "video":
+        return f"/training/video/{item_id}"
+    return f"/training/document/{item_id}"
+
+
+def send_training_reminders(kind: str, item_id: int) -> dict[str, int]:
+    kind_key = "video" if kind == "video" else "document"
+    item = get_training_video_by_id(item_id) if kind_key == "video" else get_training_document_by_id(item_id)
+    if not item or item.get("isArchived"):
+        raise ValueError("Training item not found")
+    eligible = eligible_users_for_visibility(item.get("visibility", "General"), item.get("department"))
+    completed_or_opened = (
+        get_video_completed_user_ids(item_id)
+        if kind_key == "video"
+        else get_document_opened_user_ids(item_id)
+    )
+    target_users = [user for user in eligible if user["id"] not in completed_or_opened]
+    if not target_users:
+        return {"notifications": 0, "emails": 0}
+
+    reminders = load_training_reminders_store()
+    cutoff = now_seconds() - TRAINING_REMINDER_COOLDOWN_SECONDS
+    reminders = [entry for entry in reminders if int(entry.get("sentAt", 0) or 0) >= cutoff]
+    recent_pairs = {
+        (entry["kind"], int(entry["itemId"]), entry["userId"])
+        for entry in reminders
+    }
+    pending_users = [
+        user
+        for user in target_users
+        if (kind_key, item_id, user["id"]) not in recent_pairs
+    ]
+    if not pending_users:
+        save_training_reminders_store(reminders)
+        return {"notifications": 0, "emails": 0}
+
+    title = "Mandatory Training Reminder"
+    item_name = str(item.get("title", "")).strip()
+    message = (
+        f'Please complete "{item_name}" in the training portal.'
+        if kind_key == "video"
+        else f'Please open and review "{item_name}" in the training portal.'
+    )
+    link_to = reminder_link_for_kind(kind_key, item_id)
+    notification_count = create_notifications_for_users(
+        pending_users,
+        kind="training",
+        title=title,
+        message=message,
+        link_to=link_to,
+    )
+    email_count = 0
+    for user in pending_users:
+        email = str(user.get("email", "")).strip().lower()
+        if not email:
+            continue
+        try:
+            send_content_notification_email(
+                to_email=email,
+                subject="Bawjiase Staff Portal - Mandatory Training Reminder",
+                headline=title,
+                intro=message,
+                item_title=item_name,
+                link_to=build_portal_link(link_to),
+            )
+            email_count += 1
+        except Exception:
+            app.logger.exception("Failed sending training reminder email", extra={"email": email})
+        reminders.append(
+            {
+                "kind": kind_key,
+                "itemId": item_id,
+                "userId": user["id"],
+                "sentAt": now_seconds(),
+            }
+        )
+    save_training_reminders_store(reminders)
+    return {"notifications": notification_count, "emails": email_count}
+
+
 def handle_options():
     if request.method == "OPTIONS":
         return ("", 204)
@@ -697,6 +1088,80 @@ def logout_presence():
     store = prune_presence(load_presence_store())
     store.pop(user_id, None)
     save_presence_store(store)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/notifications", methods=["GET"])
+def get_notifications():
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(NOTIFICATIONS_STORE_PATH)
+    user_items = [
+        item
+        for item in items
+        if str(item.get("userId", "")).strip() == auth_user["id"]
+    ]
+    user_items.sort(key=lambda item: int(item.get("createdAt", 0) or 0), reverse=True)
+    return jsonify({"notifications": user_items})
+
+
+@app.route("/api/notifications/unread-count", methods=["GET"])
+def get_unread_notification_count():
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(NOTIFICATIONS_STORE_PATH)
+    count = sum(
+        1
+        for item in items
+        if str(item.get("userId", "")).strip() == auth_user["id"]
+        and not bool(item.get("isRead", False))
+    )
+    return jsonify({"count": count})
+
+
+@app.route("/api/notifications/<int:item_id>/read", methods=["POST", "OPTIONS"])
+def mark_notification_read(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(NOTIFICATIONS_STORE_PATH)
+    notification = next(
+        (
+            item
+            for item in items
+            if int(item.get("id", 0) or 0) == item_id
+            and str(item.get("userId", "")).strip() == auth_user["id"]
+        ),
+        None,
+    )
+    if not notification:
+        return jsonify({"error": "Notification not found"}), 404
+    notification["isRead"] = True
+    save_json_list_store(NOTIFICATIONS_STORE_PATH, items)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/notifications/read-all", methods=["POST", "OPTIONS"])
+def mark_all_notifications_read():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(NOTIFICATIONS_STORE_PATH)
+    changed = False
+    for item in items:
+        if str(item.get("userId", "")).strip() == auth_user["id"] and not bool(item.get("isRead", False)):
+            item["isRead"] = True
+            changed = True
+    if changed:
+        save_json_list_store(NOTIFICATIONS_STORE_PATH, items)
     return jsonify({"ok": True})
 
 
@@ -1352,7 +1817,19 @@ def create_shared_form():
     }
     items.insert(0, form)
     save_json_list_store(FORMS_STORE_PATH, items)
-    return jsonify({"ok": True, "form": form})
+    delivery = fanout_content_notification(
+        kind="system",
+        title="New Form Available",
+        message=f"{form['title']} has been added to the forms centre.",
+        email_subject="Bawjiase Staff Portal - New Form Available",
+        email_headline="New Form Available",
+        email_intro="A new form has been added to the Bawjiase Staff Portal for eligible staff.",
+        item_title=form["title"],
+        visibility=form["visibility"],
+        department=form.get("department"),
+        link_to="/forms",
+    )
+    return jsonify({"ok": True, "form": form, "delivery": delivery})
 
 
 @app.route("/api/content/forms/<int:item_id>/update", methods=["POST", "OPTIONS"])
@@ -1399,7 +1876,8 @@ def get_shared_training_videos():
     _, _, error = require_authenticated_user()
     if error:
         return error
-    return jsonify({"videos": load_json_list_store(TRAINING_VIDEOS_STORE_PATH)})
+    items = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
+    return jsonify({"videos": items})
 
 
 @app.route("/api/content/training/videos", methods=["POST", "OPTIONS"])
@@ -1437,7 +1915,131 @@ def create_shared_training_video():
     }
     items.insert(0, video)
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
-    return jsonify({"ok": True, "video": video})
+    video_subject = (
+        "Bawjiase Staff Portal - Mandatory Training Assigned"
+        if video["isMandatory"]
+        else "Bawjiase Staff Portal - New Training Video"
+    )
+    video_title = (
+        "Mandatory Training Assigned"
+        if video["isMandatory"]
+        else "New Training Video"
+    )
+    video_intro = (
+        "A mandatory training video has been assigned to eligible staff."
+        if video["isMandatory"]
+        else "A new training video has been uploaded for eligible staff."
+    )
+    delivery = fanout_content_notification(
+        kind="training",
+        title=video_title,
+        message=f"{video['title']} is now available in the training portal.",
+        email_subject=video_subject,
+        email_headline=video_title,
+        email_intro=video_intro,
+        item_title=video["title"],
+        visibility=video["visibility"],
+        department=video.get("department"),
+        link_to="/training",
+    )
+    return jsonify({"ok": True, "video": video, "delivery": delivery})
+
+
+@app.route("/api/content/training/videos/<int:item_id>/progress", methods=["GET"])
+def get_my_training_video_progress(item_id: int):
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    video = get_training_video_by_id(item_id)
+    if not video or bool(video.get("isArchived", False)):
+        return jsonify({"error": "Video not found"}), 404
+    progress_items = load_training_video_progress_store()
+    item = next(
+        (
+            entry
+            for entry in progress_items
+            if entry["userId"] == auth_user["id"] and int(entry["videoId"]) == item_id
+        ),
+        None,
+    )
+    return jsonify({"progress": serialize_video_progress(item or {"videoId": item_id}) if item else None})
+
+
+@app.route("/api/content/training/videos/<int:item_id>/progress", methods=["POST", "OPTIONS"])
+def update_my_training_video_progress(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    video = get_training_video_by_id(item_id)
+    if not video or bool(video.get("isArchived", False)):
+        return jsonify({"error": "Video not found"}), 404
+    progress_percent = max(0, min(100, int(data.get("progressPercent", 0) or 0)))
+    progress_items = load_training_video_progress_store()
+    entry = next(
+        (
+            item
+            for item in progress_items
+            if item["userId"] == auth_user["id"] and int(item["videoId"]) == item_id
+        ),
+        None,
+    )
+    payload = {
+        "userId": auth_user["id"],
+        "videoId": item_id,
+        "progressPercent": progress_percent,
+        "isComplete": progress_percent >= 98,
+        "lastWatched": now_ms(),
+    }
+    if entry:
+        entry.update(payload)
+    else:
+        progress_items.append(payload)
+    save_training_video_progress_store(progress_items)
+    refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
+    return jsonify({"ok": True, "progress": serialize_video_progress(payload)})
+
+
+@app.route("/api/content/training/videos/stats", methods=["GET"])
+def get_training_video_stats():
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
+    progress_items = load_training_video_progress_store()
+    stats = []
+    for video in items:
+        if bool(video.get("isArchived", False)):
+            continue
+        video_id = int(video.get("id", 0) or 0)
+        watched_count = len(
+            {
+                entry["userId"]
+                for entry in progress_items
+                if int(entry["videoId"]) == video_id and int(entry["progressPercent"]) > 0
+            }
+        )
+        completed_count = len(
+            {
+                entry["userId"]
+                for entry in progress_items
+                if int(entry["videoId"]) == video_id and bool(entry["isComplete"])
+            }
+        )
+        stats.append(
+            {
+                "videoId": video_id,
+                "title": str(video.get("title", "")),
+                "totalWatched": watched_count,
+                "completedCount": completed_count,
+            }
+        )
+    return jsonify({"stats": stats})
 
 
 @app.route("/api/content/training/videos/<int:item_id>/archive", methods=["POST", "OPTIONS"])
@@ -1478,7 +2080,8 @@ def get_shared_training_documents():
     _, _, error = require_authenticated_user()
     if error:
         return error
-    return jsonify({"documents": load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)})
+    items = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
+    return jsonify({"documents": items})
 
 
 @app.route("/api/content/training/documents", methods=["POST", "OPTIONS"])
@@ -1515,7 +2118,117 @@ def create_shared_training_document():
     }
     items.insert(0, document)
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
-    return jsonify({"ok": True, "document": document})
+    document_subject = (
+        "Bawjiase Staff Portal - Mandatory Training Document"
+        if document["isMandatory"]
+        else "Bawjiase Staff Portal - New Training Document"
+    )
+    document_title = (
+        "Mandatory Training Document"
+        if document["isMandatory"]
+        else "New Training Document"
+    )
+    document_intro = (
+        "A mandatory training document has been shared with eligible staff."
+        if document["isMandatory"]
+        else "A new training document has been uploaded for eligible staff."
+    )
+    delivery = fanout_content_notification(
+        kind="training",
+        title=document_title,
+        message=f"{document['title']} is now available in the training portal.",
+        email_subject=document_subject,
+        email_headline=document_title,
+        email_intro=document_intro,
+        item_title=document["title"],
+        visibility=document["visibility"],
+        department=document.get("department"),
+        link_to="/training",
+    )
+    return jsonify({"ok": True, "document": document, "delivery": delivery})
+
+
+@app.route("/api/content/training/documents/<int:item_id>/open-state", methods=["GET"])
+def get_my_training_document_open_state(item_id: int):
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    document = get_training_document_by_id(item_id)
+    if not document or bool(document.get("isArchived", False)):
+        return jsonify({"error": "Document not found"}), 404
+    open_items = load_training_document_opens_store()
+    item = next(
+        (
+            entry
+            for entry in open_items
+            if entry["userId"] == auth_user["id"] and int(entry["documentId"]) == item_id
+        ),
+        None,
+    )
+    return jsonify({"state": serialize_document_open_state(item)})
+
+
+@app.route("/api/content/training/documents/<int:item_id>/open", methods=["POST", "OPTIONS"])
+def mark_training_document_opened(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    document = get_training_document_by_id(item_id)
+    if not document or bool(document.get("isArchived", False)):
+        return jsonify({"error": "Document not found"}), 404
+    open_items = load_training_document_opens_store()
+    entry = next(
+        (
+            item
+            for item in open_items
+            if item["userId"] == auth_user["id"] and int(item["documentId"]) == item_id
+        ),
+        None,
+    )
+    payload = {
+        "userId": auth_user["id"],
+        "documentId": item_id,
+        "openedAt": now_ms(),
+    }
+    if entry:
+        entry.update(payload)
+    else:
+        open_items.append(payload)
+    save_training_document_opens_store(open_items)
+    refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
+    return jsonify({"ok": True, "state": serialize_document_open_state(payload)})
+
+
+@app.route("/api/content/training/documents/stats", methods=["GET"])
+def get_training_document_stats():
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
+    open_items = load_training_document_opens_store()
+    stats = []
+    for document in items:
+        if bool(document.get("isArchived", False)):
+            continue
+        document_id = int(document.get("id", 0) or 0)
+        opened_count = len(
+            {
+                entry["userId"]
+                for entry in open_items
+                if int(entry["documentId"]) == document_id and int(entry["openedAt"]) > 0
+            }
+        )
+        stats.append(
+            {
+                "docId": document_id,
+                "title": str(document.get("title", "")),
+                "openedCount": opened_count,
+            }
+        )
+    return jsonify({"stats": stats})
 
 
 @app.route("/api/content/training/documents/<int:item_id>/archive", methods=["POST", "OPTIONS"])
@@ -1549,6 +2262,118 @@ def delete_shared_training_document(item_id: int):
         return jsonify({"error": "Document not found"}), 404
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, filtered)
     return jsonify({"ok": True})
+
+
+@app.route("/api/content/training/admin-overview", methods=["GET"])
+def get_admin_training_overview():
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    videos = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
+    documents = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
+    users = [
+        user
+        for user in load_user_store()
+        if user["isActive"] and user["isVerified"] and not user["isArchived"]
+    ]
+    progress_items = load_training_video_progress_store()
+    open_items = load_training_document_opens_store()
+    video_stats = []
+    for video in videos:
+        if bool(video.get("isArchived", False)):
+            continue
+        video_id = int(video.get("id", 0) or 0)
+        eligible_users = eligible_users_for_visibility(video.get("visibility", "General"), video.get("department"))
+        watched_user_ids = {
+            entry["userId"]
+            for entry in progress_items
+            if int(entry["videoId"]) == video_id and int(entry["progressPercent"]) > 0
+        }
+        completed_user_ids = {
+            entry["userId"]
+            for entry in progress_items
+            if int(entry["videoId"]) == video_id and bool(entry["isComplete"])
+        }
+        eligible_count = len(eligible_users)
+        video_stats.append(
+            {
+                "id": video_id,
+                "title": str(video.get("title", "")),
+                "eligibleCount": eligible_count,
+                "watchedCount": len(watched_user_ids),
+                "completionPct": round((len(completed_user_ids) / eligible_count) * 100) if eligible_count else 0,
+                "isMandatory": bool(video.get("isMandatory", False)),
+                "incompleteUsers": [
+                    user["fullname"] for user in eligible_users if user["id"] not in completed_user_ids
+                ],
+            }
+        )
+    document_stats = []
+    for document in documents:
+        if bool(document.get("isArchived", False)):
+            continue
+        document_id = int(document.get("id", 0) or 0)
+        eligible_users = eligible_users_for_visibility(document.get("visibility", "General"), document.get("department"))
+        opened_user_ids = {
+            entry["userId"]
+            for entry in open_items
+            if int(entry["documentId"]) == document_id and int(entry["openedAt"]) > 0
+        }
+        eligible_count = len(eligible_users)
+        document_stats.append(
+            {
+                "id": document_id,
+                "title": str(document.get("title", "")),
+                "eligibleCount": eligible_count,
+                "openedCount": len(opened_user_ids),
+                "openedPct": round((len(opened_user_ids) / eligible_count) * 100) if eligible_count else 0,
+                "isMandatory": bool(document.get("isMandatory", False)),
+                "incompleteUsers": [
+                    user["fullname"] for user in eligible_users if user["id"] not in opened_user_ids
+                ],
+            }
+        )
+    return jsonify(
+        {
+            "overview": {
+                "totalVideos": len([item for item in videos if not bool(item.get("isArchived", False))]),
+                "totalDocuments": len([item for item in documents if not bool(item.get("isArchived", False))]),
+                "totalStaff": len(users),
+                "videoStats": video_stats,
+                "docStats": document_stats,
+            }
+        }
+    )
+
+
+@app.route("/api/content/training/videos/<int:item_id>/remind", methods=["POST", "OPTIONS"])
+def send_video_training_reminder(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    try:
+        delivery = send_training_reminders("video", item_id)
+    except ValueError:
+        return jsonify({"error": "Video not found"}), 404
+    return jsonify({"ok": True, "delivery": delivery})
+
+
+@app.route("/api/content/training/documents/<int:item_id>/remind", methods=["POST", "OPTIONS"])
+def send_document_training_reminder(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    try:
+        delivery = send_training_reminders("document", item_id)
+    except ValueError:
+        return jsonify({"error": "Document not found"}), 404
+    return jsonify({"ok": True, "delivery": delivery})
 
 
 if __name__ == "__main__":
