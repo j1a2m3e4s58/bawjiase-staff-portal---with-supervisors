@@ -496,6 +496,168 @@ function upsertCachedUser(user: User) {
   persistUsersStore();
 }
 
+function contentId(value: unknown): number {
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return Number(value);
+  return 0;
+}
+
+function contentBigInt(value: unknown): bigint {
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" || typeof value === "string") {
+    return BigInt(value);
+  }
+  return BigInt(0);
+}
+
+function deserializeAnnouncement(raw: Record<string, unknown>): AnnouncementWithPoll {
+  const pollRaw = raw.poll as Record<string, unknown> | null | undefined;
+  return {
+    id: contentId(raw.id),
+    title: String(raw.title ?? ""),
+    content: String(raw.content ?? ""),
+    category: String(raw.category ?? ""),
+    imageUrl: typeof raw.imageUrl === "string" ? raw.imageUrl : null,
+    fileUrl: typeof raw.fileUrl === "string" ? raw.fileUrl : null,
+    attachmentName: typeof raw.attachmentName === "string" ? raw.attachmentName : null,
+    allowDownload: raw.allowDownload !== false,
+    authorId: String(raw.authorId ?? ""),
+    authorName: String(raw.authorName ?? ""),
+    createdAt: contentBigInt(raw.createdAt),
+    updatedAt: contentBigInt(raw.updatedAt),
+    isDismissed: !!raw.isDismissed,
+    isTrashed: !!raw.isTrashed,
+    poll: pollRaw
+      ? {
+          id: contentId(pollRaw.id),
+          question: String(pollRaw.question ?? ""),
+          options: Array.isArray(pollRaw.options)
+            ? (pollRaw.options as Array<Record<string, unknown>>).map((option) => ({
+                id: contentId(option.id),
+                text: String(option.text ?? ""),
+                votes: Number(option.votes ?? 0),
+              }))
+            : [],
+          totalVotes: Number(pollRaw.totalVotes ?? 0),
+          userVotedOptionId:
+            pollRaw.userVotedOptionId === null || pollRaw.userVotedOptionId === undefined
+              ? null
+              : contentId(pollRaw.userVotedOptionId),
+          endDate:
+            pollRaw.endDate === null || pollRaw.endDate === undefined
+              ? null
+              : contentBigInt(pollRaw.endDate),
+          isActive: pollRaw.isActive !== false,
+        }
+      : null,
+  };
+}
+
+function deserializeForm(raw: Record<string, unknown>): PortalForm {
+  return {
+    id: contentId(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    fileUrl: String(raw.fileUrl ?? ""),
+    category: String(raw.category ?? ""),
+    visibleTo: Array.isArray(raw.visibleTo)
+      ? (raw.visibleTo as PortalForm["visibleTo"])
+      : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibility:
+      raw.visibility === "Department" ? "Department" : "General",
+    department: typeof raw.department === "string" ? raw.department : null,
+    createdAt: contentBigInt(raw.createdAt),
+    updatedAt: contentBigInt(raw.updatedAt),
+  };
+}
+
+function deserializeTrainingVideo(raw: Record<string, unknown>): TrainingVideo {
+  return {
+    id: contentId(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    videoUrl: String(raw.videoUrl ?? ""),
+    thumbnailUrl: typeof raw.thumbnailUrl === "string" ? raw.thumbnailUrl : null,
+    duration: Number(raw.duration ?? 0),
+    category: String(raw.category ?? ""),
+    visibleTo: Array.isArray(raw.visibleTo)
+      ? (raw.visibleTo as TrainingVideo["visibleTo"])
+      : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibility: raw.visibility === "Department" ? "Department" : "General",
+    department: typeof raw.department === "string" ? raw.department : null,
+    isMandatory: !!raw.isMandatory,
+    allowDownload: !!raw.allowDownload,
+    storageType: raw.storageType === "Local" ? "Local" : "Drive",
+    driveRef: typeof raw.driveRef === "string" ? raw.driveRef : null,
+    localFilename: typeof raw.localFilename === "string" ? raw.localFilename : null,
+    uploadedBy: String(raw.uploadedBy ?? ""),
+    uploadedAt: contentBigInt(raw.uploadedAt),
+    viewCount: Number(raw.viewCount ?? 0),
+    isArchived: !!raw.isArchived,
+  };
+}
+
+function deserializeTrainingDocument(raw: Record<string, unknown>): TrainingDocument {
+  return {
+    id: contentId(raw.id),
+    title: String(raw.title ?? ""),
+    description: String(raw.description ?? ""),
+    fileUrl: String(raw.fileUrl ?? ""),
+    fileType: String(raw.fileType ?? ""),
+    category: String(raw.category ?? ""),
+    visibleTo: Array.isArray(raw.visibleTo)
+      ? (raw.visibleTo as TrainingDocument["visibleTo"])
+      : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibility: raw.visibility === "Department" ? "Department" : "General",
+    department: typeof raw.department === "string" ? raw.department : null,
+    isMandatory: !!raw.isMandatory,
+    allowDownload: !!raw.allowDownload,
+    storageType: raw.storageType === "Local" ? "Local" : "Drive",
+    driveRef: typeof raw.driveRef === "string" ? raw.driveRef : null,
+    localFilename: typeof raw.localFilename === "string" ? raw.localFilename : null,
+    uploadedBy: String(raw.uploadedBy ?? ""),
+    uploadedAt: contentBigInt(raw.uploadedAt),
+    downloadCount: Number(raw.downloadCount ?? 0),
+    isArchived: !!raw.isArchived,
+  };
+}
+
+function replaceSharedAnnouncements(items: AnnouncementWithPoll[]) {
+  for (let index = _announcements.length - 1; index >= 0; index -= 1) {
+    if (_announcements[index].id >= 1000) {
+      _announcements.splice(index, 1);
+    }
+  }
+  _announcements.unshift(...items);
+}
+
+function replaceSharedForms(items: PortalForm[]) {
+  for (let index = _forms.length - 1; index >= 0; index -= 1) {
+    if (_forms[index].id >= 1000) {
+      _forms.splice(index, 1);
+    }
+  }
+  _forms.unshift(...items);
+}
+
+function replaceSharedTrainingVideos(items: TrainingVideo[]) {
+  for (let index = _trainingVideos.length - 1; index >= 0; index -= 1) {
+    if (_trainingVideos[index].id >= 1000) {
+      _trainingVideos.splice(index, 1);
+    }
+  }
+  _trainingVideos.unshift(...items);
+}
+
+function replaceSharedTrainingDocuments(items: TrainingDocument[]) {
+  for (let index = _trainingDocuments.length - 1; index >= 0; index -= 1) {
+    if (_trainingDocuments[index].id >= 1000) {
+      _trainingDocuments.splice(index, 1);
+    }
+  }
+  _trainingDocuments.unshift(...items);
+}
+
 function getDismissalStore(): Record<string, number[]> {
   if (typeof window === "undefined") return {};
   try {
@@ -898,6 +1060,15 @@ export async function apiGetStaffStats(): Promise<StaffStats> {
 export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   await delay(350);
   await refreshUsersCache();
+  try {
+    const payload = await getMailApiJson("/content/announcements");
+    const sharedItems = Array.isArray(payload.announcements)
+      ? (payload.announcements as Array<Record<string, unknown>>).map(deserializeAnnouncement)
+      : [];
+    replaceSharedAnnouncements(sharedItems);
+  } catch {
+    // Keep local seeded content if shared announcements are unavailable.
+  }
   const activeStaff = _mockUsers.filter(
     (u) =>
       u.isActive &&
@@ -1070,6 +1241,15 @@ export async function apiGetAnnouncements(
   userId?: string,
 ): Promise<AnnouncementWithPoll[]> {
   await delay(400);
+  try {
+    const payload = await getMailApiJson("/content/announcements");
+    const sharedItems = Array.isArray(payload.announcements)
+      ? (payload.announcements as Array<Record<string, unknown>>).map(deserializeAnnouncement)
+      : [];
+    replaceSharedAnnouncements(sharedItems);
+  } catch {
+    // Keep local seeded announcements if shared content is unavailable.
+  }
   const dismissedIds = getDismissedAnnouncementIds(userId);
   return _announcements
     .filter((a) => !a.isTrashed && !dismissedIds.has(a.id))
@@ -1078,6 +1258,15 @@ export async function apiGetAnnouncements(
 
 export async function apiGetTrashedAnnouncements(): Promise<Announcement[]> {
   await delay(300);
+  try {
+    const payload = await getMailApiJson("/content/announcements");
+    const sharedItems = Array.isArray(payload.announcements)
+      ? (payload.announcements as Array<Record<string, unknown>>).map(deserializeAnnouncement)
+      : [];
+    replaceSharedAnnouncements(sharedItems);
+  } catch {
+    // Ignore and fall back to in-memory seed content.
+  }
   return _announcements
     .filter((a) => a.isTrashed)
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
@@ -1088,46 +1277,43 @@ export async function apiCreateAnnouncement(
   author: Pick<User, "id" | "fullname" | "department">,
 ): Promise<ApiResult<AnnouncementWithPoll>> {
   await delay(450);
-  const now = BigInt(Date.now());
   const cleanPollOptions = (req.pollOptions ?? [])
     .map((option) => option.trim())
     .filter(Boolean);
-
-  const announcement: AnnouncementWithPoll = {
-    id: _announcementIdCounter++,
-    title: req.title.trim(),
-    content: req.content.trim(),
-    category: req.category.trim() || author.department,
-    imageUrl: req.imageUrl ?? null,
-    fileUrl: req.fileUrl ?? null,
-    attachmentName: req.attachmentName ?? null,
-    allowDownload: req.allowDownload ?? true,
-    authorId: author.id,
-    authorName: author.fullname,
-    createdAt: now,
-    updatedAt: now,
-    isDismissed: false,
-    isTrashed: false,
-    poll:
-      req.pollQuestion?.trim() && cleanPollOptions.length >= 2
-        ? {
-            id: _pollIdCounter++,
-            question: req.pollQuestion.trim(),
-            options: cleanPollOptions.map((text) => ({
-              id: _pollOptionIdCounter++,
-              text,
-              votes: 0,
-            })),
-            totalVotes: 0,
-            userVotedOptionId: null,
-            endDate: null,
-            isActive: true,
-          }
-        : null,
-  };
-
-  _announcements.unshift(announcement);
-  return ok(announcement);
+  try {
+    const payload = await postMailApiJson("/content/announcements", {
+      title: req.title.trim(),
+      content: req.content.trim(),
+      category: req.category.trim() || author.department,
+      imageUrl: req.imageUrl ?? null,
+      fileUrl: req.fileUrl ?? null,
+      attachmentName: req.attachmentName ?? null,
+      allowDownload: req.allowDownload ?? true,
+      poll:
+        req.pollQuestion?.trim() && cleanPollOptions.length >= 2
+          ? {
+              id: _pollIdCounter++,
+              question: req.pollQuestion.trim(),
+              options: cleanPollOptions.map((text) => ({
+                id: _pollOptionIdCounter++,
+                text,
+                votes: 0,
+              })),
+              totalVotes: 0,
+              userVotedOptionId: null,
+              endDate: null,
+              isActive: true,
+            }
+          : null,
+    });
+    const rawAnnouncement = payload.announcement as Record<string, unknown> | undefined;
+    if (!rawAnnouncement) return err("Announcement could not be created");
+    const announcement = deserializeAnnouncement(rawAnnouncement);
+    _announcements.unshift(announcement);
+    return ok(announcement);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Announcement could not be created");
+  }
 }
 
 export async function apiUpdateAnnouncement(
@@ -1137,6 +1323,48 @@ export async function apiUpdateAnnouncement(
   await delay(350);
   const announcement = _announcements.find((item) => item.id === id);
   if (!announcement) return err("Announcement not found");
+  if (id >= 1000) {
+    const cleanPollOptions = (req.pollOptions ?? [])
+      .map((option) => option.trim())
+      .filter(Boolean);
+    try {
+      const payload = await postMailApiJson(`/content/announcements/${id}/update`, {
+        title: req.title?.trim(),
+        content: req.content?.trim(),
+        category: req.category?.trim(),
+        imageUrl: req.imageUrl,
+        fileUrl: req.fileUrl,
+        attachmentName: req.attachmentName,
+        allowDownload: req.allowDownload,
+        poll:
+          req.pollQuestion !== undefined || req.pollOptions !== undefined
+            ? req.pollQuestion?.trim() && cleanPollOptions.length >= 2
+              ? {
+                  id: announcement.poll?.id ?? _pollIdCounter++,
+                  question: req.pollQuestion.trim(),
+                  options: cleanPollOptions.map((text) => ({
+                    id: _pollOptionIdCounter++,
+                    text,
+                    votes: 0,
+                  })),
+                  totalVotes: 0,
+                  userVotedOptionId: null,
+                  endDate: null,
+                  isActive: true,
+                }
+              : null
+            : undefined,
+      });
+      const rawAnnouncement = payload.announcement as Record<string, unknown> | undefined;
+      if (!rawAnnouncement) return err("Announcement not found");
+      const updated = deserializeAnnouncement(rawAnnouncement);
+      const idx = _announcements.findIndex((item) => item.id === id);
+      if (idx >= 0) _announcements[idx] = updated;
+      return ok(updated);
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Announcement not found");
+    }
+  }
 
   announcement.title = req.title?.trim() ?? announcement.title;
   announcement.content = req.content?.trim() ?? announcement.content;
@@ -1197,6 +1425,15 @@ export async function apiTrashAnnouncement(
   await delay(250);
   const announcement = _announcements.find((item) => item.id === id);
   if (!announcement) return err("Announcement not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/announcements/${id}/trash`, {});
+      announcement.isTrashed = true;
+      return ok(null);
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Announcement not found");
+    }
+  }
   announcement.isTrashed = true;
   return ok(null);
 }
@@ -1207,6 +1444,16 @@ export async function apiRestoreAnnouncement(
   await delay(250);
   const announcement = _announcements.find((item) => item.id === id);
   if (!announcement) return err("Announcement not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/announcements/${id}/restore`, {});
+      announcement.isTrashed = false;
+      announcement.isDismissed = false;
+      return ok(null);
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Announcement not found");
+    }
+  }
   announcement.isTrashed = false;
   announcement.isDismissed = false;
   return ok(null);
@@ -1218,12 +1465,24 @@ export async function apiDeleteAnnouncement(
   await delay(250);
   const index = _announcements.findIndex((item) => item.id === id);
   if (index < 0) return err("Announcement not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/announcements/${id}/delete`, {});
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Announcement not found");
+    }
+  }
   _announcements.splice(index, 1);
   return ok(null);
 }
 
 export async function apiEmptyAnnouncementTrash(): Promise<ApiResult<null>> {
   await delay(300);
+  try {
+    await postMailApi("/content/announcements/empty-trash", {});
+  } catch {
+    // Keep local cleanup as a fallback.
+  }
   for (let index = _announcements.length - 1; index >= 0; index -= 1) {
     if (_announcements[index].isTrashed) {
       _announcements.splice(index, 1);
@@ -1463,6 +1722,15 @@ export function apiDownloadFormUrl(fileRef: string): string {
 
 export async function apiGetForms(user?: User | null): Promise<PortalForm[]> {
   await delay(350);
+  try {
+    const payload = await getMailApiJson("/content/forms");
+    const sharedItems = Array.isArray(payload.forms)
+      ? (payload.forms as Array<Record<string, unknown>>).map(deserializeForm)
+      : [];
+    replaceSharedForms(sharedItems);
+  } catch {
+    // Fall back to local seed content.
+  }
   return _forms
     .filter((form) => canUserSeeForm(form, user))
     .sort(
@@ -1475,21 +1743,25 @@ export async function apiCreateForm(
   req: CreateFormRequest,
 ): Promise<ApiResult<PortalForm>> {
   await delay(400);
-  const form: PortalForm = {
-    id: _formIdCounter++,
-    title: req.title,
-    description: req.description,
-    fileUrl: apiExtractDriveFileId(req.fileUrl),
-    category: req.category,
-    visibleTo: req.visibleTo,
-    visibility: req.visibility ?? "General",
-    department:
-      req.visibility === "Department" ? (req.department ?? null) : null,
-    createdAt: BigInt(Date.now()),
-    updatedAt: BigInt(Date.now()),
-  };
-  _forms.unshift(form);
-  return ok(form);
+  try {
+    const payload = await postMailApiJson("/content/forms", {
+      title: req.title,
+      description: req.description,
+      fileUrl: apiExtractDriveFileId(req.fileUrl),
+      category: req.category,
+      visibleTo: req.visibleTo,
+      visibility: req.visibility ?? "General",
+      department:
+        req.visibility === "Department" ? (req.department ?? null) : null,
+    });
+    const rawForm = payload.form as Record<string, unknown> | undefined;
+    if (!rawForm) return err("Form could not be created");
+    const form = deserializeForm(rawForm);
+    _forms.unshift(form);
+    return ok(form);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Form could not be created");
+  }
 }
 
 export async function apiUpdateForm(
@@ -1499,6 +1771,21 @@ export async function apiUpdateForm(
   await delay(350);
   const idx = _forms.findIndex((f) => f.id === id);
   if (idx < 0) return err("Form not found");
+  if (id >= 1000) {
+    try {
+      const payload = await postMailApiJson(`/content/forms/${id}/update`, {
+        ...req,
+        fileUrl: req.fileUrl ? apiExtractDriveFileId(req.fileUrl) : undefined,
+      });
+      const rawForm = payload.form as Record<string, unknown> | undefined;
+      if (!rawForm) return err("Form not found");
+      const form = deserializeForm(rawForm);
+      _forms[idx] = form;
+      return ok(form);
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Form not found");
+    }
+  }
   _forms[idx] = {
     ..._forms[idx],
     ...req,
@@ -1520,6 +1807,13 @@ export async function apiDeleteForm(id: number): Promise<ApiResult<null>> {
   await delay(300);
   const idx = _forms.findIndex((f) => f.id === id);
   if (idx < 0) return err("Form not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/forms/${id}/delete`, {});
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Form not found");
+    }
+  }
   _forms.splice(idx, 1);
   return ok(null);
 }
@@ -1936,6 +2230,15 @@ _documentOpens[documentOpenKey("db-user-3", 4)] = BigInt(Date.now() - 5400000);
 
 export async function apiGetTrainingVideos(): Promise<TrainingVideo[]> {
   await delay(400);
+  try {
+    const payload = await getMailApiJson("/content/training/videos");
+    const sharedItems = Array.isArray(payload.videos)
+      ? (payload.videos as Array<Record<string, unknown>>).map(deserializeTrainingVideo)
+      : [];
+    replaceSharedTrainingVideos(sharedItems);
+  } catch {
+    // Fall back to local seed content.
+  }
   const user = currentTrainingUser();
   return _trainingVideos
     .filter((video) => !video.isArchived)
@@ -1947,6 +2250,7 @@ export async function apiGetTrainingVideo(
   id: number,
 ): Promise<TrainingVideo | null> {
   await delay(200);
+  await apiGetTrainingVideos();
   const user = currentTrainingUser();
   const video =
     _trainingVideos.find((item) => item.id === id && !item.isArchived) ?? null;
@@ -1958,37 +2262,41 @@ export async function apiUploadTrainingVideo(
   req: UploadVideoRequest,
 ): Promise<ApiResult<TrainingVideo>> {
   await delay(600);
-  const video: TrainingVideo = {
-    id: _videoIdCounter++,
-    title: req.title,
-    description: req.description,
-    videoUrl: req.videoUrl,
-    thumbnailUrl: null,
-    duration: 0,
-    category:
-      req.visibility === "Department"
-        ? (req.department ?? "General")
-        : "General",
-    visibleTo:
-      req.visibility === "General"
-        ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
-        : ["HRAdmin", "SuperAdmin"],
-    visibility: req.visibility,
-    department:
-      req.visibility === "Department" ? (req.department ?? null) : null,
-    isMandatory: !!req.mandatory,
-    allowDownload: !!req.allowDownload,
-    storageType: req.storageType,
-    driveRef: req.storageType === "Drive" ? req.videoUrl : null,
-    localFilename:
-      req.storageType === "Local" ? req.videoUrl.replace(/^LOCAL:/, "") : null,
-    uploadedBy: currentTrainingUser()?.fullname ?? "Current User",
-    uploadedAt: BigInt(Date.now()),
-    viewCount: 0,
-    isArchived: false,
-  };
-  _trainingVideos.unshift(video);
-  return ok(video);
+  try {
+    const payload = await postMailApiJson("/content/training/videos", {
+      title: req.title,
+      description: req.description,
+      videoUrl: req.videoUrl,
+      thumbnailUrl: null,
+      duration: 0,
+      category:
+        req.visibility === "Department"
+          ? (req.department ?? "General")
+          : "General",
+      visibleTo:
+        req.visibility === "General"
+          ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
+          : ["HRAdmin", "SuperAdmin"],
+      visibility: req.visibility,
+      department:
+        req.visibility === "Department" ? (req.department ?? null) : null,
+      isMandatory: !!req.mandatory,
+      allowDownload: !!req.allowDownload,
+      storageType: req.storageType,
+      driveRef: req.storageType === "Drive" ? req.videoUrl : null,
+      localFilename:
+        req.storageType === "Local" ? req.videoUrl.replace(/^LOCAL:/, "") : null,
+      viewCount: 0,
+      isArchived: false,
+    });
+    const rawVideo = payload.video as Record<string, unknown> | undefined;
+    if (!rawVideo) return err("Video could not be uploaded");
+    const video = deserializeTrainingVideo(rawVideo);
+    _trainingVideos.unshift(video);
+    return ok(video);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Video could not be uploaded");
+  }
 }
 
 export async function apiUpdateTrainingProgress(
@@ -2039,6 +2347,15 @@ export async function apiGetVideoWatchStats(): Promise<VideoWatchStat[]> {
 
 export async function apiGetTrainingDocuments(): Promise<TrainingDocument[]> {
   await delay(400);
+  try {
+    const payload = await getMailApiJson("/content/training/documents");
+    const sharedItems = Array.isArray(payload.documents)
+      ? (payload.documents as Array<Record<string, unknown>>).map(deserializeTrainingDocument)
+      : [];
+    replaceSharedTrainingDocuments(sharedItems);
+  } catch {
+    // Fall back to local seed content.
+  }
   const user = currentTrainingUser();
   return _trainingDocuments
     .filter((doc) => !doc.isArchived)
@@ -2050,6 +2367,7 @@ export async function apiGetTrainingDocument(
   id: number,
 ): Promise<TrainingDocument | null> {
   await delay(200);
+  await apiGetTrainingDocuments();
   const user = currentTrainingUser();
   const doc =
     _trainingDocuments.find((item) => item.id === id && !item.isArchived) ??
@@ -2062,36 +2380,40 @@ export async function apiUploadTrainingDocument(
   req: UploadDocumentRequest,
 ): Promise<ApiResult<TrainingDocument>> {
   await delay(600);
-  const doc: TrainingDocument = {
-    id: _docIdCounter++,
-    title: req.title,
-    description: req.description,
-    fileUrl: req.fileUrl,
-    fileType: req.fileType,
-    category:
-      req.visibility === "Department"
-        ? (req.department ?? "General")
-        : "General",
-    visibleTo:
-      req.visibility === "General"
-        ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
-        : ["HRAdmin", "SuperAdmin"],
-    visibility: req.visibility,
-    department:
-      req.visibility === "Department" ? (req.department ?? null) : null,
-    isMandatory: !!req.mandatory,
-    allowDownload: !!req.allowDownload,
-    storageType: req.storageType,
-    driveRef: req.storageType === "Drive" ? req.fileUrl : null,
-    localFilename:
-      req.storageType === "Local" ? req.fileUrl.replace(/^LOCAL:/, "") : null,
-    uploadedBy: currentTrainingUser()?.fullname ?? "Current User",
-    uploadedAt: BigInt(Date.now()),
-    downloadCount: 0,
-    isArchived: false,
-  };
-  _trainingDocuments.unshift(doc);
-  return ok(doc);
+  try {
+    const payload = await postMailApiJson("/content/training/documents", {
+      title: req.title,
+      description: req.description,
+      fileUrl: req.fileUrl,
+      fileType: req.fileType,
+      category:
+        req.visibility === "Department"
+          ? (req.department ?? "General")
+          : "General",
+      visibleTo:
+        req.visibility === "General"
+          ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
+          : ["HRAdmin", "SuperAdmin"],
+      visibility: req.visibility,
+      department:
+        req.visibility === "Department" ? (req.department ?? null) : null,
+      isMandatory: !!req.mandatory,
+      allowDownload: !!req.allowDownload,
+      storageType: req.storageType,
+      driveRef: req.storageType === "Drive" ? req.fileUrl : null,
+      localFilename:
+        req.storageType === "Local" ? req.fileUrl.replace(/^LOCAL:/, "") : null,
+      downloadCount: 0,
+      isArchived: false,
+    });
+    const rawDocument = payload.document as Record<string, unknown> | undefined;
+    if (!rawDocument) return err("Document could not be uploaded");
+    const doc = deserializeTrainingDocument(rawDocument);
+    _trainingDocuments.unshift(doc);
+    return ok(doc);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Document could not be uploaded");
+  }
 }
 
 export async function apiMarkDocumentOpened(id: number): Promise<void> {
@@ -2137,6 +2459,7 @@ export async function apiGetMyDocumentOpenState(
 
 export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOverview> {
   await delay(500);
+  await Promise.all([apiGetTrainingVideos(), apiGetTrainingDocuments()]);
   const totalStaff = getPortalActiveUsers().length;
   return {
     totalVideos: _trainingVideos.filter((v) => !v.isArchived).length,
@@ -2208,6 +2531,15 @@ export async function apiArchiveTrainingVideo(
   await delay(300);
   const video = _trainingVideos.find((v) => v.id === id);
   if (!video) return err("Video not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/training/videos/${id}/archive`, {});
+      video.isArchived = true;
+      return ok(null);
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Video not found");
+    }
+  }
   video.isArchived = true;
   return ok(null);
 }
@@ -2218,6 +2550,13 @@ export async function apiDeleteTrainingVideo(
   await delay(300);
   const idx = _trainingVideos.findIndex((v) => v.id === id);
   if (idx < 0) return err("Video not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/training/videos/${id}/delete`, {});
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Video not found");
+    }
+  }
   _trainingVideos.splice(idx, 1);
   return ok(null);
 }
@@ -2228,6 +2567,15 @@ export async function apiArchiveTrainingDocument(
   await delay(300);
   const doc = _trainingDocuments.find((item) => item.id === id);
   if (!doc) return err("Document not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/training/documents/${id}/archive`, {});
+      doc.isArchived = true;
+      return ok(null);
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Document not found");
+    }
+  }
   doc.isArchived = true;
   return ok(null);
 }
@@ -2238,6 +2586,13 @@ export async function apiDeleteTrainingDocument(
   await delay(300);
   const idx = _trainingDocuments.findIndex((item) => item.id === id);
   if (idx < 0) return err("Document not found");
+  if (id >= 1000) {
+    try {
+      await postMailApi(`/content/training/documents/${id}/delete`, {});
+    } catch (error) {
+      return err(error instanceof Error ? error.message : "Document not found");
+    }
+  }
   _trainingDocuments.splice(idx, 1);
   return ok(null);
 }

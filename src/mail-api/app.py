@@ -21,6 +21,10 @@ USERS_STORE_PATH = os.path.join(BASE_DIR, "users_store.json")
 PENDING_VERIFICATIONS_PATH = os.path.join(BASE_DIR, "pending_verifications.json")
 RESET_TOKENS_PATH = os.path.join(BASE_DIR, "reset_tokens.json")
 SESSIONS_STORE_PATH = os.path.join(BASE_DIR, "sessions_store.json")
+ANNOUNCEMENTS_STORE_PATH = os.path.join(BASE_DIR, "announcements_store.json")
+FORMS_STORE_PATH = os.path.join(BASE_DIR, "forms_store.json")
+TRAINING_VIDEOS_STORE_PATH = os.path.join(BASE_DIR, "training_videos_store.json")
+TRAINING_DOCUMENTS_STORE_PATH = os.path.join(BASE_DIR, "training_documents_store.json")
 PRESENCE_TTL_SECONDS = 15 * 60
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
@@ -428,6 +432,25 @@ def load_reset_tokens() -> dict[str, dict]:
 
 def save_reset_tokens(store: dict[str, dict]) -> None:
     atomic_write_json(RESET_TOKENS_PATH, store)
+
+
+def load_json_list_store(path: str) -> list[dict]:
+    raw = read_json_file(path, [])
+    return raw if isinstance(raw, list) else []
+
+
+def save_json_list_store(path: str, items: list[dict]) -> None:
+    atomic_write_json(path, items)
+
+
+def next_content_id(items: list[dict], floor: int = 1000) -> int:
+    current = floor - 1
+    for item in items:
+        try:
+            current = max(current, int(item.get("id", 0) or 0))
+        except Exception:
+            continue
+    return current + 1
 
 
 def load_sessions() -> dict[str, dict]:
@@ -1156,6 +1179,375 @@ def auth_password_reset():
     user = find_user_by_email(users, email)
     if user:
         revoke_user_sessions(user["id"])
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/announcements", methods=["GET"])
+def get_shared_announcements():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    return jsonify({"announcements": load_json_list_store(ANNOUNCEMENTS_STORE_PATH)})
+
+
+@app.route("/api/content/announcements", methods=["POST", "OPTIONS"])
+def create_shared_announcement():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, actor, error = require_authenticated_user()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    poll = data.get("poll")
+    announcement = {
+        "id": next_content_id(items),
+        "title": str(data.get("title", "")).strip(),
+        "content": str(data.get("content", "")).strip(),
+        "category": str(data.get("category", "")).strip() or actor["department"],
+        "imageUrl": data.get("imageUrl"),
+        "fileUrl": data.get("fileUrl"),
+        "attachmentName": data.get("attachmentName"),
+        "allowDownload": bool(data.get("allowDownload", True)),
+        "authorId": actor["id"],
+        "authorName": actor["fullname"],
+        "createdAt": now_ms(),
+        "updatedAt": now_ms(),
+        "isDismissed": False,
+        "isTrashed": False,
+        "poll": poll if isinstance(poll, dict) else None,
+    }
+    items.insert(0, announcement)
+    save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    return jsonify({"ok": True, "announcement": announcement})
+
+
+@app.route("/api/content/announcements/<int:item_id>/update", methods=["POST", "OPTIONS"])
+def update_shared_announcement(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not announcement:
+        return jsonify({"error": "Announcement not found"}), 404
+    for key in ["title", "content", "category", "imageUrl", "fileUrl", "attachmentName", "allowDownload"]:
+        if key in data:
+            announcement[key] = data.get(key)
+    if "poll" in data:
+        announcement["poll"] = data.get("poll") if isinstance(data.get("poll"), dict) else None
+    announcement["updatedAt"] = now_ms()
+    save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    return jsonify({"ok": True, "announcement": announcement})
+
+
+@app.route("/api/content/announcements/<int:item_id>/trash", methods=["POST", "OPTIONS"])
+def trash_shared_announcement(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not announcement:
+        return jsonify({"error": "Announcement not found"}), 404
+    announcement["isTrashed"] = True
+    announcement["updatedAt"] = now_ms()
+    save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/announcements/<int:item_id>/restore", methods=["POST", "OPTIONS"])
+def restore_shared_announcement(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not announcement:
+        return jsonify({"error": "Announcement not found"}), 404
+    announcement["isTrashed"] = False
+    announcement["updatedAt"] = now_ms()
+    save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/announcements/<int:item_id>/delete", methods=["POST", "OPTIONS"])
+def delete_shared_announcement(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
+    if len(filtered) == len(items):
+        return jsonify({"error": "Announcement not found"}), 404
+    save_json_list_store(ANNOUNCEMENTS_STORE_PATH, filtered)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/announcements/empty-trash", methods=["POST", "OPTIONS"])
+def empty_shared_announcement_trash():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    save_json_list_store(
+        ANNOUNCEMENTS_STORE_PATH,
+        [item for item in items if not bool(item.get("isTrashed", False))],
+    )
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/forms", methods=["GET"])
+def get_shared_forms():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    return jsonify({"forms": load_json_list_store(FORMS_STORE_PATH)})
+
+
+@app.route("/api/content/forms", methods=["POST", "OPTIONS"])
+def create_shared_form():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, actor, error = require_staff_manager()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    items = load_json_list_store(FORMS_STORE_PATH)
+    form = {
+        "id": next_content_id(items),
+        "title": str(data.get("title", "")).strip(),
+        "description": str(data.get("description", "")).strip(),
+        "fileUrl": str(data.get("fileUrl", "")).strip(),
+        "category": str(data.get("category", "")).strip() or actor["department"],
+        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibility": str(data.get("visibility", "General")).strip() or "General",
+        "department": data.get("department"),
+        "createdAt": now_ms(),
+        "updatedAt": now_ms(),
+    }
+    items.insert(0, form)
+    save_json_list_store(FORMS_STORE_PATH, items)
+    return jsonify({"ok": True, "form": form})
+
+
+@app.route("/api/content/forms/<int:item_id>/update", methods=["POST", "OPTIONS"])
+def update_shared_form(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    items = load_json_list_store(FORMS_STORE_PATH)
+    form = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not form:
+        return jsonify({"error": "Form not found"}), 404
+    for key in ["title", "description", "fileUrl", "category", "visibleTo", "visibility", "department"]:
+        if key in data:
+            form[key] = data.get(key)
+    form["updatedAt"] = now_ms()
+    save_json_list_store(FORMS_STORE_PATH, items)
+    return jsonify({"ok": True, "form": form})
+
+
+@app.route("/api/content/forms/<int:item_id>/delete", methods=["POST", "OPTIONS"])
+def delete_shared_form(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = load_json_list_store(FORMS_STORE_PATH)
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
+    if len(filtered) == len(items):
+        return jsonify({"error": "Form not found"}), 404
+    save_json_list_store(FORMS_STORE_PATH, filtered)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/training/videos", methods=["GET"])
+def get_shared_training_videos():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    return jsonify({"videos": load_json_list_store(TRAINING_VIDEOS_STORE_PATH)})
+
+
+@app.route("/api/content/training/videos", methods=["POST", "OPTIONS"])
+def create_shared_training_video():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, actor, error = require_staff_manager()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
+    video = {
+        "id": next_content_id(items),
+        "title": str(data.get("title", "")).strip(),
+        "description": str(data.get("description", "")).strip(),
+        "videoUrl": str(data.get("videoUrl", "")).strip(),
+        "thumbnailUrl": data.get("thumbnailUrl"),
+        "duration": int(data.get("duration", 0) or 0),
+        "category": str(data.get("category", "")).strip() or "General",
+        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibility": str(data.get("visibility", "General")).strip() or "General",
+        "department": data.get("department"),
+        "isMandatory": bool(data.get("isMandatory", False)),
+        "allowDownload": bool(data.get("allowDownload", False)),
+        "storageType": str(data.get("storageType", "Drive")).strip() or "Drive",
+        "driveRef": data.get("driveRef"),
+        "localFilename": data.get("localFilename"),
+        "uploadedBy": actor["fullname"],
+        "uploadedAt": now_ms(),
+        "viewCount": int(data.get("viewCount", 0) or 0),
+        "isArchived": bool(data.get("isArchived", False)),
+    }
+    items.insert(0, video)
+    save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
+    return jsonify({"ok": True, "video": video})
+
+
+@app.route("/api/content/training/videos/<int:item_id>/archive", methods=["POST", "OPTIONS"])
+def archive_shared_training_video(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
+    video = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not video:
+        return jsonify({"error": "Video not found"}), 404
+    video["isArchived"] = True
+    save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/training/videos/<int:item_id>/delete", methods=["POST", "OPTIONS"])
+def delete_shared_training_video(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
+    if len(filtered) == len(items):
+        return jsonify({"error": "Video not found"}), 404
+    save_json_list_store(TRAINING_VIDEOS_STORE_PATH, filtered)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/training/documents", methods=["GET"])
+def get_shared_training_documents():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    return jsonify({"documents": load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)})
+
+
+@app.route("/api/content/training/documents", methods=["POST", "OPTIONS"])
+def create_shared_training_document():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, actor, error = require_staff_manager()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
+    document = {
+        "id": next_content_id(items),
+        "title": str(data.get("title", "")).strip(),
+        "description": str(data.get("description", "")).strip(),
+        "fileUrl": str(data.get("fileUrl", "")).strip(),
+        "fileType": str(data.get("fileType", "")).strip(),
+        "category": str(data.get("category", "")).strip() or "General",
+        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibility": str(data.get("visibility", "General")).strip() or "General",
+        "department": data.get("department"),
+        "isMandatory": bool(data.get("isMandatory", False)),
+        "allowDownload": bool(data.get("allowDownload", False)),
+        "storageType": str(data.get("storageType", "Drive")).strip() or "Drive",
+        "driveRef": data.get("driveRef"),
+        "localFilename": data.get("localFilename"),
+        "uploadedBy": actor["fullname"],
+        "uploadedAt": now_ms(),
+        "downloadCount": int(data.get("downloadCount", 0) or 0),
+        "isArchived": bool(data.get("isArchived", False)),
+    }
+    items.insert(0, document)
+    save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
+    return jsonify({"ok": True, "document": document})
+
+
+@app.route("/api/content/training/documents/<int:item_id>/archive", methods=["POST", "OPTIONS"])
+def archive_shared_training_document(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
+    document = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not document:
+        return jsonify({"error": "Document not found"}), 404
+    document["isArchived"] = True
+    save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/content/training/documents/<int:item_id>/delete", methods=["POST", "OPTIONS"])
+def delete_shared_training_document(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
+    if len(filtered) == len(items):
+        return jsonify({"error": "Document not found"}), 404
+    save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, filtered)
     return jsonify({"ok": True})
 
 
