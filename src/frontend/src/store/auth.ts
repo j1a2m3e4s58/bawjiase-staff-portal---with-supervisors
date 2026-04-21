@@ -25,10 +25,10 @@ function applyTheme(mode: ThemeMode) {
 
 // ── Auth Storage ──────────────────────────────────────────────────────────────
 
-const AUTH_KEY = "barb_auth_user";
-const THEME_KEY = "barb_theme";
-const AUTH_EXPIRY_KEY = "barb_auth_expiry";
-const AUTH_ACTIVITY_KEY = "barb_last_activity";
+const AUTH_KEY = "bcb_auth_user";
+const THEME_KEY = "bcb_theme";
+const AUTH_EXPIRY_KEY = "bcb_auth_expiry";
+const AUTH_ACTIVITY_KEY = "bcb_last_activity";
 const REMEMBER_DAYS = 30;
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 const PRESENCE_PING_MS = 60 * 1000;

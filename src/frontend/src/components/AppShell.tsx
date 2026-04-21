@@ -102,9 +102,9 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-// ── BARB Badge ─────────────────────────────────────────────────────────────────
+// ── BCB Badge ─────────────────────────────────────────────────────────────────
 
-function BARBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
+function BCBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
   const sizes = {
     sm: "h-8 w-8",
     md: "h-12 w-12",
@@ -178,11 +178,11 @@ function Sidebar({ collapsed = false }: SidebarProps) {
           collapsed && "justify-center",
         )}
       >
-        <BARBBadge size="md" />
+        <BCBBadge size="md" />
         {!collapsed && (
           <div className="min-w-0">
             <div className="font-display font-bold text-foreground text-sm leading-tight">
-              BARB
+              BCB
             </div>
             <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
               Rural Bank
@@ -380,9 +380,9 @@ function MobileDrawer({
       >
         <div className="flex items-center justify-between p-4 border-b border-border/30">
           <div className="flex items-center gap-3">
-            <BARBBadge size="md" />
+            <BCBBadge size="md" />
             <div>
-              <div className="font-display font-bold text-sm">BARB</div>
+              <div className="font-display font-bold text-sm">BCB</div>
               <div className="text-[10px] text-muted-foreground uppercase tracking-wider">
                 Staff Portal
               </div>
@@ -576,7 +576,7 @@ function DesktopTopNav() {
     <header className="sticky top-4 z-40 mx-4 mt-4 glass-card-elevated rounded-2xl border border-border/40 px-4 py-3">
       <div className="flex items-center gap-3">
         <Link to="/" className="flex items-center gap-3 w-[220px] shrink-0">
-          <BARBBadge size="md" />
+          <BCBBadge size="md" />
           <div className="min-w-0">
             <div className="font-display font-bold text-sm text-foreground leading-tight">
               BAWJIASE

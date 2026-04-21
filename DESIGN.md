@@ -54,7 +54,7 @@ Premium banking portal with refined glassmorphism. Navy/green palette signals tr
 - Backdrop blur: 32px for elevated modals, 16px for cards
 
 ## Signature Detail
-Glassmorphism layer system: light mode uses white/40–50% with white borders; dark mode uses rgba(30,30,40,0.5–0.7) with white/10–15% borders. Every card and interactive element leverages backdrop-blur for depth and modernity. Logo badge (BARB) rendered as circular initials with navy background and white text.
+Glassmorphism layer system: light mode uses white/40–50% with white borders; dark mode uses rgba(30,30,40,0.5–0.7) with white/10–15% borders. Every card and interactive element leverages backdrop-blur for depth and modernity. Logo badge (BCB) rendered as circular initials with navy background and white text.
 
 ## Constraints
 - No raw hex or named colors — all OKLCH via CSS variables

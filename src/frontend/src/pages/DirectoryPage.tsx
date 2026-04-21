@@ -45,7 +45,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const IT_ACCESS_CODE = "BARB-IT-2026";
+const IT_ACCESS_CODE = "BCB-IT-2026";
 const DIRECTORY_REFRESH_MS = 1000;
 
 const ROLE_LABELS: Record<User["role"], string> = {
@@ -479,7 +479,7 @@ export default function DirectoryPage() {
     };
 
     const handleStorage = (event: StorageEvent) => {
-      if (event.key === null || event.key === "barb_mock_users") {
+      if (event.key === null || event.key === "bcb_mock_users") {
         void loadStaff();
       }
     };

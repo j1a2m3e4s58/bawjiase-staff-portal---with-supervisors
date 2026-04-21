@@ -140,7 +140,7 @@ export default function RegisterPage() {
         if (isOk(userResult)) {
           login(userResult.ok, true);
           toast.success(
-            `Welcome to BARB Staff Portal, ${userResult.ok.fullname.split(" ")[0]}!`,
+            `Welcome to BCB Staff Portal, ${userResult.ok.fullname.split(" ")[0]}!`,
           );
           navigate({ to: "/" });
         }

@@ -640,7 +640,7 @@ export default function ProfilePage() {
       <ConfirmDialog
         open={showLogoutConfirm}
         onOpenChange={setShowLogoutConfirm}
-        title="Sign out of BARB Staff Portal?"
+        title="Sign out of BCB Staff Portal?"
         description="You will need to sign in again to access the portal."
         confirmLabel="Sign Out"
         cancelLabel="Stay Signed In"

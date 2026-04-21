@@ -24,14 +24,14 @@ import type {
 } from "../types";
 
 const OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com";
-const IT_ACCESS_CODE = "BARB-IT-2026";
-const HR_ACCESS_CODE = "BARB-HR-2026";
+const IT_ACCESS_CODE = "BCB-IT-2026";
+const HR_ACCESS_CODE = "BCB-HR-2026";
 const MAIL_API_URL = (
   import.meta.env.VITE_MAIL_API_URL || `${window.location.origin}/mail-api/api`
 ).replace(/\/$/, "");
-const ANNOUNCEMENT_DISMISS_KEY = "barb_announcement_dismissals";
-const USERS_STORE_KEY = "barb_mock_users";
-const PASSWORD_STORE_KEY = "barb_mock_password_hashes";
+const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
+const USERS_STORE_KEY = "bcb_mock_users";
+const PASSWORD_STORE_KEY = "bcb_mock_password_hashes";
 const OPTIONAL_API_TIMEOUT_MS = 1500;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -97,7 +97,7 @@ export interface UpdateStaffRequest extends UpdateProfileRequest {
 
 // Simulate backend calls — replace actor body when bindgen exposes methods
 
-const IMPORTED_DB_TEMP_PASSWORD_HASH = "816495661"; // Barb@2026
+const IMPORTED_DB_TEMP_PASSWORD_HASH = "816495661"; // Bcb@2026
 
 const INITIAL_MOCK_USERS: User[] = [
   {
@@ -888,7 +888,7 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
 const _announcements: AnnouncementWithPoll[] = [
   {
     id: 1,
-    title: "BARB Annual General Meeting 2026",
+    title: "BCB Annual General Meeting 2026",
     content:
       "All staff are cordially invited to the Annual General Meeting scheduled for Friday, 24 April 2026 at the Head Office auditorium at 10:00 AM. Attendance is mandatory for all department heads.",
     category: "HR",
@@ -1172,7 +1172,7 @@ const _notifications: Notification[] = [
     userId: "mock-user-1",
     kind: "announcement",
     title: "New Announcement",
-    message: "BARB Annual General Meeting 2026 has been posted",
+    message: "BCB Annual General Meeting 2026 has been posted",
     linkTo: "/announcements",
     isRead: false,
     createdAt: BigInt(Date.now() - 3600000),
@@ -1495,7 +1495,7 @@ export interface AdminTrainingOverview {
   }[];
 }
 
-const AUTH_STORAGE_KEY = "barb_auth_user";
+const AUTH_STORAGE_KEY = "bcb_auth_user";
 
 function getStoredAuthUser(): User | null {
   if (typeof window === "undefined") return null;
@@ -1626,7 +1626,7 @@ const _trainingVideos: TrainingVideo[] = [
     id: 1,
     title: "Cybersecurity Fundamentals for Bank Staff",
     description:
-      "Essential cybersecurity practices including phishing awareness, password management, and safe online banking protocols for all BARB staff.",
+      "Essential cybersecurity practices including phishing awareness, password management, and safe online banking protocols for all BCB staff.",
     videoUrl: "DRIVE:1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74",
     thumbnailUrl: null,
     duration: 1800,
@@ -1690,7 +1690,7 @@ const _trainingVideos: TrainingVideo[] = [
   },
   {
     id: 4,
-    title: "Customer Service Excellence — BARB Standards",
+    title: "Customer Service Excellence — BCB Standards",
     description:
       "Delivering world-class service at every touchpoint: greeting, problem resolution, escalation, and feedback management.",
     videoUrl: "DRIVE:1CuSt0MerServ1ceExceL1ence2026",
@@ -1715,9 +1715,9 @@ const _trainingVideos: TrainingVideo[] = [
 const _trainingDocuments: TrainingDocument[] = [
   {
     id: 1,
-    title: "BARB Staff Handbook 2026",
+    title: "BCB Staff Handbook 2026",
     description:
-      "Comprehensive guide to BARB policies, procedures, benefits, and staff conduct expectations.",
+      "Comprehensive guide to BCB policies, procedures, benefits, and staff conduct expectations.",
     fileUrl: "DRIVE:1VwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZaB",
     fileType: "application/pdf",
     category: "HR",
@@ -1781,7 +1781,7 @@ const _trainingDocuments: TrainingDocument[] = [
     id: 4,
     title: "IT Security Policy — Password & Access Control",
     description:
-      "Password requirements, system access protocols, and incident reporting guidelines for all BARB IT systems.",
+      "Password requirements, system access protocols, and incident reporting guidelines for all BCB IT systems.",
     fileUrl: "DRIVE:1OpQrStUvWxYzAbCdEfGhIjKlMnOpQrStU",
     fileType: "application/pdf",
     category: "IT Security",
@@ -2496,7 +2496,7 @@ const _auditLogs: AuditLog[] = [
     actorId: "mock-user-1",
     actorName: "Sarah Mensah",
     action: "CREATE_ANNOUNCEMENT",
-    target: "BARB Annual General Meeting 2026",
+    target: "BCB Annual General Meeting 2026",
     ipAddress: "192.168.1.10",
     timestamp: BigInt(Date.now() - 86400000),
   },

@@ -4,9 +4,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
 
-export function BARBLogoBadge() {
+export function BCBLogoBadge() {
   return (
-    <div className="flex flex-col items-center" data-ocid="auth.barb_badge">
+    <div className="flex flex-col items-center" data-ocid="auth.bcb_badge">
       <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-background bg-background shadow-glass ring-4 ring-primary/20">
         <img
           src={withBase("assets/images/bcb-logo.png")}
@@ -51,7 +51,7 @@ export function AuthShell({ children, className }: AuthShellProps) {
           )}
         >
           <div className="absolute -top-12 left-1/2 -translate-x-1/2">
-            <BARBLogoBadge />
+            <BCBLogoBadge />
           </div>
           {children}
         </div>
