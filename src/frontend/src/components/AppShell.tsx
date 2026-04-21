@@ -670,7 +670,7 @@ export function AppShell({ children }: AppShellProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background flex">
+    <div className="app-shell-surface min-h-screen flex">
       {/* Mobile Drawer */}
       {isMobile && (
         <MobileDrawer open={drawerOpen} onClose={() => setDrawerOpen(false)} />
