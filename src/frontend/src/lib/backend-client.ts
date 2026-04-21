@@ -31,6 +31,7 @@ const MAIL_API_URL = (
 ).replace(/\/$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "barb_announcement_dismissals";
 const USERS_STORE_KEY = "barb_mock_users";
+const PASSWORD_STORE_KEY = "barb_mock_password_hashes";
 const OPTIONAL_API_TIMEOUT_MS = 1500;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -376,7 +377,7 @@ function persistUsersStore() {
 
 let _pendingVerification: Record<string, User> = {};
 let _verificationCodes: Record<string, string> = {};
-let _passwordHashes: Record<string, string> = {
+const DEFAULT_PASSWORD_HASHES: Record<string, string> = {
   "dquarshie@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
   "jbruku@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
   "kasare@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
@@ -386,6 +387,42 @@ let _passwordHashes: Record<string, string> = {
   "nnarh@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
   "gowusu@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
 };
+let _passwordHashes: Record<string, string> = loadPasswordStore();
+
+function loadPasswordStore(): Record<string, string> {
+  if (typeof window === "undefined") {
+    return { ...DEFAULT_PASSWORD_HASHES };
+  }
+  try {
+    const raw = window.localStorage.getItem(PASSWORD_STORE_KEY);
+    if (!raw) {
+      const initial = { ...DEFAULT_PASSWORD_HASHES };
+      window.localStorage.setItem(PASSWORD_STORE_KEY, JSON.stringify(initial));
+      return initial;
+    }
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return Object.entries(parsed).reduce<Record<string, string>>(
+      (acc, [email, hash]) => {
+        if (typeof hash === "string" && hash) {
+          acc[normalizeEmail(email)] = hash;
+        }
+        return acc;
+      },
+      { ...DEFAULT_PASSWORD_HASHES },
+    );
+  } catch {
+    return { ...DEFAULT_PASSWORD_HASHES };
+  }
+}
+
+function syncPasswordStore() {
+  _passwordHashes = loadPasswordStore();
+}
+
+function persistPasswordStore() {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(PASSWORD_STORE_KEY, JSON.stringify(_passwordHashes));
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -447,6 +484,7 @@ export async function apiRegister(
 ): Promise<ApiResult<User>> {
   await delay(600);
   syncUsersFromStorage();
+  syncPasswordStore();
   const email = normalizeEmail(req.email);
   if (!email.endsWith(OFFICIAL_EMAIL_DOMAIN)) {
     return err("Please use your official Bawjiase email address.");
@@ -480,6 +518,7 @@ export async function apiRegister(
   _pendingVerification[email] = newUser;
   _verificationCodes[email] = verificationCodeFor(email);
   _passwordHashes[email] = req.passwordHash;
+  persistPasswordStore();
   try {
     await sendVerificationCode(email, _verificationCodes[email]);
   } catch (error) {
@@ -541,6 +580,7 @@ export async function apiLogin(
 ): Promise<ApiResult<User>> {
   await delay(700);
   syncUsersFromStorage();
+  syncPasswordStore();
   const normalizedEmail = normalizeEmail(email);
   if (_passwordHashes[normalizedEmail] !== passwordHash) {
     return err("Invalid email or password");
@@ -615,10 +655,12 @@ export async function apiConfirmPasswordReset(
   newPasswordHash: string,
 ): Promise<ApiResult<null>> {
   await delay(500);
+  syncPasswordStore();
   const email = normalizeEmail(token);
   if (!_mockUsers.some((u) => u.email === email))
     return err("Invalid reset token");
   _passwordHashes[email] = newPasswordHash;
+  persistPasswordStore();
   return ok(null);
 }
 
