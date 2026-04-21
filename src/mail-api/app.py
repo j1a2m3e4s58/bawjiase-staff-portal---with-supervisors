@@ -11,7 +11,19 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 
 OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com"
 PRESENCE_STORE_PATH = os.path.join(BASE_DIR, "presence_store.json")
+PASSWORD_STORE_PATH = os.path.join(BASE_DIR, "password_store.json")
 PRESENCE_TTL_SECONDS = 15 * 60
+DEFAULT_PASSWORD_HASH = "816495661"  # Barb@2026
+DEFAULT_PASSWORD_HASHES = {
+    "dquarshie@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "jbruku@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "kasare@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "kyeenu-prah@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "amensah@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "lawuah@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "nnarh@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    "gowusu@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+}
 
 app = Flask(__name__)
 
@@ -79,6 +91,33 @@ def prune_presence(store: dict[str, int]) -> dict[str, int]:
         for user_id, timestamp in store.items()
         if int(timestamp) >= cutoff
     }
+
+
+def load_password_store() -> dict[str, str]:
+    if not os.path.exists(PASSWORD_STORE_PATH):
+        return dict(DEFAULT_PASSWORD_HASHES)
+    try:
+        with open(PASSWORD_STORE_PATH, "r", encoding="utf-8") as handle:
+            raw = json.load(handle)
+        if not isinstance(raw, dict):
+            return dict(DEFAULT_PASSWORD_HASHES)
+        merged = dict(DEFAULT_PASSWORD_HASHES)
+        for email, password_hash in raw.items():
+            if isinstance(email, str) and isinstance(password_hash, str) and password_hash:
+                merged[email.strip().lower()] = password_hash
+        return merged
+    except Exception:
+        return dict(DEFAULT_PASSWORD_HASHES)
+
+
+def save_password_store(store: dict[str, str]) -> None:
+    normalized = {
+        str(email).strip().lower(): str(password_hash)
+        for email, password_hash in store.items()
+        if str(email).strip() and str(password_hash).strip()
+    }
+    with open(PASSWORD_STORE_PATH, "w", encoding="utf-8") as handle:
+        json.dump(normalized, handle)
 
 
 def mail_config() -> dict[str, str | int]:
@@ -239,6 +278,46 @@ def send_password_reset_email():
     except Exception as exc:
         app.logger.exception("Password reset email failed")
         return jsonify({"error": f"Email could not be sent: {exc}"}), 500
+
+
+@app.route("/api/auth/login", methods=["POST", "OPTIONS"])
+def auth_login():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    data, error = require_json()
+    if error:
+        return error
+    try:
+        email = validate_email(str(data.get("email", "")))
+        password_hash = str(data.get("passwordHash", "")).strip()
+        if not password_hash:
+            return jsonify({"error": "passwordHash is required"}), 400
+        store = load_password_store()
+        if store.get(email) != password_hash:
+            return jsonify({"ok": False}), 401
+        return jsonify({"ok": True})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/auth/password-reset", methods=["POST", "OPTIONS"])
+def auth_password_reset():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    data, error = require_json()
+    if error:
+        return error
+    try:
+        email = validate_email(str(data.get("token", "")))
+        new_password_hash = str(data.get("newPasswordHash", "")).strip()
+        if not new_password_hash:
+            return jsonify({"error": "newPasswordHash is required"}), 400
+        store = load_password_store()
+        store[email] = new_password_hash
+        save_password_store(store)
+        return jsonify({"ok": True})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 if __name__ == "__main__":

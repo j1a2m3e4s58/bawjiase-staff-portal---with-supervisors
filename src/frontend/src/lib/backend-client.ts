@@ -58,12 +58,43 @@ async function postMailApi(path: string, payload: Record<string, string>) {
   }
 }
 
+async function postMailApiJson(
+  path: string,
+  payload: Record<string, string>,
+): Promise<Record<string, unknown>> {
+  const response = await fetch(`${MAIL_API_URL}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
+  return data;
+}
+
 async function sendVerificationCode(email: string, code: string) {
   await postMailApi("/send-verification-email", { email, code });
 }
 
 async function sendPasswordResetEmail(email: string, resetUrl: string) {
   await postMailApi("/send-password-reset-email", { email, resetUrl });
+}
+
+async function verifySharedPassword(email: string, passwordHash: string) {
+  const payload = await postMailApiJson("/auth/login", { email, passwordHash });
+  return payload.ok === true;
+}
+
+async function saveSharedPassword(token: string, newPasswordHash: string) {
+  const payload = await postMailApiJson("/auth/password-reset", {
+    token,
+    newPasswordHash,
+  });
+  return payload.ok === true;
 }
 
 // ── Auth / Registration ───────────────────────────────────────────────────────
@@ -582,8 +613,20 @@ export async function apiLogin(
   syncUsersFromStorage();
   syncPasswordStore();
   const normalizedEmail = normalizeEmail(email);
-  if (_passwordHashes[normalizedEmail] !== passwordHash) {
-    return err("Invalid email or password");
+  try {
+    const sharedPasswordMatches = await verifySharedPassword(
+      normalizedEmail,
+      passwordHash,
+    );
+    if (!sharedPasswordMatches) {
+      return err("Invalid email or password");
+    }
+    _passwordHashes[normalizedEmail] = passwordHash;
+    persistPasswordStore();
+  } catch {
+    if (_passwordHashes[normalizedEmail] !== passwordHash) {
+      return err("Invalid email or password");
+    }
   }
   const user = _mockUsers.find(
     (u) => u.email === normalizedEmail && !u.isArchived && u.isActive,
@@ -659,6 +702,16 @@ export async function apiConfirmPasswordReset(
   const email = normalizeEmail(token);
   if (!_mockUsers.some((u) => u.email === email))
     return err("Invalid reset token");
+  try {
+    const saved = await saveSharedPassword(email, newPasswordHash);
+    if (!saved) {
+      return err("Password reset could not be saved");
+    }
+  } catch (error) {
+    return err(
+      error instanceof Error ? error.message : "Password reset could not be saved",
+    );
+  }
   _passwordHashes[email] = newPasswordHash;
   persistPasswordStore();
   return ok(null);
