@@ -34,6 +34,8 @@ services:
     envVars:
       - key: HUSKY
         value: "0"
+      - key: NPM_CONFIG_IGNORE_SCRIPTS
+        value: "true"
     routes:
       - type: rewrite
         source: /mail-api/*
