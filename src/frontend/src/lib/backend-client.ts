@@ -128,7 +128,7 @@ export interface UpdateStaffRequest extends UpdateProfileRequest {
 
 // Simulate backend calls — replace actor body when bindgen exposes methods
 
-const IMPORTED_DB_TEMP_PASSWORD_HASH = "816495661"; // Bcb@2026
+const IMPORTED_DB_TEMP_PASSWORD_HASH = "403784255"; // Bcb@2026
 
 const INITIAL_MOCK_USERS: User[] = [
   {
@@ -548,6 +548,18 @@ export async function apiRegister(
   };
   _pendingVerification[email] = newUser;
   _verificationCodes[email] = verificationCodeFor(email);
+  try {
+    const saved = await saveSharedPassword(email, req.passwordHash);
+    if (!saved) {
+      return err("Registration password could not be saved");
+    }
+  } catch (error) {
+    return err(
+      error instanceof Error
+        ? error.message
+        : "Registration password could not be saved",
+    );
+  }
   _passwordHashes[email] = req.passwordHash;
   persistPasswordStore();
   try {
@@ -624,9 +636,7 @@ export async function apiLogin(
     _passwordHashes[normalizedEmail] = passwordHash;
     persistPasswordStore();
   } catch {
-    if (_passwordHashes[normalizedEmail] !== passwordHash) {
-      return err("Invalid email or password");
-    }
+    return err("Authentication service unavailable. Please try again.");
   }
   const user = _mockUsers.find(
     (u) => u.email === normalizedEmail && !u.isArchived && u.isActive,

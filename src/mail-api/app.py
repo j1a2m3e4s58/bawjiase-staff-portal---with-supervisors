@@ -13,7 +13,7 @@ OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com"
 PRESENCE_STORE_PATH = os.path.join(BASE_DIR, "presence_store.json")
 PASSWORD_STORE_PATH = os.path.join(BASE_DIR, "password_store.json")
 PRESENCE_TTL_SECONDS = 15 * 60
-DEFAULT_PASSWORD_HASH = "816495661"  # Barb@2026
+DEFAULT_PASSWORD_HASH = "403784255"  # Bcb@2026
 DEFAULT_PASSWORD_HASHES = {
     "dquarshie@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
     "jbruku@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
