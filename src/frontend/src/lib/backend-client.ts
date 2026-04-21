@@ -1685,7 +1685,13 @@ function canManageForms(user?: User | null) {
 }
 
 function canUserSeeForm(form: PortalForm, user?: User | null) {
-  if (canManageForms(user)) return true;
+  if (user?.role === "SuperAdmin") return true;
+  if (form.visibility === "Department") {
+    return (
+      !!user?.department &&
+      user.department.toUpperCase() === (form.department ?? "").toUpperCase()
+    );
+  }
   const allowedCategories = new Set(["GENERAL", "HR"]);
   if (user?.department) allowedCategories.add(user.department.toUpperCase());
   return allowedCategories.has((form.category || "").toUpperCase());
@@ -1975,7 +1981,7 @@ function currentTrainingUser() {
 
 function canUserAccessVideo(video: TrainingVideo, user: User | null) {
   if (!user) return false;
-  if (isTrainingManager(user)) return true;
+  if (user.role === "SuperAdmin") return true;
   if (video.visibility !== "Department") return true;
   return (
     user.department.toUpperCase() === (video.department ?? "").toUpperCase()
@@ -1984,7 +1990,7 @@ function canUserAccessVideo(video: TrainingVideo, user: User | null) {
 
 function canUserAccessDocument(doc: TrainingDocument, user: User | null) {
   if (!user) return false;
-  if (isTrainingManager(user)) return true;
+  if (user.role === "SuperAdmin") return true;
   if (doc.visibility !== "Department") return true;
   return user.department.toUpperCase() === (doc.department ?? "").toUpperCase();
 }
