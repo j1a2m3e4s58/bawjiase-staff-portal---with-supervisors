@@ -6,7 +6,6 @@ import {
   createRootRoute,
   createRoute,
   createRouter,
-  redirect,
   useNavigate,
 } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect } from "react";
@@ -47,6 +46,52 @@ const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
 
 function PageLoading() {
   return <BrandLoader fullscreen label="Opening your workspace..." />;
+}
+
+function AppErrorScreen({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="min-h-screen bg-background px-6 py-10 flex items-center justify-center">
+      <div className="glass-card-elevated max-w-lg w-full rounded-2xl p-8 text-center space-y-4">
+        <img
+          src="/assets/images/bcb-logo.png"
+          alt="BCB Staff Portal"
+          className="mx-auto h-20 w-20 rounded-full object-cover border-4 border-background shadow-glass"
+        />
+        <div className="space-y-2">
+          <h1 className="font-display text-2xl font-bold text-foreground">
+            {title}
+          </h1>
+          <p className="text-sm text-muted-foreground leading-6">
+            {description}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function RouteErrorComponent() {
+  return (
+    <AppErrorScreen
+      title="We hit a page error"
+      description="The portal could not render this page properly. Please refresh once. If it keeps happening, the deploy configuration or a runtime page error still needs attention."
+    />
+  );
+}
+
+function RouteNotFoundComponent() {
+  return (
+    <AppErrorScreen
+      title="Page not found"
+      description="This route is not being served correctly yet. On Render, that usually means the rewrite rule or deploy output needs adjustment."
+    />
+  );
 }
 
 // ── Auth Guards (component-based, using useNavigate) ──────────────────────────
@@ -93,8 +138,8 @@ function GuestGuard() {
 
 const rootRoute = createRootRoute({
   component: () => <Outlet />,
-  notFoundComponent: () => null,
-  errorComponent: () => null,
+  notFoundComponent: RouteNotFoundComponent,
+  errorComponent: RouteErrorComponent,
 });
 
 // Guest routes (redirect to / if already logged in)
