@@ -1,7 +1,6 @@
+// Password hashing now happens on the server using a secure password hasher.
+// We keep this helper so existing UI call sites can continue passing credentials
+// through one function before submitting over HTTPS.
 export function hashPassword(password: string) {
-  let h = 0;
-  for (let i = 0; i < password.length; i++) {
-    h = (Math.imul(31, h) + password.charCodeAt(i)) | 0;
-  }
-  return String(Math.abs(h));
+  return password;
 }

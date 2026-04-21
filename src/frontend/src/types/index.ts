@@ -34,6 +34,7 @@ export interface User {
   fullname: string;
   phone: string;
   email: string;
+  sessionToken?: string;
   role: Role;
   position: string;
   department: string;

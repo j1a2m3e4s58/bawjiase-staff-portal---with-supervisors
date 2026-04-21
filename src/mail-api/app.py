@@ -9,6 +9,7 @@ from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 from dotenv import load_dotenv
 from flask import Flask, jsonify, request
+from werkzeug.security import check_password_hash, generate_password_hash
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -19,9 +20,11 @@ PASSWORD_STORE_PATH = os.path.join(BASE_DIR, "password_store.json")
 USERS_STORE_PATH = os.path.join(BASE_DIR, "users_store.json")
 PENDING_VERIFICATIONS_PATH = os.path.join(BASE_DIR, "pending_verifications.json")
 RESET_TOKENS_PATH = os.path.join(BASE_DIR, "reset_tokens.json")
+SESSIONS_STORE_PATH = os.path.join(BASE_DIR, "sessions_store.json")
 PRESENCE_TTL_SECONDS = 15 * 60
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
+SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
 DEFAULT_PASSWORD_HASH = "403784255"  # Bcb@2026
 IT_ACCESS_CODE = "BCB-IT-2026"
 HR_ACCESS_CODE = "BCB-HR-2026"
@@ -179,7 +182,7 @@ def add_cors_headers(response):
     elif origin and origin in origins:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
-    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type, Authorization"
     response.headers["Access-Control-Allow-Methods"] = "GET,POST,OPTIONS"
     return response
 
@@ -209,6 +212,36 @@ def role_from_department(department: str) -> str:
 
 def now_ms() -> int:
     return int(time.time() * 1000)
+
+
+def now_seconds() -> int:
+    return int(time.time())
+
+
+def legacy_hash_password(password: str) -> str:
+    h = 0
+    for char in password:
+        h = ((31 * h) + ord(char)) & 0xFFFFFFFF
+        if h & 0x80000000:
+            h -= 0x100000000
+    return str(abs(h))
+
+
+def is_secure_password_hash(value: str) -> bool:
+    return value.startswith("pbkdf2:") or value.startswith("scrypt:")
+
+
+def hash_password_for_storage(password: str) -> str:
+    return generate_password_hash(password)
+
+
+def verify_password(stored_value: str, password: str) -> bool:
+    if is_secure_password_hash(stored_value):
+        try:
+            return check_password_hash(stored_value, password)
+        except ValueError:
+            return False
+    return stored_value == legacy_hash_password(password)
 
 
 def atomic_write_json(path: str, payload) -> None:
@@ -397,6 +430,91 @@ def save_reset_tokens(store: dict[str, dict]) -> None:
     atomic_write_json(RESET_TOKENS_PATH, store)
 
 
+def load_sessions() -> dict[str, dict]:
+    raw = read_json_file(SESSIONS_STORE_PATH, {})
+    if not isinstance(raw, dict):
+        return {}
+    current = now_seconds()
+    sessions = {}
+    for token, item in raw.items():
+        if not isinstance(token, str) or not isinstance(item, dict):
+            continue
+        user_id = str(item.get("userId", "")).strip()
+        expires_at = int(item.get("expiresAt", 0) or 0)
+        if not user_id or expires_at <= current:
+            continue
+        sessions[token] = {
+            "userId": user_id,
+            "expiresAt": expires_at,
+        }
+    return sessions
+
+
+def save_sessions(store: dict[str, dict]) -> None:
+    atomic_write_json(SESSIONS_STORE_PATH, store)
+
+
+def issue_session(user_id: str) -> str:
+    sessions = load_sessions()
+    token = secrets.token_urlsafe(32)
+    sessions[token] = {
+        "userId": user_id,
+        "expiresAt": now_seconds() + SESSION_TTL_SECONDS,
+    }
+    save_sessions(sessions)
+    return token
+
+
+def revoke_session(token: str) -> None:
+    sessions = load_sessions()
+    if token in sessions:
+        sessions.pop(token, None)
+        save_sessions(sessions)
+
+
+def revoke_user_sessions(user_id: str) -> None:
+    sessions = load_sessions()
+    filtered = {
+        token: session
+        for token, session in sessions.items()
+        if session.get("userId") != user_id
+    }
+    if filtered != sessions:
+        save_sessions(filtered)
+
+
+def parse_bearer_token() -> str:
+    header = str(request.headers.get("Authorization", "")).strip()
+    if not header.startswith("Bearer "):
+        return ""
+    return header[7:].strip()
+
+
+def require_authenticated_user():
+    token = parse_bearer_token()
+    if not token:
+        return None, None, (jsonify({"error": "Authentication required"}), 401)
+    sessions = load_sessions()
+    session = sessions.get(token)
+    if not session:
+        return None, None, (jsonify({"error": "Invalid or expired session"}), 401)
+    users = load_user_store()
+    user = find_user_by_id(users, session["userId"])
+    if not user or user["isArchived"] or not user["isActive"] or not user["isVerified"]:
+        revoke_session(token)
+        return None, None, (jsonify({"error": "Invalid or expired session"}), 401)
+    return token, user, None
+
+
+def require_staff_manager():
+    token, user, error = require_authenticated_user()
+    if error:
+        return token, user, error
+    if user["role"] not in {"SuperAdmin", "HRAdmin"}:
+        return token, user, (jsonify({"error": "Admin access required"}), 403)
+    return token, user, None
+
+
 def generate_verification_code() -> str:
     return f"{secrets.randbelow(900000) + 100000:06d}"
 
@@ -507,6 +625,9 @@ def health():
 
 @app.route("/api/presence", methods=["GET"])
 def get_presence():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
     store = prune_presence(load_presence_store())
     save_presence_store(store)
     return jsonify({"presence": store})
@@ -517,12 +638,17 @@ def ping_presence():
     preflight = handle_options()
     if preflight:
         return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
     data, error = require_json()
     if error:
         return error
     user_id = str(data.get("userId", "")).strip()
     if not user_id:
         return jsonify({"error": "userId is required"}), 400
+    if auth_user["id"] != user_id:
+        return jsonify({"error": "Cannot update another user's presence"}), 403
     store = prune_presence(load_presence_store())
     store[user_id] = int(time.time())
     save_presence_store(store)
@@ -534,12 +660,17 @@ def logout_presence():
     preflight = handle_options()
     if preflight:
         return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
     data, error = require_json()
     if error:
         return error
     user_id = str(data.get("userId", "")).strip()
     if not user_id:
         return jsonify({"error": "userId is required"}), 400
+    if auth_user["id"] != user_id:
+        return jsonify({"error": "Cannot update another user's presence"}), 403
     store = prune_presence(load_presence_store())
     store.pop(user_id, None)
     save_presence_store(store)
@@ -548,11 +679,19 @@ def logout_presence():
 
 @app.route("/api/users", methods=["GET"])
 def list_users():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
     return jsonify({"users": load_user_store()})
 
 
 @app.route("/api/users/<user_id>", methods=["GET"])
 def get_user(user_id: str):
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    if auth_user["id"] != user_id and auth_user["role"] not in {"SuperAdmin", "HRAdmin"}:
+        return jsonify({"error": "Access denied"}), 403
     users = load_user_store()
     user = find_user_by_id(users, user_id)
     if not user:
@@ -565,6 +704,11 @@ def update_profile(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    if auth_user["id"] != user_id and auth_user["role"] not in {"SuperAdmin", "HRAdmin"}:
+        return jsonify({"error": "Access denied"}), 403
     data, error = require_json()
     if error:
         return error
@@ -572,18 +716,20 @@ def update_profile(user_id: str):
     user = find_user_by_id(users, user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
+
+    can_manage_org_fields = auth_user["role"] in {"SuperAdmin", "HRAdmin"}
     if "fullname" in data:
         user["fullname"] = str(data.get("fullname", "")).strip() or user["fullname"]
     if "phone" in data:
         user["phone"] = str(data.get("phone", "")).strip() or user["phone"]
     if "position" in data:
         user["position"] = str(data.get("position", "")).strip() or user["position"]
-    if "department" in data:
+    if "department" in data and can_manage_org_fields:
         department = str(data.get("department", "")).strip().upper()
         if department:
             user["department"] = department
             user["role"] = role_from_department(department)
-    if "branch" in data:
+    if "branch" in data and can_manage_org_fields:
         branch = str(data.get("branch", "")).strip().upper()
         if branch:
             user["branch"] = branch
@@ -596,6 +742,9 @@ def update_profile(user_id: str):
 
 @app.route("/api/staff/active", methods=["GET"])
 def get_active_staff():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
     users = load_user_store()
     active_users = [
         user for user in users
@@ -606,12 +755,18 @@ def get_active_staff():
 
 @app.route("/api/staff/archived", methods=["GET"])
 def get_archived_staff():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
     users = load_user_store()
     return jsonify({"users": [user for user in users if user["isArchived"]]})
 
 
 @app.route("/api/staff/stats", methods=["GET"])
 def get_staff_stats():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
     users = load_user_store()
     active = [user for user in users if user["isActive"] and not user["isArchived"]]
     by_department = {}
@@ -633,6 +788,9 @@ def get_staff_stats():
 
 @app.route("/api/staff/<user_id>", methods=["GET"])
 def get_staff_member(user_id: str):
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
     users = load_user_store()
     user = find_user_by_id(users, user_id)
     if not user:
@@ -645,6 +803,9 @@ def update_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
     data, error = require_json()
     if error:
         return error
@@ -685,6 +846,9 @@ def archive_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
     users = load_user_store()
     user = find_user_by_id(users, user_id)
     if not user:
@@ -694,6 +858,7 @@ def archive_staff(user_id: str):
     user["isArchived"] = True
     user["isActive"] = False
     save_user_store(users)
+    revoke_user_sessions(user_id)
     return jsonify({"ok": True})
 
 
@@ -702,6 +867,9 @@ def restore_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
     users = load_user_store()
     user = find_user_by_id(users, user_id)
     if not user:
@@ -717,6 +885,9 @@ def delete_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
     users = load_user_store()
     user = find_user_by_id(users, user_id)
     if not user:
@@ -729,6 +900,7 @@ def delete_staff(user_id: str):
     save_user_store(users)
     save_password_store(passwords)
     save_pending_verifications(pending)
+    revoke_user_sessions(user_id)
     return jsonify({"ok": True})
 
 
@@ -742,11 +914,13 @@ def auth_register():
         return error
     try:
         email = validate_email(str(data.get("email", "")))
-        password_hash = str(data.get("passwordHash", "")).strip()
+        password = str(data.get("passwordHash", ""))
         department = str(data.get("department", "")).strip().upper()
         branch = str(data.get("branch", "")).strip().upper()
-        if not password_hash:
-            return jsonify({"error": "passwordHash is required"}), 400
+        if not password:
+            return jsonify({"error": "Password is required"}), 400
+        if len(password) < 8:
+            return jsonify({"error": "Password must be at least 8 characters"}), 400
         if not department or not branch:
             return jsonify({"error": "Department and branch are required"}), 400
         if department == "IT" and str(data.get("accessCode", "")).strip() != IT_ACCESS_CODE:
@@ -779,7 +953,7 @@ def auth_register():
         code = generate_verification_code()
         pending[email] = {
             "user": new_user,
-            "passwordHash": password_hash,
+            "passwordHash": hash_password_for_storage(password),
             "code": code,
             "expiresAt": int(time.time()) + VERIFICATION_TTL_SECONDS,
         }
@@ -873,12 +1047,13 @@ def auth_login():
         return error
     try:
         email = validate_email(str(data.get("email", "")))
-        password_hash = str(data.get("passwordHash", "")).strip()
-        if not password_hash:
-            return jsonify({"error": "passwordHash is required"}), 400
+        password = str(data.get("passwordHash", ""))
+        if not password:
+            return jsonify({"error": "Password is required"}), 400
 
         passwords = load_password_store()
-        if passwords.get(email) != password_hash:
+        stored_password = passwords.get(email)
+        if not stored_password or not verify_password(stored_password, password):
             return jsonify({"error": "Invalid email or password"}), 401
 
         users = load_user_store()
@@ -888,11 +1063,28 @@ def auth_login():
         if not user["isVerified"]:
             return jsonify({"error": "Email not verified"}), 403
 
+        if not is_secure_password_hash(stored_password):
+            passwords[email] = hash_password_for_storage(password)
+            save_password_store(passwords)
+
         user["lastSeen"] = now_ms()
         save_user_store(users)
-        return jsonify({"ok": True, "user": user})
+        session_token = issue_session(user["id"])
+        return jsonify({"ok": True, "user": user, "sessionToken": session_token})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/auth/logout", methods=["POST", "OPTIONS"])
+def auth_logout():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    token, _, error = require_authenticated_user()
+    if error:
+        return error
+    revoke_session(token)
+    return jsonify({"ok": True})
 
 
 @app.route("/api/auth/request-password-reset", methods=["POST", "OPTIONS"])
@@ -938,11 +1130,13 @@ def auth_password_reset():
     if error:
         return error
     token = str(data.get("token", "")).strip()
-    new_password_hash = str(data.get("newPasswordHash", "")).strip()
+    new_password = str(data.get("newPasswordHash", ""))
     if not token:
         return jsonify({"error": "token is required"}), 400
-    if not new_password_hash:
-        return jsonify({"error": "newPasswordHash is required"}), 400
+    if not new_password:
+        return jsonify({"error": "Password is required"}), 400
+    if len(new_password) < 8:
+        return jsonify({"error": "Password must be at least 8 characters"}), 400
 
     tokens = load_reset_tokens()
     entry = tokens.get(token)
@@ -955,10 +1149,13 @@ def auth_password_reset():
         return jsonify({"error": "Invalid or expired reset token"}), 400
 
     passwords = load_password_store()
-    passwords[email] = new_password_hash
+    passwords[email] = hash_password_for_storage(new_password)
     tokens.pop(token, None)
     save_password_store(passwords)
     save_reset_tokens(tokens)
+    user = find_user_by_email(users, email)
+    if user:
+        revoke_user_sessions(user["id"])
     return jsonify({"ok": True})
 
 

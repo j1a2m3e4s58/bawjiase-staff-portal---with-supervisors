@@ -132,9 +132,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const persistUser = (updatedUser: User) => {
       if (cancelled || authSessionRef.current !== sessionId) return;
-      setUser(updatedUser);
+      const mergedUser = {
+        ...updatedUser,
+        sessionToken: updatedUser.sessionToken ?? user.sessionToken,
+      };
+      setUser(mergedUser);
       const remember = !!localStorage.getItem(AUTH_EXPIRY_KEY);
-      saveStoredUser(updatedUser, remember, false);
+      saveStoredUser(mergedUser, remember, false);
     };
 
     const pingPresence = async () => {
@@ -211,19 +215,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     const currentUserId = user?.id;
-    authSessionRef.current += 1;
-    setUser(null);
-    clearStoredUser();
     if (currentUserId) {
       void apiLogout(currentUserId);
     }
+    authSessionRef.current += 1;
+    setUser(null);
+    clearStoredUser();
   }, [user]);
 
   const updateUser = useCallback((updatedUser: User) => {
-    setUser(updatedUser);
+    const mergedUser = {
+      ...updatedUser,
+      sessionToken: updatedUser.sessionToken ?? user?.sessionToken,
+    };
+    setUser(mergedUser);
     const expiry = localStorage.getItem(AUTH_EXPIRY_KEY);
-    saveStoredUser(updatedUser, !!expiry);
-  }, []);
+    saveStoredUser(mergedUser, !!expiry);
+  }, [user?.sessionToken]);
 
   const toggleTheme = useCallback(() => {
     setThemeMode((prev) => {

@@ -31,6 +31,7 @@ const MAIL_API_URL = (
 ).replace(/\/$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
+const AUTH_STORAGE_KEY = "bcb_auth_user";
 const OPTIONAL_API_TIMEOUT_MS = 1500;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -43,10 +44,28 @@ function err<T>(message: string): ApiResult<T> {
   return { err: message };
 }
 
+function getStoredSessionToken(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { sessionToken?: string };
+    return typeof parsed.sessionToken === "string" && parsed.sessionToken
+      ? parsed.sessionToken
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 async function postMailApi(path: string, payload: Record<string, unknown>) {
+  const token = getStoredSessionToken();
   const response = await fetch(`${MAIL_API_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   });
   const data = (await response.json().catch(() => ({}))) as {
@@ -61,9 +80,13 @@ async function postMailApiJson(
   path: string,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const token = getStoredSessionToken();
   const response = await fetch(`${MAIL_API_URL}${path}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
     body: JSON.stringify(payload),
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
@@ -76,8 +99,10 @@ async function postMailApiJson(
 }
 
 async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
+  const token = getStoredSessionToken();
   const response = await fetch(`${MAIL_API_URL}${path}`, {
     method: "GET",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
     error?: string;
@@ -303,10 +328,14 @@ async function postOptionalApi(
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
+  const token = getStoredSessionToken();
   try {
     const response = await fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
       body: JSON.stringify(payload),
       signal: controller.signal,
     });
@@ -322,9 +351,11 @@ async function postOptionalApi(
 async function getOptionalApi(path: string): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
+  const token = getStoredSessionToken();
   try {
     const response = await fetch(`${MAIL_API_URL}${path}`, {
       method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       signal: controller.signal,
     });
     if (!response.ok) return null;
@@ -404,7 +435,27 @@ async function refreshUsersCache(): Promise<User[]> {
   try {
     const payload = await getMailApiJson("/users");
     const rawUsers = Array.isArray(payload.users) ? (payload.users as WireUser[]) : [];
-    _mockUsers = rawUsers.map(deserializeUser);
+    const knownTokens = new Map(
+      _mockUsers
+        .filter((user) => user.sessionToken)
+        .map((user) => [user.id, user.sessionToken as string]),
+    );
+    const currentToken = getStoredSessionToken();
+    _mockUsers = rawUsers.map((rawUser) => {
+      const user = deserializeUser(rawUser);
+      user.sessionToken = knownTokens.get(user.id) ?? user.sessionToken;
+      return user;
+    });
+    if (currentToken) {
+      const currentAuthRaw = window.localStorage.getItem(AUTH_STORAGE_KEY);
+      if (currentAuthRaw) {
+        const currentAuth = deserializeUser(JSON.parse(currentAuthRaw) as WireUser);
+        const idx = _mockUsers.findIndex((user) => user.id === currentAuth.id);
+        if (idx >= 0) {
+          _mockUsers[idx].sessionToken = currentToken;
+        }
+      }
+    }
     persistUsersStore();
   } catch {
     _mockUsers = loadUsersStore();
@@ -418,6 +469,10 @@ async function fetchUserById(userId: string): Promise<User | null> {
     const rawUser = payload.user as WireUser | undefined;
     if (!rawUser) return null;
     const user = deserializeUser(rawUser);
+    user.sessionToken =
+      _mockUsers.find((item) => item.id === user.id)?.sessionToken ??
+      getStoredSessionToken() ??
+      undefined;
     const idx = _mockUsers.findIndex((item) => item.id === user.id);
     if (idx >= 0) {
       _mockUsers[idx] = user;
@@ -580,6 +635,12 @@ export async function apiLogin(
       return err("Invalid email or password");
     }
     const user = deserializeUser(rawUser);
+    const sessionToken =
+      typeof payload.sessionToken === "string" ? payload.sessionToken : "";
+    if (!sessionToken) {
+      return err("Authentication service unavailable. Please try again.");
+    }
+    user.sessionToken = sessionToken;
     user.isOnlineNow = true;
     const sharedLastSeen = await pingSharedPresence(user.id);
     if (sharedLastSeen) {
@@ -622,6 +683,11 @@ export async function apiLogout(userId?: string): Promise<void> {
       persistUsersStore();
     }
     await logoutSharedPresence(userId);
+  }
+  try {
+    await postMailApi("/auth/logout", {});
+  } catch {
+    // Ignore logout API failures so the local session can still clear.
   }
 }
 
@@ -1520,8 +1586,6 @@ export interface AdminTrainingOverview {
     incompleteUsers: string[];
   }[];
 }
-
-const AUTH_STORAGE_KEY = "bcb_auth_user";
 
 function getStoredAuthUser(): User | null {
   if (typeof window === "undefined") return null;
