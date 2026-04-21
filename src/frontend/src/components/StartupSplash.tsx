@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { withBase } from "@/lib/app-base";
 
 const SPLASH_SESSION_KEY = "bcb_portal_splash_seen";
-const BRAND_LOGO = "/assets/images/bcb-logo.png";
+const BRAND_LOGO = withBase("assets/images/bcb-logo.png");
 
 function isStandaloneDisplay() {
   return (

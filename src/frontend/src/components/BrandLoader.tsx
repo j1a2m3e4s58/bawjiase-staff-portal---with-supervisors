@@ -1,4 +1,6 @@
-const BRAND_LOGO = "/assets/images/bcb-logo.png";
+import { withBase } from "@/lib/app-base";
+
+const BRAND_LOGO = withBase("assets/images/bcb-logo.png");
 
 interface BrandLoaderProps {
   label?: string;

@@ -25,7 +25,10 @@ def allowed_origins() -> set[str]:
 def add_cors_headers(response):
     origin = request.headers.get("Origin")
     origins = allowed_origins()
-    if origin and origin in origins:
+    if "*" in origins:
+        response.headers["Access-Control-Allow-Origin"] = origin or "*"
+        response.headers["Vary"] = "Origin"
+    elif origin and origin in origins:
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Vary"] = "Origin"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
@@ -239,4 +242,4 @@ def send_password_reset_email():
 
 
 if __name__ == "__main__":
-    app.run(host="127.0.0.1", port=int(os.getenv("PORT", "4185")))
+    app.run(host="0.0.0.0", port=int(os.getenv("PORT", "4185")))

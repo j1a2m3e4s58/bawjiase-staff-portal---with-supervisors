@@ -27,6 +27,7 @@ import {
   apiGetActiveStaff,
   apiUpdateStaff,
 } from "@/lib/backend-client";
+import { normalizePublicPath } from "@/lib/app-base";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS, type User } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
@@ -157,6 +158,7 @@ function StaffCard({
   const online = isOnline(staff);
   const initials = getInitials(staff.fullname);
   const canArchive = canEdit && !isSelf && staff.role !== "SuperAdmin";
+  const profileImage = normalizePublicPath(staff.imageFile);
 
   return (
     <div
@@ -166,8 +168,8 @@ function StaffCard({
       <div className="flex items-start gap-3">
         <div className="relative flex-shrink-0">
           <Avatar className="h-11 w-11 ring-2 ring-border/40">
-            {staff.imageFile && (
-              <AvatarImage src={staff.imageFile} alt={staff.fullname} />
+            {profileImage && (
+              <AvatarImage src={profileImage} alt={staff.fullname} />
             )}
             <AvatarFallback className="bg-primary/20 text-primary font-bold text-sm">
               {initials}

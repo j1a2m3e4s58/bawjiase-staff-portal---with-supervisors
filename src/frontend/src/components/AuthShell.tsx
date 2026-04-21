@@ -1,4 +1,5 @@
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { withBase } from "@/lib/app-base";
 import { Toaster } from "@/components/ui/sonner";
 import { cn } from "@/lib/utils";
 import type { ReactNode } from "react";
@@ -8,7 +9,7 @@ export function BARBLogoBadge() {
     <div className="flex flex-col items-center" data-ocid="auth.barb_badge">
       <div className="h-24 w-24 overflow-hidden rounded-full border-4 border-background bg-background shadow-glass ring-4 ring-primary/20">
         <img
-          src="/assets/images/bcb-logo.png"
+          src={withBase("assets/images/bcb-logo.png")}
           alt="Bawjiase Community Bank logo"
           className="h-full w-full object-cover"
         />
@@ -30,7 +31,7 @@ export function AuthShell({ children, className }: AuthShellProps) {
     >
       <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <img
-          src="/assets/images/auth-bg.jpg"
+          src={withBase("assets/images/auth-bg.jpg")}
           alt=""
           className="h-full w-full scale-105 object-cover blur-[5px]"
         />

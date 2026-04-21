@@ -13,6 +13,7 @@ import { Separator } from "@/components/ui/separator";
 import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
+import { withBase } from "@/lib/app-base";
 import { useAuth } from "@/store/auth";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
@@ -35,7 +36,7 @@ import { useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import type { User as PortalUser } from "@/types";
 
-const BRAND_LOGO = "/assets/images/bcb-logo.png";
+const BRAND_LOGO = withBase("assets/images/bcb-logo.png");
 
 // ── Nav Config ─────────────────────────────────────────────────────────────────
 
@@ -138,7 +139,7 @@ function canSeeNavItem(user: PortalUser | null, item: NavItem) {
 
 function logoutAndRedirect(logout: () => void) {
   logout();
-  window.location.replace("/login");
+  window.location.replace(withBase("login"));
 }
 
 // ── Sidebar ────────────────────────────────────────────────────────────────────

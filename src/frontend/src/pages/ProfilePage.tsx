@@ -20,6 +20,7 @@ import {
   apiGetMyProfile,
   apiUpdateMyProfile,
 } from "@/lib/backend-client";
+import { normalizePublicPath } from "@/lib/app-base";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS } from "@/types";
 import type { Role } from "@/types";
@@ -261,7 +262,7 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const displayPhoto = photoPreview ?? (user.imageFile ? user.imageFile : null);
+  const displayPhoto = photoPreview ?? normalizePublicPath(user.imageFile);
   const initials = getInitials(user.fullname);
 
   return (

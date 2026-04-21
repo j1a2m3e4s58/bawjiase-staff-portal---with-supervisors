@@ -1,4 +1,5 @@
 import { BrandLoader } from "@/components/BrandLoader";
+import { appBasePath, withBase } from "@/lib/app-base";
 import { AuthProvider, useAuth } from "@/store/auth";
 import {
   Outlet,
@@ -59,7 +60,7 @@ function AppErrorScreen({
     <div className="min-h-screen bg-background px-6 py-10 flex items-center justify-center">
       <div className="glass-card-elevated max-w-lg w-full rounded-2xl p-8 text-center space-y-4">
         <img
-          src="/assets/images/bcb-logo.png"
+          src={withBase("assets/images/bcb-logo.png")}
           alt="BCB Staff Portal"
           className="mx-auto h-20 w-20 rounded-full object-cover border-4 border-background shadow-glass"
         />
@@ -343,6 +344,7 @@ const routeTree = rootRoute.addChildren([
 const router = createRouter({
   routeTree,
   defaultPreload: "intent",
+  basepath: appBasePath,
 });
 
 declare module "@tanstack/react-router" {

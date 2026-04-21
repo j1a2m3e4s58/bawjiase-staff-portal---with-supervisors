@@ -1,3 +1,5 @@
+import { withBase } from "./app-base";
+
 /**
  * Typed API client for the Bawjiase Staff Portal backend.
  * Since the backend schema evolves via bindgen, we work with mock/local
@@ -25,7 +27,7 @@ const OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com";
 const IT_ACCESS_CODE = "BARB-IT-2026";
 const HR_ACCESS_CODE = "BARB-HR-2026";
 const MAIL_API_URL = (
-  import.meta.env.VITE_MAIL_API_URL || "http://127.0.0.1:4185/api"
+  import.meta.env.VITE_MAIL_API_URL || `${window.location.origin}/mail-api/api`
 ).replace(/\/$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "barb_announcement_dismissals";
 const USERS_STORE_KEY = "barb_mock_users";
@@ -154,7 +156,7 @@ const INITIAL_MOCK_USERS: User[] = [
     position: "Staff",
     department: "HR",
     branch: "HEAD OFFICE",
-    imageFile: "/profile_pics/f658de3c2aa8ca6d.jpeg",
+    imageFile: withBase("profile_pics/f658de3c2aa8ca6d.jpeg"),
     isActive: true,
     isVerified: true,
     lastSeen: BigInt(1770296150530),
@@ -186,7 +188,7 @@ const INITIAL_MOCK_USERS: User[] = [
     position: "Staff",
     department: "IT",
     branch: "HEAD OFFICE",
-    imageFile: "/profile_pics/88efb134d068db11.jpg",
+    imageFile: withBase("profile_pics/88efb134d068db11.jpg"),
     isActive: true,
     isVerified: true,
     lastSeen: BigInt(1775309044811),
@@ -594,7 +596,10 @@ export async function apiRequestPasswordReset(
   const normalizedEmail = normalizeEmail(email);
   const user = _mockUsers.find((u) => u.email === normalizedEmail);
   if (!user) return err("Email not found");
-  const resetUrl = `${window.location.origin}/reset-password?token=${encodeURIComponent(normalizedEmail)}`;
+  const resetUrl = new URL(
+    `${withBase("reset-password")}?token=${encodeURIComponent(normalizedEmail)}`,
+    window.location.origin,
+  ).toString();
   try {
     await sendPasswordResetEmail(normalizedEmail, resetUrl);
   } catch (error) {
