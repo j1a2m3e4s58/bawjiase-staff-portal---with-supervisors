@@ -1,10 +1,14 @@
-import os
-import smtplib
 import json
+import os
+import secrets
+import smtplib
+import tempfile
 import time
 from email.message import EmailMessage
-from flask import Flask, jsonify, request
+from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
+
 from dotenv import load_dotenv
+from flask import Flask, jsonify, request
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -12,17 +16,149 @@ load_dotenv(os.path.join(BASE_DIR, ".env"))
 OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com"
 PRESENCE_STORE_PATH = os.path.join(BASE_DIR, "presence_store.json")
 PASSWORD_STORE_PATH = os.path.join(BASE_DIR, "password_store.json")
+USERS_STORE_PATH = os.path.join(BASE_DIR, "users_store.json")
+PENDING_VERIFICATIONS_PATH = os.path.join(BASE_DIR, "pending_verifications.json")
+RESET_TOKENS_PATH = os.path.join(BASE_DIR, "reset_tokens.json")
 PRESENCE_TTL_SECONDS = 15 * 60
+RESET_TOKEN_TTL_SECONDS = 30 * 60
+VERIFICATION_TTL_SECONDS = 15 * 60
 DEFAULT_PASSWORD_HASH = "403784255"  # Bcb@2026
+IT_ACCESS_CODE = "BCB-IT-2026"
+HR_ACCESS_CODE = "BCB-HR-2026"
+
+INITIAL_USERS = [
+    {
+        "id": "db-user-6",
+        "fullname": "Desmond Tettey Quarshie",
+        "phone": "0243670230",
+        "email": "dquarshie@bawjiasearearuralbank.com",
+        "role": "GeneralStaff",
+        "position": "Staff",
+        "department": "BANKING OPERATIONS",
+        "branch": "HEAD OFFICE",
+        "imageFile": None,
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1772637593885,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-9",
+        "fullname": "Jane Afua Bruku",
+        "phone": "0248154869",
+        "email": "jbruku@bawjiasearearuralbank.com",
+        "role": "GeneralStaff",
+        "position": "Staff",
+        "department": "COMPLIANCE",
+        "branch": "HEAD OFFICE",
+        "imageFile": None,
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1770741882598,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-5",
+        "fullname": "Kwabena Asare",
+        "phone": "0599779664",
+        "email": "kasare@bawjiasearearuralbank.com",
+        "role": "GeneralStaff",
+        "position": "Staff",
+        "department": "COMPLIANCE",
+        "branch": "HEAD OFFICE",
+        "imageFile": None,
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1770990814598,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-8",
+        "fullname": "Kwesi Adu Snr Yeenu-Prah",
+        "phone": "0555443053",
+        "email": "kyeenu-prah@bawjiasearearuralbank.com",
+        "role": "HRAdmin",
+        "position": "Staff",
+        "department": "HR",
+        "branch": "HEAD OFFICE",
+        "imageFile": "profile_pics/f658de3c2aa8ca6d.jpeg",
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1770296150530,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-4",
+        "fullname": "Ato Asiedu Mensah",
+        "phone": "0247554428",
+        "email": "amensah@bawjiasearearuralbank.com",
+        "role": "SuperAdmin",
+        "position": "Staff",
+        "department": "IT",
+        "branch": "HEAD OFFICE",
+        "imageFile": None,
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1770975614364,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-2",
+        "fullname": "James Lincoln Awuah",
+        "phone": "0536799490",
+        "email": "lawuah@bawjiasearearuralbank.com",
+        "role": "SuperAdmin",
+        "position": "Staff",
+        "department": "IT",
+        "branch": "HEAD OFFICE",
+        "imageFile": "profile_pics/88efb134d068db11.jpg",
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1775309044811,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-3",
+        "fullname": "Nathaniel Oglie Narh",
+        "phone": "0246377830",
+        "email": "nnarh@bawjiasearearuralbank.com",
+        "role": "SuperAdmin",
+        "position": "Staff",
+        "department": "IT",
+        "branch": "HEAD OFFICE",
+        "imageFile": None,
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1769519876185,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+    {
+        "id": "db-user-7",
+        "fullname": "GABRIEL OWUSU",
+        "phone": "0246315586",
+        "email": "gowusu@bawjiasearearuralbank.com",
+        "role": "GeneralStaff",
+        "position": "Staff",
+        "department": "RECOVERY",
+        "branch": "HEAD OFFICE",
+        "imageFile": None,
+        "isActive": True,
+        "isVerified": True,
+        "lastSeen": 1769689048721,
+        "registrationTime": 0,
+        "isArchived": False,
+    },
+]
 DEFAULT_PASSWORD_HASHES = {
-    "dquarshie@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "jbruku@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "kasare@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "kyeenu-prah@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "amensah@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "lawuah@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "nnarh@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
-    "gowusu@bawjiasearearuralbank.com": DEFAULT_PASSWORD_HASH,
+    user["email"]: DEFAULT_PASSWORD_HASH
+    for user in INITIAL_USERS
 }
 
 app = Flask(__name__)
@@ -62,26 +198,111 @@ def validate_email(email: str) -> str:
     return normalized
 
 
-def load_presence_store() -> dict[str, int]:
-    if not os.path.exists(PRESENCE_STORE_PATH):
-        return {}
+def role_from_department(department: str) -> str:
+    normalized = (department or "").strip().upper()
+    if normalized == "IT":
+        return "SuperAdmin"
+    if normalized == "HR":
+        return "HRAdmin"
+    return "GeneralStaff"
+
+
+def now_ms() -> int:
+    return int(time.time() * 1000)
+
+
+def atomic_write_json(path: str, payload) -> None:
+    directory = os.path.dirname(path)
+    fd, tmp_path = tempfile.mkstemp(prefix="tmp-", suffix=".json", dir=directory)
     try:
-        with open(PRESENCE_STORE_PATH, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-        if not isinstance(raw, dict):
-            return {}
-        return {
-            str(user_id): int(timestamp)
-            for user_id, timestamp in raw.items()
-            if str(user_id) and isinstance(timestamp, (int, float, str))
-        }
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            json.dump(payload, handle, ensure_ascii=True, indent=2)
+        os.replace(tmp_path, path)
+    finally:
+        if os.path.exists(tmp_path):
+            os.remove(tmp_path)
+
+
+def read_json_file(path: str, default):
+    if not os.path.exists(path):
+        return default
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            return json.load(handle)
     except Exception:
+        return default
+
+
+def normalize_user(raw: dict) -> dict:
+    email = validate_email(str(raw.get("email", "")))
+    department = str(raw.get("department", "")).strip().upper()
+    branch = str(raw.get("branch", "")).strip().upper()
+    return {
+        "id": str(raw.get("id", "")).strip(),
+        "fullname": str(raw.get("fullname", "")).strip(),
+        "phone": str(raw.get("phone", "")).strip(),
+        "email": email,
+        "role": str(raw.get("role", role_from_department(department))).strip() or role_from_department(department),
+        "position": str(raw.get("position", "")).strip() or "Staff",
+        "department": department,
+        "branch": branch,
+        "imageFile": raw.get("imageFile"),
+        "isActive": bool(raw.get("isActive", True)),
+        "isVerified": bool(raw.get("isVerified", True)),
+        "lastSeen": int(raw.get("lastSeen", 0) or 0),
+        "registrationTime": int(raw.get("registrationTime", 0) or 0),
+        "isArchived": bool(raw.get("isArchived", False)),
+    }
+
+
+def load_user_store() -> list[dict]:
+    raw = read_json_file(USERS_STORE_PATH, [])
+    users_by_email = {}
+    for default_user in INITIAL_USERS:
+        normalized = normalize_user(default_user)
+        users_by_email[normalized["email"]] = normalized
+    if isinstance(raw, list):
+        for item in raw:
+            if isinstance(item, dict):
+                try:
+                    normalized = normalize_user(item)
+                    users_by_email[normalized["email"]] = normalized
+                except ValueError:
+                    continue
+    return list(users_by_email.values())
+
+
+def save_user_store(users: list[dict]) -> None:
+    normalized = []
+    for user in users:
+        try:
+            normalized.append(normalize_user(user))
+        except ValueError:
+            continue
+    atomic_write_json(USERS_STORE_PATH, normalized)
+
+
+def find_user_by_email(users: list[dict], email: str):
+    return next((user for user in users if user["email"] == email), None)
+
+
+def find_user_by_id(users: list[dict], user_id: str):
+    return next((user for user in users if user["id"] == user_id), None)
+
+
+def load_presence_store() -> dict[str, int]:
+    raw = read_json_file(PRESENCE_STORE_PATH, {})
+    if not isinstance(raw, dict):
         return {}
+    return {
+        str(user_id): int(timestamp)
+        for user_id, timestamp in raw.items()
+        if str(user_id) and isinstance(timestamp, (int, float, str))
+    }
 
 
 def save_presence_store(store: dict[str, int]) -> None:
-    with open(PRESENCE_STORE_PATH, "w", encoding="utf-8") as handle:
-        json.dump(store, handle)
+    atomic_write_json(PRESENCE_STORE_PATH, store)
 
 
 def prune_presence(store: dict[str, int]) -> dict[str, int]:
@@ -94,30 +315,99 @@ def prune_presence(store: dict[str, int]) -> dict[str, int]:
 
 
 def load_password_store() -> dict[str, str]:
-    if not os.path.exists(PASSWORD_STORE_PATH):
-        return dict(DEFAULT_PASSWORD_HASHES)
-    try:
-        with open(PASSWORD_STORE_PATH, "r", encoding="utf-8") as handle:
-            raw = json.load(handle)
-        if not isinstance(raw, dict):
-            return dict(DEFAULT_PASSWORD_HASHES)
-        merged = dict(DEFAULT_PASSWORD_HASHES)
+    raw = read_json_file(PASSWORD_STORE_PATH, {})
+    merged = dict(DEFAULT_PASSWORD_HASHES)
+    if isinstance(raw, dict):
         for email, password_hash in raw.items():
             if isinstance(email, str) and isinstance(password_hash, str) and password_hash:
                 merged[email.strip().lower()] = password_hash
-        return merged
-    except Exception:
-        return dict(DEFAULT_PASSWORD_HASHES)
+    return merged
 
 
 def save_password_store(store: dict[str, str]) -> None:
     normalized = {
-        str(email).strip().lower(): str(password_hash)
+        str(email).strip().lower(): str(password_hash).strip()
         for email, password_hash in store.items()
         if str(email).strip() and str(password_hash).strip()
     }
-    with open(PASSWORD_STORE_PATH, "w", encoding="utf-8") as handle:
-        json.dump(normalized, handle)
+    atomic_write_json(PASSWORD_STORE_PATH, normalized)
+
+
+def load_pending_verifications() -> dict[str, dict]:
+    raw = read_json_file(PENDING_VERIFICATIONS_PATH, {})
+    if not isinstance(raw, dict):
+        return {}
+    pending = {}
+    current = int(time.time())
+    for email, item in raw.items():
+        if not isinstance(item, dict):
+            continue
+        try:
+            normalized_email = validate_email(email)
+        except ValueError:
+            continue
+        expires_at = int(item.get("expiresAt", 0) or 0)
+        if expires_at <= current:
+            continue
+        user = item.get("user")
+        password_hash = str(item.get("passwordHash", "")).strip()
+        code = "".join(ch for ch in str(item.get("code", "")) if ch.isdigit())
+        if not isinstance(user, dict) or len(code) != 6 or not password_hash:
+            continue
+        try:
+            pending[normalized_email] = {
+                "user": normalize_user(user),
+                "passwordHash": password_hash,
+                "code": code,
+                "expiresAt": expires_at,
+            }
+        except ValueError:
+            continue
+    return pending
+
+
+def save_pending_verifications(store: dict[str, dict]) -> None:
+    atomic_write_json(PENDING_VERIFICATIONS_PATH, store)
+
+
+def load_reset_tokens() -> dict[str, dict]:
+    raw = read_json_file(RESET_TOKENS_PATH, {})
+    if not isinstance(raw, dict):
+        return {}
+    current = int(time.time())
+    tokens = {}
+    for token, item in raw.items():
+        if not isinstance(token, str) or not isinstance(item, dict):
+            continue
+        expires_at = int(item.get("expiresAt", 0) or 0)
+        if expires_at <= current:
+            continue
+        try:
+            email = validate_email(str(item.get("email", "")))
+        except ValueError:
+            continue
+        tokens[token] = {
+            "email": email,
+            "expiresAt": expires_at,
+        }
+    return tokens
+
+
+def save_reset_tokens(store: dict[str, dict]) -> None:
+    atomic_write_json(RESET_TOKENS_PATH, store)
+
+
+def generate_verification_code() -> str:
+    return f"{secrets.randbelow(900000) + 100000:06d}"
+
+
+def build_reset_url(base_url: str, token: str) -> str:
+    parsed = urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ValueError("A valid reset page URL is required")
+    query = dict(parse_qsl(parsed.query, keep_blank_values=True))
+    query["token"] = token
+    return urlunparse(parsed._replace(query=urlencode(query)))
 
 
 def mail_config() -> dict[str, str | int]:
@@ -150,6 +440,66 @@ def send_mail(to_email: str, subject: str, text_body: str, html_body: str):
         smtp.send_message(msg)
 
 
+def send_verification_code_email(email: str, code: str) -> None:
+    text_body = (
+        "Dear Staff,\n\n"
+        f"Your Bawjiase Staff Portal verification code is: {code}\n\n"
+        "This code expires in 15 minutes.\n\n"
+        "Thank you.\nBawjiase Community Bank PLC"
+    )
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
+          <h2 style="color: #15803d; text-align: center;">Email Verification</h2>
+          <p>Dear Staff,</p>
+          <p>Use this code to verify your email address for the <strong>Bawjiase Staff Portal</strong>:</p>
+          <div style="text-align: center; margin: 28px 0;">
+            <span style="display: inline-block; border: 2px solid #15803d; color: #15803d; padding: 14px 28px; font-size: 24px; font-weight: 700; border-radius: 8px; letter-spacing: 5px;">{code}</span>
+          </div>
+          <p>This code expires in 15 minutes.</p>
+          <p>If you did not request this code, please ignore this email.</p>
+          <p style="font-weight: 700; color: #4b5563;">Bawjiase Community Bank PLC</p>
+        </div>
+      </body>
+    </html>
+    """
+    send_mail(email, "Bawjiase Staff Portal - Email Verification Code", text_body, html_body)
+
+
+def send_password_reset_link_email(email: str, reset_url: str) -> None:
+    text_body = (
+        "Dear Staff,\n\n"
+        "Use the link below to reset your Bawjiase Staff Portal password:\n"
+        f"{reset_url}\n\n"
+        "This link expires in 30 minutes.\n\n"
+        "Bawjiase Community Bank PLC"
+    )
+    html_body = f"""
+    <html>
+      <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
+        <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
+          <h2 style="color: #15803d; text-align: center;">Password Reset</h2>
+          <p>Dear Staff,</p>
+          <p>Use the button below to reset your Bawjiase Staff Portal password.</p>
+          <p style="text-align: center; margin: 28px 0;">
+            <a href="{reset_url}" style="background: #15803d; color: #ffffff; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-weight: 700;">Reset Password</a>
+          </p>
+          <p>This link expires in 30 minutes.</p>
+          <p style="font-weight: 700; color: #4b5563;">Bawjiase Community Bank PLC</p>
+        </div>
+      </body>
+    </html>
+    """
+    send_mail(email, "Bawjiase Staff Portal - Password Reset", text_body, html_body)
+
+
+def handle_options():
+    if request.method == "OPTIONS":
+        return ("", 204)
+    return None
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"ok": True})
@@ -164,8 +514,9 @@ def get_presence():
 
 @app.route("/api/presence/ping", methods=["POST", "OPTIONS"])
 def ping_presence():
-    if request.method == "OPTIONS":
-        return ("", 204)
+    preflight = handle_options()
+    if preflight:
+        return preflight
     data, error = require_json()
     if error:
         return error
@@ -180,8 +531,9 @@ def ping_presence():
 
 @app.route("/api/presence/logout", methods=["POST", "OPTIONS"])
 def logout_presence():
-    if request.method == "OPTIONS":
-        return ("", 204)
+    preflight = handle_options()
+    if preflight:
+        return preflight
     data, error = require_json()
     if error:
         return error
@@ -194,10 +546,258 @@ def logout_presence():
     return jsonify({"ok": True})
 
 
-@app.route("/api/send-verification-email", methods=["POST", "OPTIONS"])
-def send_verification_email():
-    if request.method == "OPTIONS":
-        return ("", 204)
+@app.route("/api/users", methods=["GET"])
+def list_users():
+    return jsonify({"users": load_user_store()})
+
+
+@app.route("/api/users/<user_id>", methods=["GET"])
+def get_user(user_id: str):
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    return jsonify({"user": user})
+
+
+@app.route("/api/users/<user_id>/profile", methods=["POST", "OPTIONS"])
+def update_profile(user_id: str):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    data, error = require_json()
+    if error:
+        return error
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+    if "fullname" in data:
+        user["fullname"] = str(data.get("fullname", "")).strip() or user["fullname"]
+    if "phone" in data:
+        user["phone"] = str(data.get("phone", "")).strip() or user["phone"]
+    if "position" in data:
+        user["position"] = str(data.get("position", "")).strip() or user["position"]
+    if "department" in data:
+        department = str(data.get("department", "")).strip().upper()
+        if department:
+            user["department"] = department
+            user["role"] = role_from_department(department)
+    if "branch" in data:
+        branch = str(data.get("branch", "")).strip().upper()
+        if branch:
+            user["branch"] = branch
+    if "imageFile" in data:
+        image_file = data.get("imageFile")
+        user["imageFile"] = str(image_file) if image_file else None
+    save_user_store(users)
+    return jsonify({"ok": True, "user": user})
+
+
+@app.route("/api/staff/active", methods=["GET"])
+def get_active_staff():
+    users = load_user_store()
+    active_users = [
+        user for user in users
+        if user["isActive"] and not user["isArchived"] and user["fullname"] not in {"MASTER ADMIN", "System Admin"}
+    ]
+    return jsonify({"users": active_users})
+
+
+@app.route("/api/staff/archived", methods=["GET"])
+def get_archived_staff():
+    users = load_user_store()
+    return jsonify({"users": [user for user in users if user["isArchived"]]})
+
+
+@app.route("/api/staff/stats", methods=["GET"])
+def get_staff_stats():
+    users = load_user_store()
+    active = [user for user in users if user["isActive"] and not user["isArchived"]]
+    by_department = {}
+    by_branch = {}
+    by_role = {}
+    for user in active:
+        by_department[user["department"]] = by_department.get(user["department"], 0) + 1
+        by_branch[user["branch"]] = by_branch.get(user["branch"], 0) + 1
+        by_role[user["role"]] = by_role.get(user["role"], 0) + 1
+    return jsonify({
+        "total": len(users),
+        "active": len(active),
+        "archived": len([user for user in users if user["isArchived"]]),
+        "byDepartment": by_department,
+        "byBranch": by_branch,
+        "byRole": by_role,
+    })
+
+
+@app.route("/api/staff/<user_id>", methods=["GET"])
+def get_staff_member(user_id: str):
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "Staff member not found"}), 404
+    return jsonify({"user": user})
+
+
+@app.route("/api/staff/<user_id>/update", methods=["POST", "OPTIONS"])
+def update_staff(user_id: str):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    data, error = require_json()
+    if error:
+        return error
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "Staff member not found"}), 404
+
+    requested_department = str(data.get("department", user["department"])).strip().upper()
+    if requested_department == "IT" and user["department"] != "IT":
+        if str(data.get("accessCode", "")).strip() != IT_ACCESS_CODE:
+            return jsonify({"error": "Access denied: invalid IT security code."}), 400
+
+    if "fullname" in data:
+        user["fullname"] = str(data.get("fullname", "")).strip() or user["fullname"]
+    if "phone" in data:
+        user["phone"] = str(data.get("phone", "")).strip() or user["phone"]
+    if "position" in data:
+        user["position"] = str(data.get("position", "")).strip() or user["position"]
+    if "department" in data and requested_department:
+        user["department"] = requested_department
+        user["role"] = role_from_department(requested_department)
+    if "branch" in data:
+        branch = str(data.get("branch", "")).strip().upper()
+        if branch:
+            user["branch"] = branch
+    if "imageFile" in data:
+        image_file = data.get("imageFile")
+        user["imageFile"] = str(image_file) if image_file else None
+    if "isActive" in data:
+        user["isActive"] = bool(data.get("isActive"))
+    save_user_store(users)
+    return jsonify({"ok": True, "user": user})
+
+
+@app.route("/api/staff/<user_id>/archive", methods=["POST", "OPTIONS"])
+def archive_staff(user_id: str):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "Staff member not found"}), 404
+    if user["role"] == "SuperAdmin":
+        return jsonify({"error": "Cannot archive Super Admin."}), 400
+    user["isArchived"] = True
+    user["isActive"] = False
+    save_user_store(users)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/staff/<user_id>/restore", methods=["POST", "OPTIONS"])
+def restore_staff(user_id: str):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "Staff member not found"}), 404
+    user["isArchived"] = False
+    user["isActive"] = True
+    save_user_store(users)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/staff/<user_id>/delete", methods=["POST", "OPTIONS"])
+def delete_staff(user_id: str):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    users = load_user_store()
+    user = find_user_by_id(users, user_id)
+    if not user:
+        return jsonify({"error": "Staff member not found"}), 404
+    users = [item for item in users if item["id"] != user_id]
+    passwords = load_password_store()
+    passwords.pop(user["email"], None)
+    pending = load_pending_verifications()
+    pending.pop(user["email"], None)
+    save_user_store(users)
+    save_password_store(passwords)
+    save_pending_verifications(pending)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/auth/register", methods=["POST", "OPTIONS"])
+def auth_register():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    data, error = require_json()
+    if error:
+        return error
+    try:
+        email = validate_email(str(data.get("email", "")))
+        password_hash = str(data.get("passwordHash", "")).strip()
+        department = str(data.get("department", "")).strip().upper()
+        branch = str(data.get("branch", "")).strip().upper()
+        if not password_hash:
+            return jsonify({"error": "passwordHash is required"}), 400
+        if not department or not branch:
+            return jsonify({"error": "Department and branch are required"}), 400
+        if department == "IT" and str(data.get("accessCode", "")).strip() != IT_ACCESS_CODE:
+            return jsonify({"error": "Incorrect IT access code. Registration blocked."}), 400
+        if department == "HR" and str(data.get("accessCode", "")).strip() != HR_ACCESS_CODE:
+            return jsonify({"error": "Incorrect HR access code. Registration blocked."}), 400
+
+        users = load_user_store()
+        existing = find_user_by_email(users, email)
+        if existing and existing["isVerified"]:
+            return jsonify({"error": "Email already registered"}), 400
+
+        pending = load_pending_verifications()
+        new_user = normalize_user({
+            "id": existing["id"] if existing else f"user-{int(time.time() * 1000)}",
+            "fullname": str(data.get("fullname", "")).strip(),
+            "phone": str(data.get("phone", "")).strip(),
+            "email": email,
+            "role": role_from_department(department),
+            "position": str(data.get("position", "Staff")).strip() or "Staff",
+            "department": department,
+            "branch": branch,
+            "imageFile": None,
+            "isActive": True,
+            "isVerified": False,
+            "lastSeen": now_ms(),
+            "registrationTime": now_ms(),
+            "isArchived": False,
+        })
+        code = generate_verification_code()
+        pending[email] = {
+            "user": new_user,
+            "passwordHash": password_hash,
+            "code": code,
+            "expiresAt": int(time.time()) + VERIFICATION_TTL_SECONDS,
+        }
+        save_pending_verifications(pending)
+        send_verification_code_email(email, code)
+        return jsonify({"ok": True, "user": new_user})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Registration failed")
+        return jsonify({"error": f"Registration failed: {exc}"}), 500
+
+
+@app.route("/api/auth/verify-email", methods=["POST", "OPTIONS"])
+def auth_verify_email():
+    preflight = handle_options()
+    if preflight:
+        return preflight
     data, error = require_json()
     if error:
         return error
@@ -206,28 +806,55 @@ def send_verification_email():
         code = "".join(ch for ch in str(data.get("code", "")) if ch.isdigit())
         if len(code) != 6:
             return jsonify({"error": "A 6-digit verification code is required"}), 400
-        text_body = (
-            "Dear Staff,\n\n"
-            f"Your Bawjiase Staff Portal verification code is: {code}\n\n"
-            "Thank you.\nBawjiase Community Bank PLC"
-        )
-        html_body = f"""
-        <html>
-          <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
-              <h2 style="color: #15803d; text-align: center;">Email Verification</h2>
-              <p>Dear Staff,</p>
-              <p>Use this code to verify your email address for the <strong>Bawjiase Staff Portal</strong>:</p>
-              <div style="text-align: center; margin: 28px 0;">
-                <span style="display: inline-block; border: 2px solid #15803d; color: #15803d; padding: 14px 28px; font-size: 24px; font-weight: 700; border-radius: 8px; letter-spacing: 5px;">{code}</span>
-              </div>
-              <p>If you did not request this code, please ignore this email.</p>
-              <p style="font-weight: 700; color: #4b5563;">Bawjiase Community Bank PLC</p>
-            </div>
-          </body>
-        </html>
-        """
-        send_mail(email, "Bawjiase Staff Portal - Email Verification Code", text_body, html_body)
+
+        pending = load_pending_verifications()
+        entry = pending.get(email)
+        if not entry:
+            return jsonify({"error": "No pending verification for this email"}), 404
+        if entry["code"] != code:
+            return jsonify({"error": "Incorrect verification code"}), 400
+
+        user = entry["user"]
+        user["isVerified"] = True
+
+        users = load_user_store()
+        existing = find_user_by_email(users, email)
+        if existing:
+            existing.update(user)
+        else:
+            users.append(user)
+
+        passwords = load_password_store()
+        passwords[email] = entry["passwordHash"]
+
+        pending.pop(email, None)
+        save_user_store(users)
+        save_password_store(passwords)
+        save_pending_verifications(pending)
+        return jsonify({"ok": True, "user": user})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/auth/resend-verification", methods=["POST", "OPTIONS"])
+def auth_resend_verification():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    data, error = require_json()
+    if error:
+        return error
+    try:
+        email = validate_email(str(data.get("email", "")))
+        pending = load_pending_verifications()
+        entry = pending.get(email)
+        if not entry:
+            return jsonify({"error": "Email not found"}), 404
+        entry["code"] = generate_verification_code()
+        entry["expiresAt"] = int(time.time()) + VERIFICATION_TTL_SECONDS
+        pending[email] = entry
+        save_pending_verifications(pending)
+        send_verification_code_email(email, entry["code"])
         return jsonify({"ok": True})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -236,54 +863,11 @@ def send_verification_email():
         return jsonify({"error": f"Email could not be sent: {exc}"}), 500
 
 
-@app.route("/api/send-password-reset-email", methods=["POST", "OPTIONS"])
-def send_password_reset_email():
-    if request.method == "OPTIONS":
-        return ("", 204)
-    data, error = require_json()
-    if error:
-        return error
-    try:
-        email = validate_email(str(data.get("email", "")))
-        reset_url = str(data.get("resetUrl", "")).strip()
-        if not reset_url.startswith(("http://", "https://")):
-            return jsonify({"error": "A valid resetUrl is required"}), 400
-        text_body = (
-            "Dear Staff,\n\n"
-            "Use the link below to reset your Bawjiase Staff Portal password:\n"
-            f"{reset_url}\n\n"
-            "This link expires in 30 minutes.\n\n"
-            "Bawjiase Community Bank PLC"
-        )
-        html_body = f"""
-        <html>
-          <body style="font-family: Arial, sans-serif; color: #1f2937; line-height: 1.6;">
-            <div style="max-width: 600px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 12px;">
-              <h2 style="color: #15803d; text-align: center;">Password Reset</h2>
-              <p>Dear Staff,</p>
-              <p>Use the button below to reset your Bawjiase Staff Portal password.</p>
-              <p style="text-align: center; margin: 28px 0;">
-                <a href="{reset_url}" style="background: #15803d; color: #ffffff; padding: 12px 22px; border-radius: 8px; text-decoration: none; font-weight: 700;">Reset Password</a>
-              </p>
-              <p>This link expires in 30 minutes.</p>
-              <p style="font-weight: 700; color: #4b5563;">Bawjiase Community Bank PLC</p>
-            </div>
-          </body>
-        </html>
-        """
-        send_mail(email, "Bawjiase Staff Portal - Password Reset", text_body, html_body)
-        return jsonify({"ok": True})
-    except ValueError as exc:
-        return jsonify({"error": str(exc)}), 400
-    except Exception as exc:
-        app.logger.exception("Password reset email failed")
-        return jsonify({"error": f"Email could not be sent: {exc}"}), 500
-
-
 @app.route("/api/auth/login", methods=["POST", "OPTIONS"])
 def auth_login():
-    if request.method == "OPTIONS":
-        return ("", 204)
+    preflight = handle_options()
+    if preflight:
+        return preflight
     data, error = require_json()
     if error:
         return error
@@ -292,32 +876,90 @@ def auth_login():
         password_hash = str(data.get("passwordHash", "")).strip()
         if not password_hash:
             return jsonify({"error": "passwordHash is required"}), 400
-        store = load_password_store()
-        if store.get(email) != password_hash:
-            return jsonify({"ok": False}), 401
-        return jsonify({"ok": True})
+
+        passwords = load_password_store()
+        if passwords.get(email) != password_hash:
+            return jsonify({"error": "Invalid email or password"}), 401
+
+        users = load_user_store()
+        user = find_user_by_email(users, email)
+        if not user or user["isArchived"] or not user["isActive"]:
+            return jsonify({"error": "Invalid email or password"}), 401
+        if not user["isVerified"]:
+            return jsonify({"error": "Email not verified"}), 403
+
+        user["lastSeen"] = now_ms()
+        save_user_store(users)
+        return jsonify({"ok": True, "user": user})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
 
-@app.route("/api/auth/password-reset", methods=["POST", "OPTIONS"])
-def auth_password_reset():
-    if request.method == "OPTIONS":
-        return ("", 204)
+@app.route("/api/auth/request-password-reset", methods=["POST", "OPTIONS"])
+def auth_request_password_reset():
+    preflight = handle_options()
+    if preflight:
+        return preflight
     data, error = require_json()
     if error:
         return error
     try:
-        email = validate_email(str(data.get("token", "")))
-        new_password_hash = str(data.get("newPasswordHash", "")).strip()
-        if not new_password_hash:
-            return jsonify({"error": "newPasswordHash is required"}), 400
-        store = load_password_store()
-        store[email] = new_password_hash
-        save_password_store(store)
+        email = validate_email(str(data.get("email", "")))
+        reset_page_url = str(data.get("resetPageUrl", "")).strip()
+
+        users = load_user_store()
+        user = find_user_by_email(users, email)
+        if not user:
+            return jsonify({"error": "Email not found"}), 404
+
+        token = secrets.token_urlsafe(32)
+        reset_url = build_reset_url(reset_page_url, token)
+        tokens = load_reset_tokens()
+        tokens[token] = {
+            "email": email,
+            "expiresAt": int(time.time()) + RESET_TOKEN_TTL_SECONDS,
+        }
+        save_reset_tokens(tokens)
+        send_password_reset_link_email(email, reset_url)
         return jsonify({"ok": True})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    except Exception as exc:
+        app.logger.exception("Password reset email failed")
+        return jsonify({"error": f"Email could not be sent: {exc}"}), 500
+
+
+@app.route("/api/auth/password-reset", methods=["POST", "OPTIONS"])
+def auth_password_reset():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    data, error = require_json()
+    if error:
+        return error
+    token = str(data.get("token", "")).strip()
+    new_password_hash = str(data.get("newPasswordHash", "")).strip()
+    if not token:
+        return jsonify({"error": "token is required"}), 400
+    if not new_password_hash:
+        return jsonify({"error": "newPasswordHash is required"}), 400
+
+    tokens = load_reset_tokens()
+    entry = tokens.get(token)
+    if not entry:
+        return jsonify({"error": "Invalid or expired reset token"}), 400
+
+    email = entry["email"]
+    users = load_user_store()
+    if not find_user_by_email(users, email):
+        return jsonify({"error": "Invalid or expired reset token"}), 400
+
+    passwords = load_password_store()
+    passwords[email] = new_password_hash
+    tokens.pop(token, None)
+    save_password_store(passwords)
+    save_reset_tokens(tokens)
+    return jsonify({"ok": True})
 
 
 if __name__ == "__main__":

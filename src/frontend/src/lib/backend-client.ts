@@ -31,7 +31,6 @@ const MAIL_API_URL = (
 ).replace(/\/$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
-const PASSWORD_STORE_KEY = "bcb_mock_password_hashes";
 const OPTIONAL_API_TIMEOUT_MS = 1500;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -44,7 +43,7 @@ function err<T>(message: string): ApiResult<T> {
   return { err: message };
 }
 
-async function postMailApi(path: string, payload: Record<string, string>) {
+async function postMailApi(path: string, payload: Record<string, unknown>) {
   const response = await fetch(`${MAIL_API_URL}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -60,7 +59,7 @@ async function postMailApi(path: string, payload: Record<string, string>) {
 
 async function postMailApiJson(
   path: string,
-  payload: Record<string, string>,
+  payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const response = await fetch(`${MAIL_API_URL}${path}`, {
     method: "POST",
@@ -76,25 +75,31 @@ async function postMailApiJson(
   return data;
 }
 
-async function sendVerificationCode(email: string, code: string) {
-  await postMailApi("/send-verification-email", { email, code });
-}
-
-async function sendPasswordResetEmail(email: string, resetUrl: string) {
-  await postMailApi("/send-password-reset-email", { email, resetUrl });
-}
-
-async function verifySharedPassword(email: string, passwordHash: string) {
-  const payload = await postMailApiJson("/auth/login", { email, passwordHash });
-  return payload.ok === true;
-}
-
-async function saveSharedPassword(token: string, newPasswordHash: string) {
-  const payload = await postMailApiJson("/auth/password-reset", {
-    token,
-    newPasswordHash,
+async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
+  const response = await fetch(`${MAIL_API_URL}${path}`, {
+    method: "GET",
   });
-  return payload.ok === true;
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || "Request failed");
+  }
+  return data;
+}
+
+type WireUser = Omit<User, "lastSeen" | "registrationTime"> & {
+  lastSeen: string | number;
+  registrationTime: string | number;
+};
+
+function deserializeUser(user: WireUser): User {
+  return {
+    ...user,
+    imageFile: typeof user.imageFile === "string" ? user.imageFile : null,
+    lastSeen: BigInt(user.lastSeen ?? 0),
+    registrationTime: BigInt(user.registrationTime ?? 0),
+  };
 }
 
 // ── Auth / Registration ───────────────────────────────────────────────────────
@@ -127,8 +132,6 @@ export interface UpdateStaffRequest extends UpdateProfileRequest {
 }
 
 // Simulate backend calls — replace actor body when bindgen exposes methods
-
-const IMPORTED_DB_TEMP_PASSWORD_HASH = "403784255"; // Bcb@2026
 
 const INITIAL_MOCK_USERS: User[] = [
   {
@@ -272,16 +275,7 @@ function serializeUsers(users: User[]) {
 }
 
 function deserializeUsers(raw: string): User[] {
-  return (JSON.parse(raw) as Array<
-    Omit<User, "lastSeen" | "registrationTime"> & {
-      lastSeen: string | number;
-      registrationTime: string | number;
-    }
-  >).map((user) => ({
-    ...user,
-    lastSeen: BigInt(user.lastSeen ?? 0),
-    registrationTime: BigInt(user.registrationTime ?? 0),
-  }));
+  return (JSON.parse(raw) as WireUser[]).map(deserializeUser);
 }
 
 function loadUsersStore(): User[] {
@@ -305,7 +299,7 @@ function loadUsersStore(): User[] {
 
 async function postOptionalApi(
   path: string,
-  payload: Record<string, string>,
+  payload: Record<string, unknown>,
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
@@ -397,66 +391,54 @@ async function logoutSharedPresence(userId: string) {
 
 let _mockUsers: User[] = loadUsersStore();
 
-function syncUsersFromStorage() {
-  _mockUsers = loadUsersStore();
-}
-
 function persistUsersStore() {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(USERS_STORE_KEY, serializeUsers(_mockUsers));
 }
 
-let _pendingVerification: Record<string, User> = {};
-let _verificationCodes: Record<string, string> = {};
-const DEFAULT_PASSWORD_HASHES: Record<string, string> = {
-  "dquarshie@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "jbruku@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "kasare@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "kyeenu-prah@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "amensah@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "lawuah@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "nnarh@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-  "gowusu@bawjiasearearuralbank.com": IMPORTED_DB_TEMP_PASSWORD_HASH,
-};
-let _passwordHashes: Record<string, string> = loadPasswordStore();
-
-function loadPasswordStore(): Record<string, string> {
-  if (typeof window === "undefined") {
-    return { ...DEFAULT_PASSWORD_HASHES };
-  }
-  try {
-    const raw = window.localStorage.getItem(PASSWORD_STORE_KEY);
-    if (!raw) {
-      const initial = { ...DEFAULT_PASSWORD_HASHES };
-      window.localStorage.setItem(PASSWORD_STORE_KEY, JSON.stringify(initial));
-      return initial;
-    }
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    return Object.entries(parsed).reduce<Record<string, string>>(
-      (acc, [email, hash]) => {
-        if (typeof hash === "string" && hash) {
-          acc[normalizeEmail(email)] = hash;
-        }
-        return acc;
-      },
-      { ...DEFAULT_PASSWORD_HASHES },
-    );
-  } catch {
-    return { ...DEFAULT_PASSWORD_HASHES };
-  }
-}
-
-function syncPasswordStore() {
-  _passwordHashes = loadPasswordStore();
-}
-
-function persistPasswordStore() {
-  if (typeof window === "undefined") return;
-  window.localStorage.setItem(PASSWORD_STORE_KEY, JSON.stringify(_passwordHashes));
-}
-
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+async function refreshUsersCache(): Promise<User[]> {
+  try {
+    const payload = await getMailApiJson("/users");
+    const rawUsers = Array.isArray(payload.users) ? (payload.users as WireUser[]) : [];
+    _mockUsers = rawUsers.map(deserializeUser);
+    persistUsersStore();
+  } catch {
+    _mockUsers = loadUsersStore();
+  }
+  return _mockUsers;
+}
+
+async function fetchUserById(userId: string): Promise<User | null> {
+  try {
+    const payload = await getMailApiJson(`/users/${encodeURIComponent(userId)}`);
+    const rawUser = payload.user as WireUser | undefined;
+    if (!rawUser) return null;
+    const user = deserializeUser(rawUser);
+    const idx = _mockUsers.findIndex((item) => item.id === user.id);
+    if (idx >= 0) {
+      _mockUsers[idx] = user;
+    } else {
+      _mockUsers.push(user);
+    }
+    persistUsersStore();
+    return user;
+  } catch {
+    return _mockUsers.find((user) => user.id === userId) ?? null;
+  }
+}
+
+function upsertCachedUser(user: User) {
+  const idx = _mockUsers.findIndex((item) => item.id === user.id);
+  if (idx >= 0) {
+    _mockUsers[idx] = user;
+  } else {
+    _mockUsers.push(user);
+  }
+  persistUsersStore();
 }
 
 function getDismissalStore(): Record<string, number[]> {
@@ -514,8 +496,6 @@ export async function apiRegister(
   req: RegisterRequest,
 ): Promise<ApiResult<User>> {
   await delay(600);
-  syncUsersFromStorage();
-  syncPasswordStore();
   const email = normalizeEmail(req.email);
   if (!email.endsWith(OFFICIAL_EMAIL_DOMAIN)) {
     return err("Please use your official Bawjiase email address.");
@@ -527,49 +507,25 @@ export async function apiRegister(
     return err("Incorrect HR access code. Registration blocked.");
   }
 
-  const existing = _mockUsers.find((u) => u.email === email);
-  if (existing?.isVerified) return err("Email already registered");
-
-  const newUser: User = {
-    id: existing?.id ?? `user-${Date.now()}`,
-    fullname: req.fullname,
-    phone: req.phone,
-    email,
-    role: roleFromRegistration(req),
-    position: req.position,
-    department: req.department,
-    branch: req.branch,
-    imageFile: null,
-    isActive: true,
-    isVerified: false,
-    lastSeen: BigInt(Date.now()),
-    registrationTime: BigInt(Date.now()),
-    isArchived: false,
-  };
-  _pendingVerification[email] = newUser;
-  _verificationCodes[email] = verificationCodeFor(email);
   try {
-    const saved = await saveSharedPassword(email, req.passwordHash);
-    if (!saved) {
-      return err("Registration password could not be saved");
+    const payload = await postMailApiJson("/auth/register", {
+      fullname: req.fullname,
+      phone: req.phone,
+      email,
+      passwordHash: req.passwordHash,
+      position: req.position,
+      department: req.department,
+      branch: req.branch,
+      accessCode: req.accessCode,
+    });
+    const rawUser = payload.user as WireUser | undefined;
+    if (!rawUser) {
+      return err("Registration failed");
     }
+    return ok(deserializeUser(rawUser));
   } catch (error) {
-    return err(
-      error instanceof Error
-        ? error.message
-        : "Registration password could not be saved",
-    );
+    return err(error instanceof Error ? error.message : "Registration failed");
   }
-  _passwordHashes[email] = req.passwordHash;
-  persistPasswordStore();
-  try {
-    await sendVerificationCode(email, _verificationCodes[email]);
-  } catch (error) {
-    return err(
-      error instanceof Error ? error.message : "Email could not be sent",
-    );
-  }
-  return ok(newUser);
 }
 
 export async function apiVerifyEmail(
@@ -577,44 +533,35 @@ export async function apiVerifyEmail(
   code: string,
 ): Promise<ApiResult<null>> {
   await delay(400);
-  syncUsersFromStorage();
   const normalizedEmail = normalizeEmail(email);
-  const user = _pendingVerification[normalizedEmail];
-  if (!user) return err("No pending verification for this email");
-  if (_verificationCodes[normalizedEmail] !== code) {
-    return err("Incorrect verification code");
+  try {
+    const payload = await postMailApiJson("/auth/verify-email", {
+      email: normalizedEmail,
+      code,
+    });
+    const rawUser = payload.user as WireUser | undefined;
+    if (rawUser) {
+      upsertCachedUser(deserializeUser(rawUser));
+    }
+    return ok(null);
+  } catch (error) {
+    return err(
+      error instanceof Error ? error.message : "Email verification failed",
+    );
   }
-  user.isVerified = true;
-  const existingIdx = _mockUsers.findIndex((u) => u.email === normalizedEmail);
-  if (existingIdx >= 0) {
-    _mockUsers[existingIdx] = user;
-  } else {
-    _mockUsers.push(user);
-  }
-  persistUsersStore();
-  delete _pendingVerification[normalizedEmail];
-  delete _verificationCodes[normalizedEmail];
-  return ok(null);
 }
 
 export async function apiResendCode(email: string): Promise<ApiResult<null>> {
   await delay(300);
   const normalizedEmail = normalizeEmail(email);
-  if (!_pendingVerification[normalizedEmail]) return err("Email not found");
-  _verificationCodes[normalizedEmail] = verificationCodeFor(
-    `${normalizedEmail}-${Date.now()}`,
-  );
   try {
-    await sendVerificationCode(
-      normalizedEmail,
-      _verificationCodes[normalizedEmail],
-    );
+    await postMailApi("/auth/resend-verification", { email: normalizedEmail });
+    return ok(null);
   } catch (error) {
     return err(
       error instanceof Error ? error.message : "Email could not be sent",
     );
   }
-  return ok(null);
 }
 
 export async function apiLogin(
@@ -622,42 +569,38 @@ export async function apiLogin(
   passwordHash: string,
 ): Promise<ApiResult<User>> {
   await delay(700);
-  syncUsersFromStorage();
-  syncPasswordStore();
   const normalizedEmail = normalizeEmail(email);
   try {
-    const sharedPasswordMatches = await verifySharedPassword(
-      normalizedEmail,
+    const payload = await postMailApiJson("/auth/login", {
+      email: normalizedEmail,
       passwordHash,
-    );
-    if (!sharedPasswordMatches) {
+    });
+    const rawUser = payload.user as WireUser | undefined;
+    if (!rawUser) {
       return err("Invalid email or password");
     }
-    _passwordHashes[normalizedEmail] = passwordHash;
-    persistPasswordStore();
-  } catch {
-    return err("Authentication service unavailable. Please try again.");
+    const user = deserializeUser(rawUser);
+    user.isOnlineNow = true;
+    const sharedLastSeen = await pingSharedPresence(user.id);
+    if (sharedLastSeen) {
+      user.lastSeen = sharedLastSeen;
+    }
+    upsertCachedUser(user);
+    return ok(user);
+  } catch (error) {
+    return err(
+      error instanceof Error
+        ? error.message
+        : "Authentication service unavailable. Please try again.",
+    );
   }
-  const user = _mockUsers.find(
-    (u) => u.email === normalizedEmail && !u.isArchived && u.isActive,
-  );
-  if (!user) return err("Invalid email or password");
-  if (!user.isVerified) return err("Email not verified");
-  user.lastSeen = currentPresenceTimestampMs();
-  user.isOnlineNow = true;
-  const sharedLastSeen = await pingSharedPresence(user.id);
-  if (sharedLastSeen) {
-    user.lastSeen = sharedLastSeen;
-  }
-  persistUsersStore();
-  return ok(user);
 }
 
 export async function apiUpdateLastSeen(
   userId: string,
 ): Promise<ApiResult<User>> {
   await delay(120);
-  syncUsersFromStorage();
+  await refreshUsersCache();
   const user = _mockUsers.find((item) => item.id === userId && item.isActive);
   if (!user || user.isArchived) return err("User not found");
   user.lastSeen = currentPresenceTimestampMs();
@@ -672,7 +615,7 @@ export async function apiUpdateLastSeen(
 
 export async function apiLogout(userId?: string): Promise<void> {
   if (userId) {
-    syncUsersFromStorage();
+    await refreshUsersCache();
     const user = _mockUsers.find((item) => item.id === userId);
     if (user) {
       user.isOnlineNow = false;
@@ -687,20 +630,18 @@ export async function apiRequestPasswordReset(
 ): Promise<ApiResult<string>> {
   await delay(500);
   const normalizedEmail = normalizeEmail(email);
-  const user = _mockUsers.find((u) => u.email === normalizedEmail);
-  if (!user) return err("Email not found");
-  const resetUrl = new URL(
-    `${withBase("reset-password")}?token=${encodeURIComponent(normalizedEmail)}`,
-    window.location.origin,
-  ).toString();
   try {
-    await sendPasswordResetEmail(normalizedEmail, resetUrl);
+    const resetPageUrl = new URL(withBase("reset-password"), window.location.origin).toString();
+    await postMailApi("/auth/request-password-reset", {
+      email: normalizedEmail,
+      resetPageUrl,
+    });
+    return ok("Password reset link sent to your email");
   } catch (error) {
     return err(
       error instanceof Error ? error.message : "Email could not be sent",
     );
   }
-  return ok("Password reset link sent to your email");
 }
 
 export async function apiConfirmPasswordReset(
@@ -708,33 +649,24 @@ export async function apiConfirmPasswordReset(
   newPasswordHash: string,
 ): Promise<ApiResult<null>> {
   await delay(500);
-  syncPasswordStore();
-  const email = normalizeEmail(token);
-  if (!_mockUsers.some((u) => u.email === email))
-    return err("Invalid reset token");
   try {
-    const saved = await saveSharedPassword(email, newPasswordHash);
-    if (!saved) {
-      return err("Password reset could not be saved");
-    }
+    await postMailApi("/auth/password-reset", { token, newPasswordHash });
+    return ok(null);
   } catch (error) {
     return err(
       error instanceof Error ? error.message : "Password reset could not be saved",
     );
   }
-  _passwordHashes[email] = newPasswordHash;
-  persistPasswordStore();
-  return ok(null);
 }
 
 // ── Profile ───────────────────────────────────────────────────────────────────
 
 export async function apiGetMyProfile(userId: string): Promise<User | null> {
   await delay(300);
-  syncUsersFromStorage();
+  await refreshUsersCache();
   const sharedPresence = await fetchSharedPresenceMap();
   applyPresenceMap(_mockUsers, sharedPresence);
-  const user = _mockUsers.find((u) => u.id === userId) ?? null;
+  const user = await fetchUserById(userId);
   persistUsersStore();
   return user ? { ...user } : null;
 }
@@ -744,19 +676,28 @@ export async function apiUpdateMyProfile(
   req: UpdateProfileRequest,
 ): Promise<ApiResult<User>> {
   await delay(400);
-  syncUsersFromStorage();
-  const idx = _mockUsers.findIndex((u) => u.id === userId);
-  if (idx < 0) return err("User not found");
-  _mockUsers[idx] = { ..._mockUsers[idx], ...req };
-  persistUsersStore();
-  return ok(_mockUsers[idx]);
+  try {
+    const payload = await postMailApiJson(
+      `/users/${encodeURIComponent(userId)}/profile`,
+      { ...req },
+    );
+    const rawUser = payload.user as WireUser | undefined;
+    if (!rawUser) {
+      return err("User not found");
+    }
+    const user = deserializeUser(rawUser);
+    upsertCachedUser(user);
+    return ok(user);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "User not found");
+  }
 }
 
 // ── Staff ─────────────────────────────────────────────────────────────────────
 
 export async function apiGetActiveStaff(): Promise<User[]> {
   await delay(400);
-  syncUsersFromStorage();
+  await refreshUsersCache();
   const sharedPresence = await fetchSharedPresenceMap();
   applyPresenceMap(_mockUsers, sharedPresence);
   persistUsersStore();
@@ -771,16 +712,28 @@ export async function apiGetActiveStaff(): Promise<User[]> {
 
 export async function apiGetArchivedStaff(): Promise<User[]> {
   await delay(400);
-  syncUsersFromStorage();
-  return _mockUsers
-    .filter((u) => isPortalStaff(u) && u.isArchived)
-    .sort((a, b) => a.fullname.localeCompare(b.fullname));
+  try {
+    const payload = await getMailApiJson("/staff/archived");
+    const users = (Array.isArray(payload.users) ? (payload.users as WireUser[]) : [])
+      .map(deserializeUser)
+      .filter((user) => isPortalStaff(user))
+      .sort((a, b) => a.fullname.localeCompare(b.fullname));
+    _mockUsers = users.concat(
+      _mockUsers.filter((user) => !users.some((item) => item.id === user.id)),
+    );
+    persistUsersStore();
+    return users;
+  } catch {
+    return _mockUsers
+      .filter((u) => isPortalStaff(u) && u.isArchived)
+      .sort((a, b) => a.fullname.localeCompare(b.fullname));
+  }
 }
 
 export async function apiGetStaffMember(userId: string): Promise<User | null> {
   await delay(200);
-  syncUsersFromStorage();
-  return _mockUsers.find((u) => u.id === userId) ?? null;
+  await refreshUsersCache();
+  return fetchUserById(userId);
 }
 
 export async function apiUpdateStaff(
@@ -788,87 +741,97 @@ export async function apiUpdateStaff(
   req: UpdateStaffRequest,
 ): Promise<ApiResult<User>> {
   await delay(400);
-  syncUsersFromStorage();
-  const idx = _mockUsers.findIndex((u) => u.id === userId);
-  if (idx < 0) return err("Staff member not found");
-  const existing = _mockUsers[idx];
-  if (
-    req.department === "IT" &&
-    existing.department !== "IT" &&
-    req.accessCode !== IT_ACCESS_CODE
-  ) {
-    return err("Access denied: invalid IT security code.");
+  try {
+    const payload = await postMailApiJson(
+      `/staff/${encodeURIComponent(userId)}/update`,
+      { ...req },
+    );
+    const rawUser = payload.user as WireUser | undefined;
+    if (!rawUser) {
+      return err("Staff member not found");
+    }
+    const user = deserializeUser(rawUser);
+    upsertCachedUser(user);
+    return ok(user);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Staff member not found");
   }
-  _mockUsers[idx] = {
-    ...existing,
-    ...req,
-    role: req.department ? roleFromDepartment(req.department) : existing.role,
-  } as User;
-  persistUsersStore();
-  return ok(_mockUsers[idx]);
 }
 
 export async function apiArchiveStaff(
   userId: string,
 ): Promise<ApiResult<null>> {
   await delay(300);
-  syncUsersFromStorage();
-  const user = _mockUsers.find((u) => u.id === userId);
-  if (!user) return err("Staff member not found");
-  if (user.role === "SuperAdmin") return err("Cannot archive Super Admin.");
-  user.isArchived = true;
-  user.isActive = false;
-  persistUsersStore();
-  return ok(null);
+  try {
+    await postMailApi(`/staff/${encodeURIComponent(userId)}/archive`, {});
+    await refreshUsersCache();
+    return ok(null);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Staff member not found");
+  }
 }
 
 export async function apiRestoreStaff(
   userId: string,
 ): Promise<ApiResult<null>> {
   await delay(300);
-  syncUsersFromStorage();
-  const user = _mockUsers.find((u) => u.id === userId);
-  if (!user) return err("Staff member not found");
-  user.isArchived = false;
-  user.isActive = true;
-  persistUsersStore();
-  return ok(null);
+  try {
+    await postMailApi(`/staff/${encodeURIComponent(userId)}/restore`, {});
+    await refreshUsersCache();
+    return ok(null);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Staff member not found");
+  }
 }
 
 export async function apiDeleteStaff(userId: string): Promise<ApiResult<null>> {
   await delay(300);
-  syncUsersFromStorage();
-  const idx = _mockUsers.findIndex((u) => u.id === userId);
-  if (idx < 0) return err("Staff member not found");
-  _mockUsers.splice(idx, 1);
-  persistUsersStore();
-  return ok(null);
+  try {
+    await postMailApi(`/staff/${encodeURIComponent(userId)}/delete`, {});
+    _mockUsers = _mockUsers.filter((user) => user.id !== userId);
+    persistUsersStore();
+    return ok(null);
+  } catch (error) {
+    return err(error instanceof Error ? error.message : "Staff member not found");
+  }
 }
 
 export async function apiGetStaffStats(): Promise<StaffStats> {
   await delay(300);
-  syncUsersFromStorage();
-  const active = _mockUsers.filter((u) => !u.isArchived && u.isActive);
-  const byDept: Record<string, number> = {};
-  const byBranch: Record<string, number> = {};
-  const byRole: Record<string, number> = {};
-  for (const u of active) {
-    byDept[u.department] = (byDept[u.department] ?? 0) + 1;
-    byBranch[u.branch] = (byBranch[u.branch] ?? 0) + 1;
-    byRole[u.role] = (byRole[u.role] ?? 0) + 1;
+  try {
+    const payload = await getMailApiJson("/staff/stats");
+    return {
+      total: Number(payload.total ?? 0),
+      active: Number(payload.active ?? 0),
+      archived: Number(payload.archived ?? 0),
+      byDepartment: (payload.byDepartment as Record<string, number>) ?? {},
+      byBranch: (payload.byBranch as Record<string, number>) ?? {},
+      byRole: (payload.byRole as Record<string, number>) ?? {},
+    };
+  } catch {
+    const active = _mockUsers.filter((u) => !u.isArchived && u.isActive);
+    const byDept: Record<string, number> = {};
+    const byBranch: Record<string, number> = {};
+    const byRole: Record<string, number> = {};
+    for (const u of active) {
+      byDept[u.department] = (byDept[u.department] ?? 0) + 1;
+      byBranch[u.branch] = (byBranch[u.branch] ?? 0) + 1;
+      byRole[u.role] = (byRole[u.role] ?? 0) + 1;
+    }
+    return {
+      total: _mockUsers.length,
+      active: active.length,
+      archived: _mockUsers.filter((u) => u.isArchived).length,
+      byDepartment: byDept,
+      byBranch: byBranch,
+      byRole: byRole,
+    };
   }
-  return {
-    total: _mockUsers.length,
-    active: active.length,
-    archived: _mockUsers.filter((u) => u.isArchived).length,
-    byDepartment: byDept,
-    byBranch: byBranch,
-    byRole: byRole,
-  };
 }
 
 export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   await delay(350);
+  await refreshUsersCache();
   const activeStaff = _mockUsers.filter(
     (u) =>
       u.isActive &&
