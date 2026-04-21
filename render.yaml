@@ -31,6 +31,9 @@ services:
     rootDir: src/frontend
     buildCommand: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm build
     staticPublishPath: dist
+    envVars:
+      - key: HUSKY
+        value: "0"
     routes:
       - type: rewrite
         source: /mail-api/*
