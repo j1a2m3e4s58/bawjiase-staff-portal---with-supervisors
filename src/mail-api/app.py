@@ -181,6 +181,42 @@ os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
+STORE_DEFAULTS: dict[str, object] = {
+    PRESENCE_STORE_PATH: {},
+    PASSWORD_STORE_PATH: {},
+    USERS_STORE_PATH: [],
+    PENDING_VERIFICATIONS_PATH: {},
+    RESET_TOKENS_PATH: {},
+    SESSIONS_STORE_PATH: {},
+    ANNOUNCEMENTS_STORE_PATH: [],
+    FORMS_STORE_PATH: [],
+    TRAINING_VIDEOS_STORE_PATH: [],
+    TRAINING_DOCUMENTS_STORE_PATH: [],
+    NOTIFICATIONS_STORE_PATH: [],
+    TRAINING_VIDEO_PROGRESS_STORE_PATH: [],
+    TRAINING_DOCUMENT_OPENS_STORE_PATH: [],
+    TRAINING_REMINDERS_STORE_PATH: [],
+}
+
+
+def initialize_data_directory() -> None:
+    for path, default in STORE_DEFAULTS.items():
+        if os.path.exists(path):
+            continue
+        legacy_path = os.path.join(BASE_DIR, os.path.basename(path))
+        if path != legacy_path and os.path.exists(legacy_path):
+            try:
+                os.replace(legacy_path, path)
+                continue
+            except OSError:
+                pass
+        with open(path, "w", encoding="utf-8") as handle:
+            json.dump(default, handle, ensure_ascii=True, indent=2)
+
+
+initialize_data_directory()
+
+
 def allowed_origins() -> set[str]:
     raw = os.getenv("ALLOWED_ORIGINS", "")
     return {item.strip() for item in raw.split(",") if item.strip()}
