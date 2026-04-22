@@ -1716,9 +1716,7 @@ function canUserSeeForm(form: PortalForm, user?: User | null) {
       user.department.toUpperCase() === (form.department ?? "").toUpperCase()
     );
   }
-  const allowedCategories = new Set(["GENERAL", "HR"]);
-  if (user?.department) allowedCategories.add(user.department.toUpperCase());
-  return allowedCategories.has((form.category || "").toUpperCase());
+  return true;
 }
 
 export function apiExtractDriveFileId(driveRef: string): string {
