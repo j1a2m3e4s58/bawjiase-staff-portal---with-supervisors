@@ -306,6 +306,36 @@ def normalize_form_file_url(value: object) -> str:
     return drive_id
 
 
+def normalize_announcement_payload(data: dict, actor: dict, existing: dict | None = None) -> dict:
+    title = normalize_non_empty_title(
+        data.get("title", existing.get("title") if existing else ""),
+        "Announcement title",
+    )
+    content = str(data.get("content", existing.get("content") if existing else "")).strip()
+    if not content:
+        raise ValueError("Announcement content is required")
+    category = str(data.get("category", existing.get("category") if existing else "")).strip() or actor["department"]
+    poll = data.get("poll", existing.get("poll") if existing else None)
+    if poll is not None and not isinstance(poll, dict):
+        raise ValueError("Poll data is invalid")
+    allow_download = bool(
+        data.get("allowDownload", existing.get("allowDownload", True) if existing else True)
+    )
+    image_url = data.get("imageUrl", existing.get("imageUrl") if existing else None)
+    file_url = data.get("fileUrl", existing.get("fileUrl") if existing else None)
+    attachment_name = data.get("attachmentName", existing.get("attachmentName") if existing else None)
+    return {
+        "title": title,
+        "content": content,
+        "category": category,
+        "imageUrl": image_url,
+        "fileUrl": file_url,
+        "attachmentName": attachment_name,
+        "allowDownload": allow_download,
+        "poll": poll if isinstance(poll, dict) else None,
+    }
+
+
 def normalize_training_video_payload(data: dict, actor: dict) -> dict:
     title = normalize_non_empty_title(data.get("title"), "Video title")
     visibility, department = normalize_visibility_and_department(data)
@@ -1938,30 +1968,26 @@ def create_shared_announcement():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, actor, error = require_authenticated_user()
+    _, actor, error = require_staff_manager()
     if error:
         return error
     data, error = require_json()
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
-    poll = data.get("poll")
+    try:
+        payload = normalize_announcement_payload(data, actor)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     announcement = {
         "id": next_content_id(items),
-        "title": str(data.get("title", "")).strip(),
-        "content": str(data.get("content", "")).strip(),
-        "category": str(data.get("category", "")).strip() or actor["department"],
-        "imageUrl": data.get("imageUrl"),
-        "fileUrl": data.get("fileUrl"),
-        "attachmentName": data.get("attachmentName"),
-        "allowDownload": bool(data.get("allowDownload", True)),
+        **payload,
         "authorId": actor["id"],
         "authorName": actor["fullname"],
         "createdAt": now_ms(),
         "updatedAt": now_ms(),
         "isDismissed": False,
         "isTrashed": False,
-        "poll": poll if isinstance(poll, dict) else None,
     }
     items.insert(0, announcement)
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
@@ -1973,7 +1999,7 @@ def update_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_authenticated_user()
+    _, actor, error = require_staff_manager()
     if error:
         return error
     data, error = require_json()
@@ -1983,11 +2009,11 @@ def update_shared_announcement(item_id: int):
     announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
-    for key in ["title", "content", "category", "imageUrl", "fileUrl", "attachmentName", "allowDownload"]:
-        if key in data:
-            announcement[key] = data.get(key)
-    if "poll" in data:
-        announcement["poll"] = data.get("poll") if isinstance(data.get("poll"), dict) else None
+    try:
+        payload = normalize_announcement_payload(data, actor, announcement)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+    announcement.update(payload)
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
     return jsonify({"ok": True, "announcement": announcement})
@@ -1998,7 +2024,7 @@ def trash_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_authenticated_user()
+    _, _, error = require_staff_manager()
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
@@ -2016,7 +2042,7 @@ def restore_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_authenticated_user()
+    _, _, error = require_staff_manager()
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
@@ -2034,7 +2060,7 @@ def delete_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_authenticated_user()
+    _, _, error = require_staff_manager()
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
@@ -2050,7 +2076,7 @@ def empty_shared_announcement_trash():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_authenticated_user()
+    _, _, error = require_staff_manager()
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
