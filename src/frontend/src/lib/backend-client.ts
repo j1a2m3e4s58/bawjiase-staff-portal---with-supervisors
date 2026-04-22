@@ -666,39 +666,19 @@ function deserializeTrainingDocument(raw: Record<string, unknown>): TrainingDocu
 }
 
 function replaceSharedAnnouncements(items: AnnouncementWithPoll[]) {
-  for (let index = _announcements.length - 1; index >= 0; index -= 1) {
-    if (_announcements[index].id >= 1000) {
-      _announcements.splice(index, 1);
-    }
-  }
-  _announcements.unshift(...items);
+  _announcements.splice(0, _announcements.length, ...items);
 }
 
 function replaceSharedForms(items: PortalForm[]) {
-  for (let index = _forms.length - 1; index >= 0; index -= 1) {
-    if (_forms[index].id >= 1000) {
-      _forms.splice(index, 1);
-    }
-  }
-  _forms.unshift(...items);
+  _forms.splice(0, _forms.length, ...items);
 }
 
 function replaceSharedTrainingVideos(items: TrainingVideo[]) {
-  for (let index = _trainingVideos.length - 1; index >= 0; index -= 1) {
-    if (_trainingVideos[index].id >= 1000) {
-      _trainingVideos.splice(index, 1);
-    }
-  }
-  _trainingVideos.unshift(...items);
+  _trainingVideos.splice(0, _trainingVideos.length, ...items);
 }
 
 function replaceSharedTrainingDocuments(items: TrainingDocument[]) {
-  for (let index = _trainingDocuments.length - 1; index >= 0; index -= 1) {
-    if (_trainingDocuments[index].id >= 1000) {
-      _trainingDocuments.splice(index, 1);
-    }
-  }
-  _trainingDocuments.unshift(...items);
+  _trainingDocuments.splice(0, _trainingDocuments.length, ...items);
 }
 
 function getDismissalStore(): Record<string, number[]> {
@@ -1560,38 +1540,7 @@ export async function apiVoteAnnouncementPoll(
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 
-const _notifications: Notification[] = [
-  {
-    id: 1,
-    userId: "mock-user-1",
-    kind: "announcement",
-    title: "New Announcement",
-    message: "BCB Annual General Meeting 2026 has been posted",
-    linkTo: "/announcements",
-    isRead: false,
-    createdAt: BigInt(Date.now() - 3600000),
-  },
-  {
-    id: 2,
-    userId: "mock-user-1",
-    kind: "training",
-    title: "New Training Material",
-    message: "Cybersecurity Fundamentals course is now available",
-    linkTo: "/training",
-    isRead: false,
-    createdAt: BigInt(Date.now() - 7200000),
-  },
-  {
-    id: 3,
-    userId: "mock-user-1",
-    kind: "system",
-    title: "Profile Updated",
-    message: "Your profile information has been updated successfully",
-    linkTo: "/profile",
-    isRead: true,
-    createdAt: BigInt(Date.now() - 86400000),
-  },
-];
+const _notifications: Notification[] = [];
 
 export async function apiGetUnreadNotificationCount(): Promise<number> {
   await delay(200);

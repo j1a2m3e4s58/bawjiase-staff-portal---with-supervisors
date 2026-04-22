@@ -14,23 +14,24 @@ from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
+DATA_DIR = os.getenv("PORTAL_DATA_DIR", BASE_DIR).strip() or BASE_DIR
 
 OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com"
-PRESENCE_STORE_PATH = os.path.join(BASE_DIR, "presence_store.json")
-PASSWORD_STORE_PATH = os.path.join(BASE_DIR, "password_store.json")
-USERS_STORE_PATH = os.path.join(BASE_DIR, "users_store.json")
-PENDING_VERIFICATIONS_PATH = os.path.join(BASE_DIR, "pending_verifications.json")
-RESET_TOKENS_PATH = os.path.join(BASE_DIR, "reset_tokens.json")
-SESSIONS_STORE_PATH = os.path.join(BASE_DIR, "sessions_store.json")
-ANNOUNCEMENTS_STORE_PATH = os.path.join(BASE_DIR, "announcements_store.json")
-FORMS_STORE_PATH = os.path.join(BASE_DIR, "forms_store.json")
-TRAINING_VIDEOS_STORE_PATH = os.path.join(BASE_DIR, "training_videos_store.json")
-TRAINING_DOCUMENTS_STORE_PATH = os.path.join(BASE_DIR, "training_documents_store.json")
-NOTIFICATIONS_STORE_PATH = os.path.join(BASE_DIR, "notifications_store.json")
-TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(BASE_DIR, "training_video_progress_store.json")
-TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(BASE_DIR, "training_document_opens_store.json")
-TRAINING_REMINDERS_STORE_PATH = os.path.join(BASE_DIR, "training_reminders_store.json")
-UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
+PRESENCE_STORE_PATH = os.path.join(DATA_DIR, "presence_store.json")
+PASSWORD_STORE_PATH = os.path.join(DATA_DIR, "password_store.json")
+USERS_STORE_PATH = os.path.join(DATA_DIR, "users_store.json")
+PENDING_VERIFICATIONS_PATH = os.path.join(DATA_DIR, "pending_verifications.json")
+RESET_TOKENS_PATH = os.path.join(DATA_DIR, "reset_tokens.json")
+SESSIONS_STORE_PATH = os.path.join(DATA_DIR, "sessions_store.json")
+ANNOUNCEMENTS_STORE_PATH = os.path.join(DATA_DIR, "announcements_store.json")
+FORMS_STORE_PATH = os.path.join(DATA_DIR, "forms_store.json")
+TRAINING_VIDEOS_STORE_PATH = os.path.join(DATA_DIR, "training_videos_store.json")
+TRAINING_DOCUMENTS_STORE_PATH = os.path.join(DATA_DIR, "training_documents_store.json")
+NOTIFICATIONS_STORE_PATH = os.path.join(DATA_DIR, "notifications_store.json")
+TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(DATA_DIR, "training_video_progress_store.json")
+TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_opens_store.json")
+TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
+UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
 PRESENCE_TTL_SECONDS = 15 * 60
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
@@ -176,6 +177,7 @@ DEFAULT_PASSWORD_HASHES = {
 }
 
 app = Flask(__name__)
+os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
