@@ -32,6 +32,7 @@ interface VideoStat {
   watchedCount: number;
   completionPct: number;
   isMandatory: boolean;
+  incompleteCount: number;
   incompleteUsers: string[];
 }
 
@@ -42,6 +43,7 @@ interface DocStat {
   openedCount: number;
   openedPct: number;
   isMandatory: boolean;
+  incompleteCount: number;
   incompleteUsers: string[];
 }
 
@@ -89,9 +91,29 @@ export default function TrainingAdminPage() {
   const [sendingReminder, setSendingReminder] = useState<number | null>(null);
 
   useEffect(() => {
-    apiGetAdminTrainingOverview()
-      .then((data) => setOverview(data as AdminOverview))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function loadOverview() {
+      const data = (await apiGetAdminTrainingOverview()) as AdminOverview;
+      if (!cancelled) setOverview(data);
+    }
+
+    loadOverview().finally(() => {
+      if (!cancelled) setLoading(false);
+    });
+
+    const onFocus = () => {
+      void loadOverview();
+    };
+    const intervalId = window.setInterval(() => {
+      void loadOverview();
+    }, 10000);
+    window.addEventListener("focus", onFocus);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", onFocus);
+    };
   }, []);
 
   const overallVideoCompletion = useMemo(() => {
@@ -274,6 +296,34 @@ export default function TrainingAdminPage() {
                                 {video.watchedCount} of {video.eligibleCount}{" "}
                                 eligible staff completed this video.
                               </div>
+                              {video.incompleteCount > 0 ? (
+                                <div className="mt-3 space-y-2">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Still outstanding
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {video.incompleteUsers.map((name) => (
+                                      <Badge
+                                        key={`${video.id}-${name}`}
+                                        variant="outline"
+                                      >
+                                        {name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                  {video.incompleteCount >
+                                  video.incompleteUsers.length ? (
+                                    <div className="text-xs text-muted-foreground">
+                                      Showing first {video.incompleteUsers.length} of{" "}
+                                      {video.incompleteCount} remaining staff.
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="mt-3 text-xs text-secondary">
+                                  Everyone eligible has completed this video.
+                                </div>
+                              )}
                             </div>
                             <div className="flex items-center gap-3">
                               <div className="min-w-16 text-right text-sm font-semibold text-foreground">
@@ -410,6 +460,34 @@ export default function TrainingAdminPage() {
                                 {doc.openedCount} of {doc.eligibleCount}{" "}
                                 eligible staff opened this document.
                               </div>
+                              {doc.incompleteCount > 0 ? (
+                                <div className="mt-3 space-y-2">
+                                  <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                                    Still outstanding
+                                  </div>
+                                  <div className="flex flex-wrap gap-2">
+                                    {doc.incompleteUsers.map((name) => (
+                                      <Badge
+                                        key={`${doc.id}-${name}`}
+                                        variant="outline"
+                                      >
+                                        {name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                  {doc.incompleteCount >
+                                  doc.incompleteUsers.length ? (
+                                    <div className="text-xs text-muted-foreground">
+                                      Showing first {doc.incompleteUsers.length} of{" "}
+                                      {doc.incompleteCount} remaining staff.
+                                    </div>
+                                  ) : null}
+                                </div>
+                              ) : (
+                                <div className="mt-3 text-xs text-secondary">
+                                  Everyone eligible has opened this document.
+                                </div>
+                              )}
                             </div>
                             <div className="min-w-16 text-right text-sm font-semibold text-foreground">
                               {doc.openedPct}%

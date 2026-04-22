@@ -2652,6 +2652,12 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
               watchedCount: Number(item.watchedCount ?? 0),
               completionPct: Number(item.completionPct ?? 0),
               isMandatory: !!item.isMandatory,
+              incompleteCount: Number(
+                item.incompleteCount ??
+                  (Array.isArray(item.incompleteUsers)
+                    ? item.incompleteUsers.length
+                    : 0),
+              ),
               incompleteUsers: Array.isArray(item.incompleteUsers)
                 ? item.incompleteUsers.map((name) => String(name))
                 : [],
@@ -2665,6 +2671,12 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
               openedCount: Number(item.openedCount ?? 0),
               openedPct: Number(item.openedPct ?? 0),
               isMandatory: !!item.isMandatory,
+              incompleteCount: Number(
+                item.incompleteCount ??
+                  (Array.isArray(item.incompleteUsers)
+                    ? item.incompleteUsers.length
+                    : 0),
+              ),
               incompleteUsers: Array.isArray(item.incompleteUsers)
                 ? item.incompleteUsers.map((name) => String(name))
                 : [],
@@ -2710,8 +2722,12 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
             ? Math.round((completedUserIds.size / eligibleUsers.length) * 100)
             : 0,
           isMandatory: !!v.isMandatory,
+          incompleteCount: eligibleUsers.filter(
+            (user) => !completedUserIds.has(user.id),
+          ).length,
           incompleteUsers: eligibleUsers
             .filter((user) => !completedUserIds.has(user.id))
+            .slice(0, 100)
             .map((user) => user.fullname),
         };
       }),
@@ -2733,8 +2749,12 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
             ? Math.round((openedUserIds.size / eligibleUsers.length) * 100)
             : 0,
           isMandatory: !!d.isMandatory,
+          incompleteCount: eligibleUsers.filter(
+            (user) => !openedUserIds.has(user.id),
+          ).length,
           incompleteUsers: eligibleUsers
             .filter((user) => !openedUserIds.has(user.id))
+            .slice(0, 100)
             .map((user) => user.fullname),
         };
       }),

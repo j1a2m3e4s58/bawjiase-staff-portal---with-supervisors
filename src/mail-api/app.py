@@ -2674,6 +2674,9 @@ def get_admin_training_overview():
             if int(entry["videoId"]) == video_id and bool(entry["isComplete"])
         }
         eligible_count = len(eligible_users)
+        incomplete_users = [
+            user["fullname"] for user in eligible_users if user["id"] not in completed_user_ids
+        ]
         video_stats.append(
             {
                 "id": video_id,
@@ -2682,9 +2685,8 @@ def get_admin_training_overview():
                 "watchedCount": len(watched_user_ids),
                 "completionPct": round((len(completed_user_ids) / eligible_count) * 100) if eligible_count else 0,
                 "isMandatory": bool(video.get("isMandatory", False)),
-                "incompleteUsers": [
-                    user["fullname"] for user in eligible_users if user["id"] not in completed_user_ids
-                ],
+                "incompleteCount": len(incomplete_users),
+                "incompleteUsers": incomplete_users[:100],
             }
         )
     document_stats = []
@@ -2699,6 +2701,9 @@ def get_admin_training_overview():
             if int(entry["documentId"]) == document_id and int(entry["openedAt"]) > 0
         }
         eligible_count = len(eligible_users)
+        incomplete_users = [
+            user["fullname"] for user in eligible_users if user["id"] not in opened_user_ids
+        ]
         document_stats.append(
             {
                 "id": document_id,
@@ -2707,9 +2712,8 @@ def get_admin_training_overview():
                 "openedCount": len(opened_user_ids),
                 "openedPct": round((len(opened_user_ids) / eligible_count) * 100) if eligible_count else 0,
                 "isMandatory": bool(document.get("isMandatory", False)),
-                "incompleteUsers": [
-                    user["fullname"] for user in eligible_users if user["id"] not in opened_user_ids
-                ],
+                "incompleteCount": len(incomplete_users),
+                "incompleteUsers": incomplete_users[:100],
             }
         )
     return jsonify(
