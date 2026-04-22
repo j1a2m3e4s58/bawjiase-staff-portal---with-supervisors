@@ -625,12 +625,23 @@ function RecentIncidents({ refreshKey }: { refreshKey: number }) {
     void refreshKey;
     let cancelled = false;
     setLoading(true);
-    apiGetMyIncidents(user.id).then((data) => {
-      if (!cancelled) {
-        setIncidents(data);
-        setLoading(false);
-      }
-    });
+    apiGetMyIncidents(user.id)
+      .then((data) => {
+        if (!cancelled) {
+          setIncidents(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setIncidents([]);
+          toast.error("Recent incident reports could not be loaded.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };
@@ -685,12 +696,23 @@ function RecentAmendments({ refreshKey }: { refreshKey: number }) {
     void refreshKey;
     let cancelled = false;
     setLoading(true);
-    apiGetMyAmendments(user.id).then((data) => {
-      if (!cancelled) {
-        setAmendments(data);
-        setLoading(false);
-      }
-    });
+    apiGetMyAmendments(user.id)
+      .then((data) => {
+        if (!cancelled) {
+          setAmendments(data);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setAmendments([]);
+          toast.error("Recent amendment requests could not be loaded.");
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
     return () => {
       cancelled = true;
     };

@@ -3,13 +3,14 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { useHasRole } from "@/components/RoleGuard";
 import { SkeletonRow } from "@/components/SkeletonCard";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   apiDeleteStaff,
   apiGetArchivedStaff,
   apiRestoreStaff,
+  resolveStoredAssetUrl,
 } from "@/lib/backend-client";
 import type { User } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
@@ -66,6 +67,7 @@ function PastStaffRow({
   onDelete,
 }: PastStaffRowProps) {
   const initials = getInitials(staff.fullname);
+  const profileImage = resolveStoredAssetUrl(staff.imageFile);
 
   return (
     <div
@@ -74,6 +76,9 @@ function PastStaffRow({
     >
       {/* Avatar */}
       <Avatar className="h-10 w-10 flex-shrink-0 ring-2 ring-border/30">
+        {profileImage ? (
+          <AvatarImage src={profileImage} alt={staff.fullname} />
+        ) : null}
         <AvatarFallback className="bg-muted text-muted-foreground font-semibold text-sm">
           {initials}
         </AvatarFallback>
@@ -156,11 +161,25 @@ export default function PastStaffPage() {
   }, [canAccess, navigate]);
 
   useEffect(() => {
+    let cancelled = false;
     void (async () => {
-      const data = await apiGetArchivedStaff();
-      setStaff(data);
-      setLoading(false);
+      try {
+        const data = await apiGetArchivedStaff();
+        if (cancelled) return;
+        setStaff(data);
+      } catch {
+        if (cancelled) return;
+        setStaff([]);
+        toast.error("Archived staff could not be loaded.");
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleRestoreConfirm() {

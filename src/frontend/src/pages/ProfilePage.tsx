@@ -302,6 +302,7 @@ export default function ProfilePage() {
   const displayPhoto = removePhoto
     ? null
     : photoPreview ?? resolveStoredAssetUrl(user.imageFile);
+  const hasExistingProfilePhoto = !!resolveStoredAssetUrl(user.imageFile);
   const initials = getInitials(user.fullname);
 
   return (
@@ -326,7 +327,10 @@ export default function ProfilePage() {
                 }`}
                 data-ocid="profile.avatar.upload_button"
               >
-                <Avatar className="h-24 w-24">
+                <Avatar
+                  key={displayPhoto ?? "fallback"}
+                  className="h-24 w-24"
+                >
                   {displayPhoto && (
                     <AvatarImage src={displayPhoto} alt={user.fullname} />
                   )}
@@ -348,19 +352,6 @@ export default function ProfilePage() {
                 onChange={handleFileChange}
                 data-ocid="profile.photo.input"
               />
-              {isEditing && (displayPhoto || user.imageFile) ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="mt-3 w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                  onClick={handleRemovePhoto}
-                  data-ocid="profile.photo.remove_button"
-                >
-                  <ImageOff className="h-4 w-4" />
-                  Remove Photo
-                </Button>
-              ) : null}
             </div>
 
             {/* Info */}

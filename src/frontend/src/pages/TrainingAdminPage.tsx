@@ -93,8 +93,15 @@ export default function TrainingAdminPage() {
   useEffect(() => {
     let cancelled = false;
     async function loadOverview() {
-      const data = (await apiGetAdminTrainingOverview()) as AdminOverview;
-      if (!cancelled) setOverview(data);
+      try {
+        const data = (await apiGetAdminTrainingOverview()) as AdminOverview;
+        if (!cancelled) setOverview(data);
+      } catch {
+        if (!cancelled) {
+          setOverview(null);
+          toast.error("Training dashboard could not be loaded. Please try again.");
+        }
+      }
     }
 
     loadOverview().finally(() => {

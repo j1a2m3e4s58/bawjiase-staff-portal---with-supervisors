@@ -144,10 +144,16 @@ function IncidentsSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await apiGetIncidentReports();
-    setIncidents(data);
-    setSelected(new Set());
-    setLoading(false);
+    try {
+      const data = await apiGetIncidentReports();
+      setIncidents(data);
+      setSelected(new Set());
+    } catch {
+      setIncidents([]);
+      toast.error("Incident reports could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -407,10 +413,16 @@ function AmendmentsSection() {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const data = await apiGetProfileAmendments();
-    setAmendments(data);
-    setSelected(new Set());
-    setLoading(false);
+    try {
+      const data = await apiGetProfileAmendments();
+      setAmendments(data);
+      setSelected(new Set());
+    } catch {
+      setAmendments([]);
+      toast.error("Amendment requests could not be loaded.");
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -683,8 +695,21 @@ export default function SupportAdminPage() {
   }, [canAccess, navigate]);
 
   useEffect(() => {
-    apiGetIncidentReports().then(setIncidents);
-    apiGetProfileAmendments().then(setAmendments);
+    let cancelled = false;
+    Promise.all([apiGetIncidentReports(), apiGetProfileAmendments()])
+      .then(([nextIncidents, nextAmendments]) => {
+        if (cancelled) return;
+        setIncidents(nextIncidents);
+        setAmendments(nextAmendments);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setIncidents([]);
+        setAmendments([]);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   if (!canAccess) return null;
