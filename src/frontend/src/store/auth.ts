@@ -105,8 +105,8 @@ interface AuthProviderProps {
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [user, setUser] = useState<User | null>(() => loadStoredUser());
+  const [isLoading] = useState(false);
   const authSessionRef = useRef(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
@@ -116,12 +116,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   useEffect(() => {
     applyTheme(themeMode);
   }, [themeMode]);
-
-  useEffect(() => {
-    const storedUser = loadStoredUser();
-    setUser(storedUser);
-    setIsLoading(false);
-  }, []);
 
   useEffect(() => {
     const handleSessionExpired = () => {
