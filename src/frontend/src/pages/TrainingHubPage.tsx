@@ -27,7 +27,7 @@ import {
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import type { TrainingDocument, TrainingVideo } from "@/types";
-import { useNavigate } from "@tanstack/react-router";
+import { useLocation, useNavigate } from "@tanstack/react-router";
 import {
   Archive,
   ArrowRight,
@@ -81,6 +81,7 @@ function visibilityLabel(
 
 export default function TrainingHubPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = useAuth();
   const isAdmin = user?.role === "HRAdmin" || user?.role === "SuperAdmin";
 
@@ -110,8 +111,13 @@ export default function TrainingHubPage() {
     useState<TrainingDocument | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    setLoadingVideos(true);
+    setLoadingDocuments(true);
+
     apiGetTrainingVideos()
       .then(async (items) => {
+        if (cancelled) return;
         setVideos(items);
         const progressEntries = await Promise.all(
           items.map(async (video) => {
@@ -119,12 +125,16 @@ export default function TrainingHubPage() {
             return [video.id, progress?.progressPercent ?? 0] as const;
           }),
         );
+        if (cancelled) return;
         setVideoProgress(Object.fromEntries(progressEntries));
       })
-      .finally(() => setLoadingVideos(false));
+      .finally(() => {
+        if (!cancelled) setLoadingVideos(false);
+      });
 
     apiGetTrainingDocuments()
       .then(async (items) => {
+        if (cancelled) return;
         setDocuments(items);
         const openedEntries = await Promise.all(
           items.map(async (doc) => {
@@ -132,10 +142,17 @@ export default function TrainingHubPage() {
             return [doc.id, state.isOpened] as const;
           }),
         );
+        if (cancelled) return;
         setDocumentOpened(Object.fromEntries(openedEntries));
       })
-      .finally(() => setLoadingDocuments(false));
-  }, []);
+      .finally(() => {
+        if (!cancelled) setLoadingDocuments(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id, location.pathname]);
 
   const departments = useMemo(() => {
     const values = new Set<string>();
