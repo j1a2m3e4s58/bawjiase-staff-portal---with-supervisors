@@ -25,6 +25,7 @@ import {
   apiDismissAnnouncement,
   apiGetAnnouncements,
   apiLogAction,
+  resolveAnnouncementAssetUrl,
   apiTrashAnnouncement,
   apiUpdateAnnouncement,
   apiVoteAnnouncementPoll,
@@ -171,23 +172,25 @@ function PollWidget({
 
 function AnnouncementAttachment({ ann }: { ann: AnnouncementWithPoll }) {
   if (!ann.fileUrl && !ann.imageUrl) return null;
+  const resolvedImageUrl = resolveAnnouncementAssetUrl(ann.imageUrl);
+  const resolvedFileUrl = resolveAnnouncementAssetUrl(ann.fileUrl);
 
   const filename = ann.attachmentName || "Attached file";
   const linkLabel = ann.allowDownload ? "Download File" : "View File";
 
   return (
     <div className="mt-4 space-y-3 rounded-xl border border-border/30 bg-background/40 p-4">
-      {ann.imageUrl && (
+      {resolvedImageUrl && (
         <div className="overflow-hidden rounded-xl border border-border/30 bg-muted/30">
           <img
-            src={ann.imageUrl}
+            src={resolvedImageUrl}
             alt={ann.title}
             className="max-h-[420px] w-full object-cover"
           />
         </div>
       )}
 
-      {ann.fileUrl && (
+      {resolvedFileUrl && (
         <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-border/30 bg-card/70 px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-10 w-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
@@ -205,7 +208,7 @@ function AnnouncementAttachment({ ann }: { ann: AnnouncementWithPoll }) {
 
           <Button asChild size="sm" variant="outline">
             <a
-              href={ann.fileUrl}
+              href={resolvedFileUrl}
               target="_blank"
               rel="noreferrer"
               download={ann.allowDownload ? filename : undefined}

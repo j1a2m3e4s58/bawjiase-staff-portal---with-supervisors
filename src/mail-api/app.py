@@ -2150,6 +2150,21 @@ def upload_training_document_file():
         return jsonify({"error": str(exc)}), 400
 
 
+@app.route("/api/uploads/announcement-asset", methods=["POST", "OPTIONS"])
+def upload_announcement_asset_file():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    try:
+        saved = save_uploaded_media(request.files.get("file"), "announcement")
+        return jsonify({"ok": True, **saved})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @app.route("/api/content/forms", methods=["POST", "OPTIONS"])
 def create_shared_form():
     preflight = handle_options()

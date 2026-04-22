@@ -2014,6 +2014,24 @@ export async function apiUploadTrainingDocumentFile(
   };
 }
 
+export async function apiUploadAnnouncementAssetFile(
+  file: File,
+): Promise<{ filename: string; url: string }> {
+  const payload = await uploadMailApiFile("/uploads/announcement-asset", file);
+  return {
+    filename: String(payload.filename ?? ""),
+    url: String(payload.url ?? ""),
+  };
+}
+
+export function resolveAnnouncementAssetUrl(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  if (raw.startsWith("LOCAL:")) {
+    return localAssetUrl(raw);
+  }
+  return raw;
+}
+
 export function resolveTrainingVideoEmbedUrl(video: TrainingVideo): string {
   const raw = video.driveRef || video.videoUrl;
   if (video.storageType === "Local" || raw.startsWith("LOCAL:")) {

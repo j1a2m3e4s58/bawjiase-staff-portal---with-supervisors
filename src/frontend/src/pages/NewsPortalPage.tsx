@@ -7,7 +7,11 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { apiCreateAnnouncement, apiLogAction } from "@/lib/backend-client";
+import {
+  apiCreateAnnouncement,
+  apiLogAction,
+  apiUploadAnnouncementAssetFile,
+} from "@/lib/backend-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
 import { Link } from "@tanstack/react-router";
@@ -27,13 +31,13 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 
-function readFileAsDataUrl(file: File) {
-  return new Promise<string>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result ?? ""));
-    reader.onerror = () => reject(new Error("File could not be read"));
-    reader.readAsDataURL(file);
-  });
+const MAX_NEWS_ASSET_MB = 25;
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 function NewsPortalForm() {
@@ -43,8 +47,8 @@ function NewsPortalForm() {
   const [activeTab, setActiveTab] = useState("attach");
   const [allowDownload, setAllowDownload] = useState(true);
   const [fileName, setFileName] = useState("");
-  const [fileUrl, setFileUrl] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [publishing, setPublishing] = useState(false);
@@ -76,24 +80,30 @@ function NewsPortalForm() {
   }, [stopCamera]);
 
   async function handleFileChange(file: File | null) {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
     if (!file) {
       setFileName("");
-      setFileUrl(null);
-      setImageUrl(null);
+      setSelectedFile(null);
+      setImagePreviewUrl(null);
       return;
     }
 
-    try {
-      const dataUrl = await readFileAsDataUrl(file);
-      setFileName(file.name);
-      setFileUrl(dataUrl);
-      setImageUrl(file.type.startsWith("image/") ? dataUrl : null);
-      setCapturedImage(null);
-    } catch (error) {
+    if (file.size > MAX_NEWS_ASSET_MB * 1024 * 1024) {
       toast.error(
-        error instanceof Error ? error.message : "File could not be prepared",
+        `Attachment is too large. Please keep it under ${MAX_NEWS_ASSET_MB} MB.`,
       );
+      setFileName("");
+      setSelectedFile(null);
+      setImagePreviewUrl(null);
+      return;
     }
+
+    setFileName(file.name);
+    setSelectedFile(file);
+    setImagePreviewUrl(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
+    setCapturedImage(null);
   }
 
   async function startCamera() {
@@ -125,20 +135,32 @@ function NewsPortalForm() {
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const dataUrl = canvas.toDataURL("image/png");
     setCapturedImage(dataUrl);
-    setImageUrl(dataUrl);
-    setFileUrl(dataUrl);
-    setFileName("camera_capture.png");
+    const blob = await new Promise<Blob | null>((resolve) =>
+      canvas.toBlob((value) => resolve(value), "image/png", 0.92),
+    );
+    if (!blob) {
+      toast.error("Captured image could not be prepared");
+      return;
+    }
+    const file = new File([blob], "camera_capture.png", {
+      type: "image/png",
+    });
+    setSelectedFile(file);
+    setFileName(file.name);
     stopCamera();
   }
 
   function resetForm() {
+    if (imagePreviewUrl) {
+      URL.revokeObjectURL(imagePreviewUrl);
+    }
     setTitle("");
     setContent("");
     setActiveTab("attach");
     setAllowDownload(true);
     setFileName("");
-    setFileUrl(null);
-    setImageUrl(null);
+    setSelectedFile(null);
+    setImagePreviewUrl(null);
     setPollQuestion("");
     setPollOptions(["", ""]);
     setCapturedImage(null);
@@ -153,15 +175,24 @@ function NewsPortalForm() {
       return;
     }
 
-    const result = await (async () => {
-      setPublishing(true);
-      return apiCreateAnnouncement(
+    setPublishing(true);
+    try {
+      let uploadedRef: string | null = null;
+      if (selectedFile) {
+        const uploaded = await apiUploadAnnouncementAssetFile(selectedFile);
+        uploadedRef = `LOCAL:${uploaded.filename}`;
+      }
+
+      const result = await apiCreateAnnouncement(
         {
           title,
           content,
           category,
-          imageUrl,
-          fileUrl,
+          imageUrl:
+            selectedFile && selectedFile.type.startsWith("image/")
+              ? uploadedRef
+              : null,
+          fileUrl: uploadedRef,
           attachmentName: fileName || null,
           allowDownload,
           pollQuestion,
@@ -173,18 +204,17 @@ function NewsPortalForm() {
           department: user.department,
         },
       );
-    })();
+      if ("err" in result) {
+        toast.error(result.err);
+        return;
+      }
 
-    setPublishing(false);
-
-    if ("err" in result) {
-      toast.error(result.err);
-      return;
+      await apiLogAction(user.fullname, "CREATE_ANNOUNCEMENT", title.trim(), "-");
+      toast.success("News posted successfully");
+      resetForm();
+    } finally {
+      setPublishing(false);
     }
-
-    await apiLogAction(user.fullname, "CREATE_ANNOUNCEMENT", title.trim(), "-");
-    toast.success("News posted successfully");
-    resetForm();
   }
 
   return (
@@ -310,6 +340,11 @@ function NewsPortalForm() {
                       <span className="font-semibold text-foreground">
                         {fileName}
                       </span>
+                      {selectedFile ? (
+                        <span className="ml-2 text-xs">
+                          ({formatFileSize(selectedFile.size)})
+                        </span>
+                      ) : null}
                     </div>
                   )}
 
