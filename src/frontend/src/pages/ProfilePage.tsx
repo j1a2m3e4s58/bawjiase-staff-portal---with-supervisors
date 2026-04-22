@@ -588,12 +588,12 @@ export default function ProfilePage() {
 
             {/* Save / remove buttons */}
             {isEditing && (
-              <div className="flex flex-col gap-3 sm:flex-row">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {(hasExistingProfilePhoto || removePhoto) && (
                   <Button
                     type="button"
                     variant="outline"
-                    className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    className="min-w-0 gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={handleRemovePhoto}
                     data-ocid="profile.photo.remove_button"
                   >
@@ -602,23 +602,23 @@ export default function ProfilePage() {
                   </Button>
                 )}
                 <Button
-                type="button"
-                onClick={handleSave}
-                disabled={isSaving}
-                className="w-full gap-2 glass-button text-primary-foreground"
-                data-ocid="profile.save_button"
-              >
-                {isSaving ? (
-                  <>
-                    <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                    Savingâ€¦
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4" />
-                    Save Changes
-                  </>
-                )}
+                  type="button"
+                  onClick={handleSave}
+                  disabled={isSaving}
+                  className="min-w-0 gap-2 glass-button text-primary-foreground"
+                  data-ocid="profile.save_button"
+                >
+                  {isSaving ? (
+                    <>
+                      <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                      Saving…
+                    </>
+                  ) : (
+                    <>
+                      <Save className="h-4 w-4" />
+                      Save Changes
+                    </>
+                  )}
                 </Button>
               </div>
             )}
