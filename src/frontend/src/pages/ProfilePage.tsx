@@ -586,9 +586,22 @@ export default function ProfilePage() {
               </div>
             )}
 
-            {/* Save button */}
+            {/* Save / remove buttons */}
             {isEditing && (
-              <Button
+              <div className="flex flex-col gap-3 sm:flex-row">
+                {(hasExistingProfilePhoto || removePhoto) && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                    onClick={handleRemovePhoto}
+                    data-ocid="profile.photo.remove_button"
+                  >
+                    <ImageOff className="h-4 w-4" />
+                    Remove Photo
+                  </Button>
+                )}
+                <Button
                 type="button"
                 onClick={handleSave}
                 disabled={isSaving}
@@ -606,7 +619,8 @@ export default function ProfilePage() {
                     Save Changes
                   </>
                 )}
-              </Button>
+                </Button>
+              </div>
             )}
           </div>
         </PortalCard>
