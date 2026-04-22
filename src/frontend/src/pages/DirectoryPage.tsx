@@ -42,11 +42,12 @@ import {
   UserX,
   Users,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const IT_ACCESS_CODE = "BCB-IT-2026";
-const DIRECTORY_REFRESH_MS = 1000;
+const DIRECTORY_REFRESH_MS = 15000;
+const DIRECTORY_PAGE_SIZE = 24;
 
 const ROLE_LABELS: Record<User["role"], string> = {
   SuperAdmin: "Super Admin",
@@ -448,9 +449,11 @@ export default function DirectoryPage() {
   const [staff, setStaff] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [editTarget, setEditTarget] = useState<User | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<User | null>(null);
   const [archiving, setArchiving] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(DIRECTORY_PAGE_SIZE);
 
   useEffect(() => {
     let mounted = true;
@@ -465,7 +468,9 @@ export default function DirectoryPage() {
     void loadStaff();
 
     const intervalId = window.setInterval(() => {
-      void loadStaff();
+      if (document.visibilityState === "visible") {
+        void loadStaff();
+      }
     }, DIRECTORY_REFRESH_MS);
 
     const handleFocus = () => {
@@ -497,8 +502,12 @@ export default function DirectoryPage() {
     };
   }, []);
 
+  useEffect(() => {
+    setVisibleCount(DIRECTORY_PAGE_SIZE);
+  }, [deferredSearch]);
+
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = deferredSearch.trim().toLowerCase();
     if (!q) return staff;
     return staff.filter(
       (user) =>
@@ -509,17 +518,17 @@ export default function DirectoryPage() {
         user.email.toLowerCase().includes(q) ||
         user.phone.toLowerCase().includes(q),
     );
-  }, [staff, search]);
+  }, [staff, deferredSearch]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, User[]>();
-    for (const user of filtered) {
+    for (const user of filtered.slice(0, visibleCount)) {
       const department = user.department || "Other";
       if (!map.has(department)) map.set(department, []);
       map.get(department)!.push(user);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [filtered]);
+  }, [filtered, visibleCount]);
 
   function handleSaved(updated: User) {
     setStaff((prev) =>
@@ -657,6 +666,20 @@ export default function DirectoryPage() {
                 ))}
               </div>
             )}
+            {filtered.length > visibleCount ? (
+              <div className="flex justify-center pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setVisibleCount((current) => current + DIRECTORY_PAGE_SIZE)
+                  }
+                  data-ocid="directory.load_more_button"
+                >
+                  Load more staff
+                </Button>
+              </div>
+            ) : null}
           </>
         )}
       </div>

@@ -105,14 +105,23 @@ export default function TrainingAdminPage() {
       void loadOverview();
     };
     const intervalId = window.setInterval(() => {
-      void loadOverview();
+      if (document.visibilityState === "visible") {
+        void loadOverview();
+      }
     }, 10000);
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void loadOverview();
+      }
+    };
     window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
       cancelled = true;
       window.clearInterval(intervalId);
       window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
   }, []);
 

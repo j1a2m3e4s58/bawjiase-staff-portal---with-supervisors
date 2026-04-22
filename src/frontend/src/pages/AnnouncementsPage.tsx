@@ -43,8 +43,10 @@ import {
   Trash2,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+const ANNOUNCEMENTS_PAGE_SIZE = 12;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -532,9 +534,11 @@ export default function AnnouncementsPage() {
   );
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const deferredSearch = useDeferredValue(search);
   const [filterCategory, setFilterCategory] = useState("all");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AnnouncementWithPoll | null>(null);
+  const [visibleCount, setVisibleCount] = useState(ANNOUNCEMENTS_PAGE_SIZE);
   const isAdmin =
     user?.department?.toUpperCase() === "IT" ||
     user?.department?.toUpperCase() === "HR";
@@ -546,6 +550,10 @@ export default function AnnouncementsPage() {
       setLoading(false);
     });
   }, [user]);
+
+  useEffect(() => {
+    setVisibleCount(ANNOUNCEMENTS_PAGE_SIZE);
+  }, [deferredSearch, filterCategory]);
 
   async function handleDismiss(id: number) {
     if (!user) return;
@@ -620,16 +628,26 @@ export default function AnnouncementsPage() {
     }
   }
 
-  const filtered = announcements.filter((a) => {
+  const filtered = useMemo(() => announcements.filter((a) => {
     if (a.isTrashed) return false;
     const cat = getAnnouncementCategory(a);
     if (filterCategory !== "all" && cat !== filterCategory) return false;
-    if (search && !a.title.toLowerCase().includes(search.toLowerCase()))
+    if (
+      deferredSearch &&
+      !a.title.toLowerCase().includes(deferredSearch.toLowerCase())
+    )
       return false;
     return true;
-  });
+  }), [announcements, deferredSearch, filterCategory]);
 
-  const grouped = groupByDate(filtered);
+  const visibleAnnouncements = useMemo(
+    () => filtered.slice(0, visibleCount),
+    [filtered, visibleCount],
+  );
+  const grouped = useMemo(
+    () => groupByDate(visibleAnnouncements),
+    [visibleAnnouncements],
+  );
   const dateGroups = Object.keys(grouped);
 
   return (
@@ -748,6 +766,20 @@ export default function AnnouncementsPage() {
                 </div>
               </div>
             ))}
+            {filtered.length > visibleAnnouncements.length ? (
+              <div className="flex justify-center pt-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setVisibleCount((current) => current + ANNOUNCEMENTS_PAGE_SIZE)
+                  }
+                  data-ocid="announcements.load_more_button"
+                >
+                  Load more announcements
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
 

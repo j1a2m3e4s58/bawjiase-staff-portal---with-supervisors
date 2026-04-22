@@ -27,6 +27,8 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
+const NOTIFICATIONS_PAGE_SIZE = 50;
+
 function kindIcon(kind: NotificationKind) {
   if (kind === "announcement") return <Megaphone className="h-4 w-4" />;
   if (kind === "training") return <BookOpen className="h-4 w-4" />;
@@ -171,6 +173,7 @@ export default function NotificationsPage() {
     number | null
   >(null);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(NOTIFICATIONS_PAGE_SIZE);
 
   useEffect(() => {
     if (!user) return;
@@ -180,6 +183,10 @@ export default function NotificationsPage() {
     });
   }, [user]);
 
+  useEffect(() => {
+    setVisibleCount(NOTIFICATIONS_PAGE_SIZE);
+  }, [notifications.length]);
+
   const unreadCount = useMemo(
     () => notifications.filter((n) => !n.isRead).length,
     [notifications],
@@ -187,7 +194,7 @@ export default function NotificationsPage() {
 
   const grouped = useMemo(() => {
     const map: Record<string, Notification[]> = {};
-    for (const n of notifications) {
+    for (const n of notifications.slice(0, visibleCount)) {
       const label = groupLabel(n.createdAt);
       if (!map[label]) map[label] = [];
       map[label].push(n);
@@ -350,6 +357,20 @@ export default function NotificationsPage() {
                 </div>
               </section>
             ))}
+            {notifications.length > visibleCount ? (
+              <div className="flex justify-center pt-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() =>
+                    setVisibleCount((current) => current + NOTIFICATIONS_PAGE_SIZE)
+                  }
+                  data-ocid="notifications.load_more_button"
+                >
+                  Load more notifications
+                </Button>
+              </div>
+            ) : null}
           </div>
         )}
       </div>

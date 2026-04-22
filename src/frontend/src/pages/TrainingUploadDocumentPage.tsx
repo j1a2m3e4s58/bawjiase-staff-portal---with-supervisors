@@ -29,6 +29,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
+const MAX_DOCUMENT_UPLOAD_MB = 100;
+
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function TrainingUploadDocumentPage() {
@@ -55,6 +57,13 @@ export default function TrainingUploadDocumentPage() {
       : localFile !== null) &&
     (visibility === "General" || department.length > 0);
 
+  function formatFileSize(bytes: number): string {
+    if (bytes >= 1024 * 1024 * 1024) {
+      return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+    }
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  }
+
   function getFileType(file: File): string {
     if (file.type) return file.type;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
@@ -73,6 +82,16 @@ export default function TrainingUploadDocumentPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValid || submitting) return;
+    if (
+      storageType === "Local" &&
+      localFile &&
+      localFile.size > MAX_DOCUMENT_UPLOAD_MB * 1024 * 1024
+    ) {
+      toast.error(
+        `Document is too large. Please keep uploads under ${MAX_DOCUMENT_UPLOAD_MB} MB.`,
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       const fileUrl =
@@ -237,9 +256,14 @@ export default function TrainingUploadDocumentPage() {
                       >
                         <Upload className="h-8 w-8 text-muted-foreground" />
                         {localFile ? (
-                          <span className="text-sm font-medium text-secondary">
-                            {localFile.name}
-                          </span>
+                          <div className="text-center">
+                            <span className="text-sm font-medium text-secondary">
+                              {localFile.name}
+                            </span>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {formatFileSize(localFile.size)}
+                            </div>
+                          </div>
                         ) : (
                           <>
                             <span className="text-sm font-medium text-foreground">

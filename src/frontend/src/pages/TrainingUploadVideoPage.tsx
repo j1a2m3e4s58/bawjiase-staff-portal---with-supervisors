@@ -31,6 +31,8 @@ import {
 import { useState } from "react";
 import { toast } from "sonner";
 
+const MAX_VIDEO_UPLOAD_MB = 1024;
+
 // ── Helper ────────────────────────────────────────────────────────────────────
 
 function extractDriveId(input: string): string {
@@ -38,6 +40,13 @@ function extractDriveId(input: string): string {
     input.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) ??
     input.match(/[?&]id=([a-zA-Z0-9_-]+)/);
   return match?.[1] ?? input.trim();
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024 * 1024) {
+    return `${(bytes / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+  }
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 // ── Page ──────────────────────────────────────────────────────────────────────
@@ -68,6 +77,16 @@ export default function TrainingUploadVideoPage() {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!isValid || submitting) return;
+    if (
+      storageType === "Local" &&
+      localFile &&
+      localFile.size > MAX_VIDEO_UPLOAD_MB * 1024 * 1024
+    ) {
+      toast.error(
+        `Video is too large. Please keep uploads under ${MAX_VIDEO_UPLOAD_MB} MB.`,
+      );
+      return;
+    }
     setSubmitting(true);
     try {
       const videoUrl =
@@ -241,9 +260,14 @@ export default function TrainingUploadVideoPage() {
                       >
                         <Upload className="h-8 w-8 text-muted-foreground" />
                         {localFile ? (
-                          <span className="text-sm font-medium text-secondary">
-                            {localFile.name}
-                          </span>
+                          <div className="text-center">
+                            <span className="text-sm font-medium text-secondary">
+                              {localFile.name}
+                            </span>
+                            <div className="text-xs text-muted-foreground mt-1">
+                              {formatFileSize(localFile.size)}
+                            </div>
+                          </div>
                         ) : (
                           <>
                             <span className="text-sm font-medium text-foreground">

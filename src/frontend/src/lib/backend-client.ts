@@ -2396,20 +2396,28 @@ export async function apiUpdateTrainingProgress(
   videoId: number,
   progressPercent: number,
 ): Promise<void> {
-  await delay(100);
   const user = currentTrainingUser();
   if (!user) return;
   try {
-    await postMailApiJson(`/content/training/videos/${videoId}/progress`, {
+    const payload = await postMailApiJson(`/content/training/videos/${videoId}/progress`, {
       progressPercent,
     });
-    const videosPayload = await getMailApiJson("/content/training/videos");
-    const sharedItems = Array.isArray(videosPayload.videos)
-      ? (videosPayload.videos as Array<Record<string, unknown>>).map(
-          deserializeTrainingVideo,
-        )
-      : [];
-    replaceSharedTrainingVideos(sharedItems);
+    const raw = payload.progress as Record<string, unknown> | undefined;
+    const nextPercent = Number(raw?.progressPercent ?? progressPercent);
+    const isComplete = Boolean(raw?.isComplete ?? nextPercent >= 98);
+    _videoProgress[videoProgressKey(user.id, videoId)] = {
+      videoId,
+      progressPercent: nextPercent,
+      isComplete,
+      lastWatched: contentBigInt(raw?.lastWatched) || BigInt(Date.now()),
+    };
+    const watchedUserIds = new Set(
+      Object.entries(_videoProgress)
+        .filter(([, item]) => item.videoId === videoId && item.progressPercent > 0)
+        .map(([key]) => key.split("-").slice(0, -1).join("-")),
+    );
+    const video = _trainingVideos.find((item) => item.id === videoId);
+    if (video) video.viewCount = watchedUserIds.size;
     return;
   } catch {
     // Fall back to local state below.
@@ -2553,18 +2561,20 @@ export async function apiUploadTrainingDocument(
 }
 
 export async function apiMarkDocumentOpened(id: number): Promise<void> {
-  await delay(100);
   const user = currentTrainingUser();
   if (!user) return;
   try {
-    await postMailApiJson(`/content/training/documents/${id}/open`, {});
-    const documentsPayload = await getMailApiJson("/content/training/documents");
-    const sharedItems = Array.isArray(documentsPayload.documents)
-      ? (documentsPayload.documents as Array<Record<string, unknown>>).map(
-          deserializeTrainingDocument,
-        )
-      : [];
-    replaceSharedTrainingDocuments(sharedItems);
+    const payload = await postMailApiJson(`/content/training/documents/${id}/open`, {});
+    const raw = payload.state as Record<string, unknown> | undefined;
+    const openedAt =
+      contentBigInt(raw?.openedAt) || BigInt(Date.now());
+    _documentOpens[documentOpenKey(user.id, id)] = openedAt;
+    const openedUserIds = new Set(
+      Object.keys(_documentOpens)
+        .filter((key) => key.endsWith(`-${id}`)),
+    );
+    const doc = _trainingDocuments.find((item) => item.id === id);
+    if (doc) doc.downloadCount = openedUserIds.size;
     return;
   } catch {
     // Fall back to local state below.
@@ -3244,5 +3254,6 @@ export async function apiDeleteAuditLogs(
 // ── Util ──────────────────────────────────────────────────────────────────────
 
 function delay(ms: number) {
-  return new Promise((r) => setTimeout(r, ms));
+  void ms;
+  return Promise.resolve();
 }
