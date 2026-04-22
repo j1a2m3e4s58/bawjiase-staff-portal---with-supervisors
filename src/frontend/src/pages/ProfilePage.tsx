@@ -259,8 +259,10 @@ export default function ProfilePage() {
       } else {
         toast.error(result.err ?? "Failed to update profile");
       }
-    } catch {
-      toast.error("An unexpected error occurred");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Profile could not be updated",
+      );
     } finally {
       setIsSaving(false);
     }

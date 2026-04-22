@@ -1312,6 +1312,23 @@ def save_uploaded_media(file_storage, kind: str) -> dict:
     ext = os.path.splitext(original_name)[1].lower()
     if kind == "video":
         allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    elif kind == "profile":
+        allowed = {".jpg", ".jpeg", ".png", ".webp", ".gif"}
+    elif kind == "announcement":
+        allowed = {
+            ".jpg",
+            ".jpeg",
+            ".png",
+            ".webp",
+            ".gif",
+            ".pdf",
+            ".doc",
+            ".docx",
+            ".xls",
+            ".xlsx",
+            ".ppt",
+            ".pptx",
+        }
     else:
         allowed = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
     if ext not in allowed:
