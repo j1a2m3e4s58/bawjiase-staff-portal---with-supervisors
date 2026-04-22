@@ -63,16 +63,57 @@ function VideoViewer({
   const videoRef = useRef<HTMLVideoElement>(null);
   const lastReportRef = useRef(0);
   const completedRef = useRef(false);
+  const highestAllowedTimeRef = useRef(0);
+  const isGuardSeekRef = useRef(false);
+  const initialSeekAppliedRef = useRef(false);
+  const lastKnownTimeRef = useRef(0);
 
   useEffect(() => {
-    const element = videoRef.current;
-    if (!element || initialProgress <= 0 || !element.duration) return;
-    element.currentTime = (initialProgress / 100) * element.duration;
+    lastReportRef.current = initialProgress;
+    completedRef.current = initialProgress >= 98;
+    highestAllowedTimeRef.current = 0;
+    isGuardSeekRef.current = false;
+    initialSeekAppliedRef.current = false;
+    lastKnownTimeRef.current = 0;
   }, [initialProgress]);
+
+  const seekToAllowedTime = useCallback((targetTime: number) => {
+    const element = videoRef.current;
+    if (!element) return;
+    isGuardSeekRef.current = true;
+    element.currentTime = Math.max(0, targetTime);
+    window.setTimeout(() => {
+      isGuardSeekRef.current = false;
+    }, 120);
+  }, []);
+
+  const handleLoadedMetadata = useCallback(() => {
+    const element = videoRef.current;
+    if (!element || !element.duration || initialSeekAppliedRef.current) return;
+    const resumeTime = Math.min(
+      (initialProgress / 100) * element.duration,
+      Math.max(element.duration - 1, 0),
+    );
+    highestAllowedTimeRef.current = resumeTime;
+    lastKnownTimeRef.current = resumeTime;
+    initialSeekAppliedRef.current = true;
+    if (resumeTime > 0.5) {
+      seekToAllowedTime(resumeTime);
+    }
+  }, [initialProgress, seekToAllowedTime]);
 
   const handleTimeUpdate = useCallback(() => {
     const element = videoRef.current;
     if (!element || !element.duration) return;
+    if (isGuardSeekRef.current) {
+      lastKnownTimeRef.current = element.currentTime;
+      return;
+    }
+    highestAllowedTimeRef.current = Math.max(
+      highestAllowedTimeRef.current,
+      element.currentTime,
+    );
+    lastKnownTimeRef.current = element.currentTime;
     const pct = (element.currentTime / element.duration) * 100;
     if (pct >= 98 && !completedRef.current) {
       completedRef.current = true;
@@ -83,6 +124,18 @@ function VideoViewer({
       onProgressUpdate(pct);
     }
   }, [onComplete, onProgressUpdate]);
+
+  const handleSeeking = useCallback(() => {
+    const element = videoRef.current;
+    if (!element || !element.duration || isGuardSeekRef.current) return;
+    const allowedTime = highestAllowedTimeRef.current;
+    const tolerance = 1.25;
+    if (element.currentTime > allowedTime + tolerance) {
+      seekToAllowedTime(Math.max(allowedTime, lastKnownTimeRef.current));
+      return;
+    }
+    lastKnownTimeRef.current = element.currentTime;
+  }, [seekToAllowedTime]);
 
   if (isDriveVideo(video)) {
     return (
@@ -106,6 +159,8 @@ function VideoViewer({
         controls
         preload="metadata"
         className="aspect-video w-full"
+        onLoadedMetadata={handleLoadedMetadata}
+        onSeeking={handleSeeking}
         onTimeUpdate={handleTimeUpdate}
       >
         <track kind="captions" />
