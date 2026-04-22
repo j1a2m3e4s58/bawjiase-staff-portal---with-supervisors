@@ -224,7 +224,7 @@ export interface UpdateProfileRequest {
   position?: string;
   department?: string;
   branch?: string;
-  imageFile?: string;
+  imageFile?: string | null;
 }
 
 export interface UpdateStaffRequest extends UpdateProfileRequest {

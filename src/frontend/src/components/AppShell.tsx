@@ -256,11 +256,9 @@ function Sidebar({ collapsed = false }: SidebarProps) {
                 {userImage ? (
                   <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
                 ) : null}
-                {!userImage ? (
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                    {initials}
-                  </AvatarFallback>
-                ) : null}
+                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
               {!collapsed && (
                 <div className="min-w-0 flex-1">
@@ -499,11 +497,9 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
                 {userImage ? (
                   <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
                 ) : null}
-                {!userImage ? (
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                    {initials}
-                  </AvatarFallback>
-                ) : null}
+                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                  {initials}
+                </AvatarFallback>
               </Avatar>
               {!isMobile && (
                 <span className="text-xs font-medium text-foreground max-w-[120px] truncate pr-1">
@@ -641,11 +637,9 @@ function DesktopTopNav() {
                   {userImage ? (
                     <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
                   ) : null}
-                  {!userImage ? (
-                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                      {initials}
-                    </AvatarFallback>
-                  ) : null}
+                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                    {initials}
+                  </AvatarFallback>
                 </Avatar>
                 <div className="text-left min-w-0">
                   <div className="text-xs font-bold text-foreground max-w-[84px] truncate">

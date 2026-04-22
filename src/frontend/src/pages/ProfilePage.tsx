@@ -31,6 +31,7 @@ import {
   Calendar,
   Camera,
   CheckCircle2,
+  ImageOff,
   LogOut,
   Mail,
   MapPin,
@@ -100,22 +101,23 @@ export default function ProfilePage() {
   const { user, updateUser, logout } = useAuth();
   const router = useRouter();
 
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(!user);
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
   // Form state
-  const [fullname, setFullname] = useState("");
-  const [phone, setPhone] = useState("");
-  const [department, setDepartment] = useState("");
-  const [branch, setBranch] = useState("");
+  const [fullname, setFullname] = useState(() => user?.fullname ?? "");
+  const [phone, setPhone] = useState(() => user?.phone ?? "");
+  const [department, setDepartment] = useState(() => user?.department ?? "");
+  const [branch, setBranch] = useState(() => user?.branch ?? "");
   const [itCode, setItCode] = useState("");
   const [itCodeError, setItCodeError] = useState("");
 
   // Photo state
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [removePhoto, setRemovePhoto] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isPrivileged = user?.role === "SuperAdmin" || user?.role === "HRAdmin";
@@ -188,6 +190,7 @@ export default function ProfilePage() {
     }
     setPhotoFile(file);
     setPhotoPreview(URL.createObjectURL(file));
+    setRemovePhoto(false);
   }
 
   function handleCancelEdit() {
@@ -203,7 +206,17 @@ export default function ProfilePage() {
     }
     setPhotoPreview(null);
     setPhotoFile(null);
+    setRemovePhoto(false);
     setIsEditing(false);
+  }
+
+  function handleRemovePhoto() {
+    if (photoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(photoPreview);
+    }
+    setPhotoPreview(null);
+    setPhotoFile(null);
+    setRemovePhoto(true);
   }
 
   async function handleSave() {
@@ -242,6 +255,8 @@ export default function ProfilePage() {
       if (photoFile) {
         const uploaded = await apiUploadProfilePhotoFile(photoFile);
         req.imageFile = `LOCAL:${uploaded.filename}`;
+      } else if (removePhoto) {
+        req.imageFile = null;
       }
 
       const result = await apiUpdateMyProfile(user.id, req);
@@ -256,6 +271,7 @@ export default function ProfilePage() {
           URL.revokeObjectURL(photoPreview);
         }
         setPhotoPreview(null);
+        setRemovePhoto(false);
       } else {
         toast.error(result.err ?? "Failed to update profile");
       }
@@ -283,7 +299,9 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const displayPhoto = photoPreview ?? resolveStoredAssetUrl(user.imageFile);
+  const displayPhoto = removePhoto
+    ? null
+    : photoPreview ?? resolveStoredAssetUrl(user.imageFile);
   const initials = getInitials(user.fullname);
 
   return (
@@ -330,6 +348,19 @@ export default function ProfilePage() {
                 onChange={handleFileChange}
                 data-ocid="profile.photo.input"
               />
+              {isEditing && (displayPhoto || user.imageFile) ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-3 w-full gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                  onClick={handleRemovePhoto}
+                  data-ocid="profile.photo.remove_button"
+                >
+                  <ImageOff className="h-4 w-4" />
+                  Remove Photo
+                </Button>
+              ) : null}
             </div>
 
             {/* Info */}
