@@ -1475,6 +1475,29 @@ def mark_all_notifications_read():
     return jsonify({"ok": True})
 
 
+@app.route("/api/notifications/<int:item_id>/delete", methods=["POST", "OPTIONS"])
+def delete_notification(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    items = load_json_list_store(NOTIFICATIONS_STORE_PATH)
+    filtered = [
+        item
+        for item in items
+        if not (
+            int(item.get("id", 0) or 0) == item_id
+            and str(item.get("userId", "")).strip() == auth_user["id"]
+        )
+    ]
+    if len(filtered) == len(items):
+        return jsonify({"error": "Notification not found"}), 404
+    save_json_list_store(NOTIFICATIONS_STORE_PATH, filtered)
+    return jsonify({"ok": True})
+
+
 @app.route("/api/users", methods=["GET"])
 def list_users():
     _, _, error = require_authenticated_user()

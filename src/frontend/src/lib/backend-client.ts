@@ -1625,6 +1625,21 @@ export async function apiMarkAllNotificationsRead(): Promise<void> {
   for (const n of _notifications) n.isRead = true;
 }
 
+export async function apiDeleteNotification(id: number): Promise<boolean> {
+  await delay(150);
+  try {
+    await postMailApi(`/notifications/${id}/delete`, {});
+  } catch {
+    // Fall back to local state below.
+  }
+  const idx = _notifications.findIndex((n) => n.id === id);
+  if (idx >= 0) {
+    _notifications.splice(idx, 1);
+    return true;
+  }
+  return false;
+}
+
 // ── Forms Centre ──────────────────────────────────────────────────────────────
 
 let _forms: PortalForm[] = [

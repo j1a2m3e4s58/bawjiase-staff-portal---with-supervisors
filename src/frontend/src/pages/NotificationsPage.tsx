@@ -1,8 +1,10 @@
 import { AppShell } from "@/components/AppShell";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/SkeletonCard";
 import { Button } from "@/components/ui/button";
 import {
+  apiDeleteNotification,
   apiGetNotifications,
   apiMarkAllNotificationsRead,
   apiMarkNotificationRead,
@@ -14,15 +16,16 @@ import {
   BellOff,
   BookOpen,
   CheckCheck,
+  CheckSquare,
   Megaphone,
   Settings,
   ShieldAlert,
+  Square,
+  Trash2,
   Wrench,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
 
 function kindIcon(kind: NotificationKind) {
   if (kind === "announcement") return <Megaphone className="h-4 w-4" />;
@@ -73,18 +76,30 @@ function groupLabel(ts: bigint): string {
   });
 }
 
-// ── Notification Item ──────────────────────────────────────────────────────────
-
 interface NotifItemProps {
   notif: Notification;
   index: number;
   onRead: (id: number) => void;
+  selectionMode: boolean;
+  isSelected: boolean;
+  onSelect: (id: number) => void;
 }
 
-function NotifItem({ notif, index, onRead }: NotifItemProps) {
+function NotifItem({
+  notif,
+  index,
+  onRead,
+  selectionMode,
+  isSelected,
+  onSelect,
+}: NotifItemProps) {
   const navigate = useNavigate();
 
   const handleClick = async () => {
+    if (selectionMode) {
+      onSelect(notif.id);
+      return;
+    }
     if (!notif.isRead) {
       onRead(notif.id);
       await apiMarkNotificationRead(notif.id);
@@ -105,18 +120,28 @@ function NotifItem({ notif, index, onRead }: NotifItemProps) {
       }`}
       data-ocid={`notifications.item.${index}`}
     >
-      {/* Kind icon */}
+      {selectionMode ? (
+        <div className="flex-shrink-0 pt-2 text-muted-foreground">
+          {isSelected ? (
+            <CheckSquare className="h-4 w-4 text-primary" />
+          ) : (
+            <Square className="h-4 w-4" />
+          )}
+        </div>
+      ) : null}
+
       <div
         className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center mt-0.5 ${kindColor(notif.kind)}`}
       >
         {kindIcon(notif.kind)}
       </div>
 
-      {/* Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <span
-            className={`text-sm leading-snug ${notif.isRead ? "text-foreground/80" : "font-semibold text-foreground"}`}
+            className={`text-sm leading-snug ${
+              notif.isRead ? "text-foreground/80" : "font-semibold text-foreground"
+            }`}
           >
             {notif.title}
           </span>
@@ -129,21 +154,23 @@ function NotifItem({ notif, index, onRead }: NotifItemProps) {
         </p>
       </div>
 
-      {/* Unread dot */}
-      {!notif.isRead && (
+      {!notif.isRead && !selectionMode ? (
         <div className="flex-shrink-0 w-2 h-2 rounded-full bg-primary mt-2" />
-      )}
+      ) : null}
     </button>
   );
 }
-
-// ── NotificationsPage ──────────────────────────────────────────────────────────
 
 export default function NotificationsPage() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedNotificationId, setSelectedNotificationId] = useState<
+    number | null
+  >(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
 
   useEffect(() => {
     if (!user) return;
@@ -182,13 +209,28 @@ export default function NotificationsPage() {
     setIsMarkingAll(false);
   };
 
+  const handleDeleteSelected = async () => {
+    if (selectedNotificationId === null) return;
+    const ok = await apiDeleteNotification(selectedNotificationId);
+    if (!ok) {
+      toast.error("Notification could not be deleted");
+      return;
+    }
+    setNotifications((prev) =>
+      prev.filter((item) => item.id !== selectedNotificationId),
+    );
+    setDeleteDialogOpen(false);
+    setSelectedNotificationId(null);
+    setSelectionMode(false);
+    toast.success("Notification deleted");
+  };
+
   return (
     <AppShell>
       <div
         className="max-w-2xl mx-auto space-y-5"
         data-ocid="notifications.page"
       >
-        {/* Header */}
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="font-display text-2xl font-bold text-foreground">
@@ -207,23 +249,65 @@ export default function NotificationsPage() {
               </p>
             )}
           </div>
-          {unreadCount > 0 && (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="gap-2"
-              onClick={handleMarkAllRead}
-              disabled={isMarkingAll}
-              data-ocid="notifications.mark_all_button"
-            >
-              <CheckCheck className="h-4 w-4" />
-              {isMarkingAll ? "Marking…" : "Mark all read"}
-            </Button>
-          )}
+
+          <div className="flex items-center gap-2">
+            {notifications.length > 0 ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={() => {
+                  setSelectionMode((prev) => !prev);
+                  setSelectedNotificationId(null);
+                }}
+                data-ocid="notifications.select_button"
+              >
+                {selectionMode ? (
+                  <>
+                    <Square className="h-4 w-4" />
+                    Cancel
+                  </>
+                ) : (
+                  <>
+                    <CheckSquare className="h-4 w-4" />
+                    Select
+                  </>
+                )}
+              </Button>
+            ) : null}
+
+            {selectionMode && selectedNotificationId !== null ? (
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                className="gap-2"
+                onClick={() => setDeleteDialogOpen(true)}
+                data-ocid="notifications.delete_selected_button"
+              >
+                <Trash2 className="h-4 w-4" />
+                Delete
+              </Button>
+            ) : null}
+
+            {unreadCount > 0 && !selectionMode ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                onClick={handleMarkAllRead}
+                disabled={isMarkingAll}
+                data-ocid="notifications.mark_all_button"
+              >
+                <CheckCheck className="h-4 w-4" />
+                {isMarkingAll ? "Marking..." : "Mark all read"}
+              </Button>
+            ) : null}
+          </div>
         </div>
 
-        {/* Content */}
         {isLoading ? (
           <div
             className="glass-card rounded-xl divide-y divide-border/30"
@@ -254,6 +338,13 @@ export default function NotificationsPage() {
                       notif={notif}
                       index={i + 1}
                       onRead={handleMarkRead}
+                      selectionMode={selectionMode}
+                      isSelected={selectedNotificationId === notif.id}
+                      onSelect={(id) =>
+                        setSelectedNotificationId((current) =>
+                          current === id ? null : id,
+                        )
+                      }
                     />
                   ))}
                 </div>
@@ -262,6 +353,16 @@ export default function NotificationsPage() {
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+        title="Delete notification?"
+        description="This will remove only the selected notification from your own list."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={handleDeleteSelected}
+      />
     </AppShell>
   );
 }
