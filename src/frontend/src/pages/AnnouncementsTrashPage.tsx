@@ -141,10 +141,26 @@ export default function AnnouncementsTrashPage() {
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
 
   useEffect(() => {
-    apiGetTrashedAnnouncements().then((data) => {
-      setTrashed(data);
-      setLoading(false);
-    });
+    let cancelled = false;
+
+    async function loadTrash() {
+      try {
+        const data = await apiGetTrashedAnnouncements();
+        if (cancelled) return;
+        setTrashed(data);
+      } catch {
+        if (cancelled) return;
+        setTrashed([]);
+        toast.error("Recycle Bin could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadTrash();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   async function handleRestore(id: number) {

@@ -1235,6 +1235,20 @@ def find_user_by_local_image(filename: str) -> dict | None:
     )
 
 
+def local_filename_from_ref(value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw.startswith("LOCAL:"):
+        return ""
+    return raw.replace("LOCAL:", "", 1).strip()
+
+
+def cleanup_local_announcement_assets(item: dict) -> None:
+    for key in ("imageUrl", "fileUrl"):
+        filename = local_filename_from_ref(item.get(key))
+        if filename:
+            remove_uploaded_file_if_unused(filename)
+
+
 def remove_uploaded_file_if_unused(filename: str) -> None:
     if not filename:
         return
@@ -2096,9 +2110,15 @@ def update_shared_announcement(item_id: int):
         payload = normalize_announcement_payload(data, actor, announcement)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    previous_image = str(announcement.get("imageUrl") or "").strip()
+    previous_file = str(announcement.get("fileUrl") or "").strip()
     announcement.update(payload)
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    if previous_image.startswith("LOCAL:") and previous_image != str(announcement.get("imageUrl") or "").strip():
+        remove_uploaded_file_if_unused(previous_image.replace("LOCAL:", "", 1).strip())
+    if previous_file.startswith("LOCAL:") and previous_file != str(announcement.get("fileUrl") or "").strip():
+        remove_uploaded_file_if_unused(previous_file.replace("LOCAL:", "", 1).strip())
     return jsonify({"ok": True, "announcement": announcement})
 
 
@@ -2147,10 +2167,12 @@ def delete_shared_announcement(item_id: int):
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
-    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
-    if len(filtered) == len(items):
+    target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not target:
         return jsonify({"error": "Announcement not found"}), 404
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, filtered)
+    cleanup_local_announcement_assets(target)
     return jsonify({"ok": True})
 
 
@@ -2163,10 +2185,13 @@ def empty_shared_announcement_trash():
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    trashed_items = [item for item in items if bool(item.get("isTrashed", False))]
     save_json_list_store(
         ANNOUNCEMENTS_STORE_PATH,
         [item for item in items if not bool(item.get("isTrashed", False))],
     )
+    for item in trashed_items:
+        cleanup_local_announcement_assets(item)
     return jsonify({"ok": True})
 
 

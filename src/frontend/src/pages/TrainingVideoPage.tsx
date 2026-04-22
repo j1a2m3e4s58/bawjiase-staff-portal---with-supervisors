@@ -182,12 +182,31 @@ export default function TrainingVideoPage() {
   const [reminderOpen, setReminderOpen] = useState(false);
 
   useEffect(() => {
-    Promise.all([apiGetTrainingVideo(videoId), apiGetMyVideoProgress(videoId)])
-      .then(([videoData, progressData]) => {
+    let cancelled = false;
+
+    async function loadVideo() {
+      try {
+        const [videoData, progressData] = await Promise.all([
+          apiGetTrainingVideo(videoId),
+          apiGetMyVideoProgress(videoId),
+        ]);
+        if (cancelled) return;
         setVideo(videoData);
         setProgress(progressData?.progressPercent ?? 0);
-      })
-      .finally(() => setLoading(false));
+      } catch {
+        if (cancelled) return;
+        setVideo(null);
+        setProgress(0);
+        toast.error("Training video could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadVideo();
+    return () => {
+      cancelled = true;
+    };
   }, [videoId]);
 
   const completed = progress >= 98;

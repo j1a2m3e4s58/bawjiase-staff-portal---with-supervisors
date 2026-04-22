@@ -48,19 +48,41 @@ export default function TrainingDocumentPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   useEffect(() => {
-    Promise.all([
-      apiGetTrainingDocument(docId),
-      apiGetMyDocumentOpenState(docId),
-    ])
-      .then(async ([docData, state]) => {
+    let cancelled = false;
+
+    async function loadDocument() {
+      try {
+        const [docData, state] = await Promise.all([
+          apiGetTrainingDocument(docId),
+          apiGetMyDocumentOpenState(docId),
+        ]);
+        if (cancelled) return;
         setDoc(docData);
         setOpened(state.isOpened);
         if (docData && !state.isOpened) {
-          await apiMarkDocumentOpened(docId);
-          setOpened(true);
+          try {
+            await apiMarkDocumentOpened(docId);
+            if (!cancelled) setOpened(true);
+          } catch {
+            if (!cancelled) {
+              toast.error("Document open status could not be updated.");
+            }
+          }
         }
-      })
-      .finally(() => setLoading(false));
+      } catch {
+        if (cancelled) return;
+        setDoc(null);
+        setOpened(false);
+        toast.error("Training document could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadDocument();
+    return () => {
+      cancelled = true;
+    };
   }, [docId]);
 
   if (loading) {
