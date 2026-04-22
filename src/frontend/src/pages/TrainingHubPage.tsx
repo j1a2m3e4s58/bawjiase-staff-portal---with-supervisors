@@ -417,6 +417,7 @@ export default function TrainingHubPage() {
                   const progress = videoProgress[video.id] ?? 0;
                   const watched = progress > 0;
                   const completed = progress >= 98;
+                  const supportsTracking = video.storageType === "Local";
                   return (
                     <PortalCard key={video.id} className="p-0 overflow-hidden">
                       <button
@@ -448,10 +449,16 @@ export default function TrainingHubPage() {
                             }
                           >
                             {completed
-                              ? "Watched"
+                              ? supportsTracking
+                                ? "Watched"
+                                : "Acknowledged"
                               : watched
-                                ? "In progress"
-                                : "Not watched"}
+                                ? supportsTracking
+                                  ? "In progress"
+                                  : "Acknowledged"
+                                : supportsTracking
+                                  ? "Not watched"
+                                  : "Pending acknowledgement"}
                           </Badge>
                         </div>
 
@@ -477,7 +484,13 @@ export default function TrainingHubPage() {
                             <Clock3 className="h-3.5 w-3.5" />
                             {formatDate(video.uploadedAt)}
                           </div>
-                          <span>{Math.round(progress)}% complete</span>
+                          <span>
+                            {supportsTracking
+                              ? `${Math.round(progress)}% complete`
+                              : completed
+                                ? "Acknowledged"
+                                : "Awaiting acknowledgement"}
+                          </span>
                         </div>
 
                         <div className="flex gap-2">

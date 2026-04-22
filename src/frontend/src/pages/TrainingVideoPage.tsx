@@ -45,6 +45,10 @@ function isDriveVideo(video: TrainingVideo) {
   return video.storageType !== "Local";
 }
 
+function supportsPlaybackTracking(video: TrainingVideo) {
+  return video.storageType === "Local";
+}
+
 function VideoViewer({
   video,
   initialProgress,
@@ -132,6 +136,7 @@ export default function TrainingVideoPage() {
   }, [videoId]);
 
   const completed = progress >= 98;
+  const supportsTracking = !!video && supportsPlaybackTracking(video);
 
   const handleProgressUpdate = useCallback(
     async (pct: number) => {
@@ -147,10 +152,16 @@ export default function TrainingVideoPage() {
     toast.success("Training marked complete.");
   }, [videoId]);
 
+  const handleAcknowledgeDriveVideo = useCallback(async () => {
+    await apiUpdateTrainingProgress(videoId, 100);
+    setProgress(100);
+    toast.success("Training acknowledged.");
+  }, [videoId]);
+
   const viewerNote = useMemo(() => {
     if (!video) return "";
     return isDriveVideo(video)
-      ? "This video is streamed through Google Drive preview, just like the original portal flow."
+      ? "This video is streamed through Google Drive preview. Google Drive does not expose reliable playback progress, so completion here uses manual acknowledgement instead of automatic watch tracking."
       : "This local upload follows the internal viewer flow and keeps progress tracking active while you watch.";
   }, [video]);
 
@@ -229,7 +240,13 @@ export default function TrainingVideoPage() {
                         : "bg-primary/10 text-primary border-primary/20"
                     }
                   >
-                    {completed ? "Completed" : "In progress"}
+                    {completed
+                      ? supportsTracking
+                        ? "Completed"
+                        : "Acknowledged"
+                      : supportsTracking
+                        ? "In progress"
+                        : "Pending acknowledgement"}
                   </Badge>
                 </div>
 
@@ -251,14 +268,36 @@ export default function TrainingVideoPage() {
 
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-muted-foreground">
-                    <span>Your completion progress</span>
-                    <span>{Math.round(progress)}%</span>
+                    <span>
+                      {supportsTracking
+                        ? "Your completion progress"
+                        : "Acknowledgement status"}
+                    </span>
+                    <span>
+                      {supportsTracking
+                        ? `${Math.round(progress)}%`
+                        : completed
+                          ? "Acknowledged"
+                          : "Pending"}
+                    </span>
                   </div>
-                  <Progress value={progress} className="h-2.5" />
+                  <Progress
+                    value={supportsTracking ? progress : completed ? 100 : 0}
+                    className="h-2.5"
+                  />
                   {completed && (
                     <div className="flex items-center gap-1.5 text-xs font-medium text-secondary">
                       <CheckCircle2 className="h-4 w-4" />
-                      You have completed this training video.
+                      {supportsTracking
+                        ? "You have completed this training video."
+                        : "You have acknowledged this training video."}
+                    </div>
+                  )}
+                  {!supportsTracking && !completed && (
+                    <div className="rounded-lg border border-amber-400/30 bg-amber-500/10 p-3 text-xs leading-5 text-amber-700 dark:text-amber-300">
+                      Because this video is hosted on Google Drive, the portal cannot
+                      measure real playback completion. Use the acknowledgement button
+                      below after you finish watching it.
                     </div>
                   )}
                 </div>
@@ -302,6 +341,17 @@ export default function TrainingVideoPage() {
 
             <PortalCard title="Actions">
               <div className="space-y-2">
+                {!supportsTracking && (
+                  <Button
+                    type="button"
+                    className="w-full justify-start gap-2"
+                    onClick={handleAcknowledgeDriveVideo}
+                    disabled={completed}
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    {completed ? "Training acknowledged" : "Acknowledge after watching"}
+                  </Button>
+                )}
                 <Button
                   type="button"
                   variant="outline"
