@@ -74,7 +74,7 @@ export default function TrainingUploadVideoPage() {
           ? `DRIVE:${driveId}`
           : `LOCAL:${(await apiUploadTrainingVideoFile(localFile as File)).filename}`;
 
-      await apiUploadTrainingVideo({
+      const result = await apiUploadTrainingVideo({
         title: title.trim(),
         description: description.trim(),
         videoUrl,
@@ -84,6 +84,9 @@ export default function TrainingUploadVideoPage() {
         mandatory,
         allowDownload,
       });
+      if ("err" in result) {
+        throw new Error(result.err);
+      }
       toast.success("Video uploaded successfully");
       navigate({ to: "/training" });
     } catch (error) {

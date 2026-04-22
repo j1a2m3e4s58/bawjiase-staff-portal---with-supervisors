@@ -81,7 +81,7 @@ export default function TrainingUploadDocumentPage() {
       const fileType =
         storageType === "Local" && localFile ? getFileType(localFile) : "drive";
 
-      await apiUploadTrainingDocument({
+      const result = await apiUploadTrainingDocument({
         title: title.trim(),
         description: description.trim(),
         fileUrl,
@@ -92,6 +92,9 @@ export default function TrainingUploadDocumentPage() {
         mandatory,
         allowDownload,
       });
+      if ("err" in result) {
+        throw new Error(result.err);
+      }
       toast.success("Document uploaded successfully");
       navigate({ to: "/training" });
     } catch (error) {
