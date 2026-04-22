@@ -45,6 +45,7 @@ export default function TrainingUploadDocumentPage() {
   const [department, setDepartment] = useState("");
   const [mandatory, setMandatory] = useState(false);
   const [allowDownload, setAllowDownload] = useState(true);
+  const [sendExternalEmails, setSendExternalEmails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const isValid =
@@ -91,6 +92,7 @@ export default function TrainingUploadDocumentPage() {
         department: visibility === "Department" ? department : undefined,
         mandatory,
         allowDownload,
+        sendExternalEmails,
       });
       if ("err" in result) {
         throw new Error(result.err);
@@ -327,6 +329,21 @@ export default function TrainingUploadDocumentPage() {
                     checked={allowDownload}
                     onCheckedChange={setAllowDownload}
                     data-ocid="training.upload_doc.download_switch"
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-border/30">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      Send external email too
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      In-app notifications will still be sent automatically.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={sendExternalEmails}
+                    onCheckedChange={setSendExternalEmails}
+                    data-ocid="training.upload_doc.external_email_switch"
                   />
                 </div>
               </div>

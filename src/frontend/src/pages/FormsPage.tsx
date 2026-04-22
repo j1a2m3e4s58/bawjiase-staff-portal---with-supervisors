@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import {
   type CreateFormRequest,
   apiCreateForm,
@@ -104,11 +105,13 @@ function FormDialog({
     initial?.category ?? "General",
   );
   const [fileUrl, setFileUrl] = useState(initial?.fileUrl ?? "");
+  const [sendExternalEmails, setSendExternalEmails] = useState(false);
 
   useEffect(() => {
     setTitle(initial?.title ?? "");
     setCategory(initial?.category ?? "General");
     setFileUrl(initial?.fileUrl ?? "");
+    setSendExternalEmails(false);
   }, [initial]);
 
   async function handleSubmit() {
@@ -125,6 +128,7 @@ function FormDialog({
       visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"] as Role[],
       visibility: "General",
       department: null,
+      sendExternalEmails: initial ? false : sendExternalEmails,
     });
   }
 
@@ -188,6 +192,30 @@ function FormDialog({
               Slides links stay as full links so they open correctly.
             </p>
           </div>
+          {!initial ? (
+            <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-1">
+                  <Label
+                    htmlFor="forms-external-email"
+                    className="text-sm font-medium"
+                  >
+                    Send external email too
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Staff will still get the normal in-app notification. Turn
+                    this on only when you also want email alerts sent out.
+                  </p>
+                </div>
+                <Switch
+                  id="forms-external-email"
+                  checked={sendExternalEmails}
+                  onCheckedChange={setSendExternalEmails}
+                  data-ocid="forms.external_email.switch"
+                />
+              </div>
+            </div>
+          ) : null}
         </div>
         <DialogFooter className="gap-2">
           <Button

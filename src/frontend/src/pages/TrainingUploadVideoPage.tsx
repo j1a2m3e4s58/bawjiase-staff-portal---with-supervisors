@@ -56,6 +56,7 @@ export default function TrainingUploadVideoPage() {
   const [department, setDepartment] = useState("");
   const [mandatory, setMandatory] = useState(false);
   const [allowDownload, setAllowDownload] = useState(false);
+  const [sendExternalEmails, setSendExternalEmails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   const driveId = driveInput ? extractDriveId(driveInput) : "";
@@ -83,6 +84,7 @@ export default function TrainingUploadVideoPage() {
         department: visibility === "Department" ? department : undefined,
         mandatory,
         allowDownload,
+        sendExternalEmails,
       });
       if ("err" in result) {
         throw new Error(result.err);
@@ -331,6 +333,22 @@ export default function TrainingUploadVideoPage() {
                     checked={allowDownload}
                     onCheckedChange={setAllowDownload}
                     data-ocid="training.upload_video.download_switch"
+                  />
+                </div>
+                <div className="flex items-center justify-between py-2 border-t border-border/30">
+                  <div>
+                    <div className="text-sm font-medium text-foreground">
+                      Send external email too
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      In-app notifications will still go out even if this stays
+                      off.
+                    </div>
+                  </div>
+                  <Switch
+                    checked={sendExternalEmails}
+                    onCheckedChange={setSendExternalEmails}
+                    data-ocid="training.upload_video.external_email_switch"
                   />
                 </div>
               </div>

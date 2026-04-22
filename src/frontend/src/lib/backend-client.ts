@@ -1725,6 +1725,7 @@ export interface CreateFormRequest {
   visibleTo: PortalForm["visibleTo"];
   visibility?: PortalForm["visibility"];
   department?: string | null;
+  sendExternalEmails?: boolean;
 }
 
 function canManageForms(user?: User | null) {
@@ -1808,6 +1809,7 @@ export async function apiCreateForm(
       visibility: req.visibility ?? "General",
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,
+      sendExternalEmails: !!req.sendExternalEmails,
     });
     const rawForm = payload.form as Record<string, unknown> | undefined;
     if (!rawForm) return err("Form could not be created");
@@ -1884,6 +1886,7 @@ export interface UploadVideoRequest {
   department?: string;
   mandatory?: boolean;
   allowDownload?: boolean;
+  sendExternalEmails?: boolean;
 }
 
 export interface UploadDocumentRequest {
@@ -1896,6 +1899,7 @@ export interface UploadDocumentRequest {
   department?: string;
   mandatory?: boolean;
   allowDownload?: boolean;
+  sendExternalEmails?: boolean;
 }
 
 export interface VideoProgress {
@@ -2363,6 +2367,7 @@ export async function apiUploadTrainingVideo(
         req.storageType === "Local" ? req.videoUrl.replace(/^LOCAL:/, "") : null,
       viewCount: 0,
       isArchived: false,
+      sendExternalEmails: !!req.sendExternalEmails,
     });
     const rawVideo = payload.video as Record<string, unknown> | undefined;
     if (!rawVideo) return err("Video could not be uploaded");
@@ -2522,6 +2527,7 @@ export async function apiUploadTrainingDocument(
         req.storageType === "Local" ? req.fileUrl.replace(/^LOCAL:/, "") : null,
       downloadCount: 0,
       isArchived: false,
+      sendExternalEmails: !!req.sendExternalEmails,
     });
     const rawDocument = payload.document as Record<string, unknown> | undefined;
     if (!rawDocument) return err("Document could not be uploaded");

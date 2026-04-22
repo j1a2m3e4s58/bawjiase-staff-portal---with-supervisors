@@ -1051,6 +1051,7 @@ def fanout_content_notification(
     visibility: str,
     department: str | None,
     link_to: str | None,
+    send_external_emails: bool = False,
 ) -> dict[str, int]:
     users = eligible_users_for_visibility(visibility, department)
     notification_count = create_notifications_for_users(
@@ -1061,22 +1062,23 @@ def fanout_content_notification(
         link_to=link_to,
     )
     email_count = 0
-    for user in users:
-        email = str(user.get("email", "")).strip().lower()
-        if not email:
-            continue
-        try:
-            send_content_notification_email(
-                to_email=email,
-                subject=email_subject,
-                headline=email_headline,
-                intro=email_intro,
-                item_title=item_title,
-                link_to=build_portal_link(link_to) if link_to else None,
-            )
-            email_count += 1
-        except Exception:
-            app.logger.exception("Failed sending content notification email", extra={"email": email})
+    if send_external_emails:
+        for user in users:
+            email = str(user.get("email", "")).strip().lower()
+            if not email:
+                continue
+            try:
+                send_content_notification_email(
+                    to_email=email,
+                    subject=email_subject,
+                    headline=email_headline,
+                    intro=email_intro,
+                    item_title=item_title,
+                    link_to=build_portal_link(link_to) if link_to else None,
+                )
+                email_count += 1
+            except Exception:
+                app.logger.exception("Failed sending content notification email", extra={"email": email})
     return {
         "notifications": notification_count,
         "emails": email_count,
@@ -2136,6 +2138,7 @@ def create_shared_form():
     data, error = require_json()
     if error:
         return error
+    send_external_emails = bool(data.get("sendExternalEmails", False))
     items = load_json_list_store(FORMS_STORE_PATH)
     try:
         visibility, department = normalize_visibility_and_department(data)
@@ -2166,6 +2169,7 @@ def create_shared_form():
         visibility=form["visibility"],
         department=form.get("department"),
         link_to="/forms",
+        send_external_emails=send_external_emails,
     )
     return jsonify({"ok": True, "form": form, "delivery": delivery})
 
@@ -2247,6 +2251,7 @@ def create_shared_training_video():
     data, error = require_json()
     if error:
         return error
+    send_external_emails = bool(data.get("sendExternalEmails", False))
     items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
     try:
         video = normalize_training_video_payload(data, actor)
@@ -2280,6 +2285,7 @@ def create_shared_training_video():
         visibility=video["visibility"],
         department=video.get("department"),
         link_to="/training",
+        send_external_emails=send_external_emails,
     )
     return jsonify({"ok": True, "video": video, "delivery": delivery})
 
@@ -2452,6 +2458,7 @@ def create_shared_training_document():
     data, error = require_json()
     if error:
         return error
+    send_external_emails = bool(data.get("sendExternalEmails", False))
     items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
     try:
         document = normalize_training_document_payload(data, actor)
@@ -2485,6 +2492,7 @@ def create_shared_training_document():
         visibility=document["visibility"],
         department=document.get("department"),
         link_to="/training",
+        send_external_emails=send_external_emails,
     )
     return jsonify({"ok": True, "document": document, "delivery": delivery})
 
