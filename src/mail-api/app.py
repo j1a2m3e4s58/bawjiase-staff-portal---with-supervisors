@@ -1206,12 +1206,43 @@ def find_document_by_local_filename(filename: str) -> dict | None:
     )
 
 
+def is_local_upload_ref(value: object, filename: str) -> bool:
+    return str(value or "").strip() == f"LOCAL:{filename}"
+
+
+def find_announcement_by_local_filename(filename: str) -> dict | None:
+    items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
+    return next(
+        (
+            item
+            for item in items
+            if is_local_upload_ref(item.get("imageUrl"), filename)
+            or is_local_upload_ref(item.get("fileUrl"), filename)
+        ),
+        None,
+    )
+
+
+def find_user_by_local_image(filename: str) -> dict | None:
+    users = load_user_store()
+    return next(
+        (
+            user
+            for user in users
+            if is_local_upload_ref(user.get("imageFile"), filename)
+        ),
+        None,
+    )
+
+
 def remove_uploaded_file_if_unused(filename: str) -> None:
     if not filename:
         return
     video_match = find_video_by_local_filename(filename)
     document_match = find_document_by_local_filename(filename)
-    if video_match or document_match:
+    announcement_match = find_announcement_by_local_filename(filename)
+    profile_match = find_user_by_local_image(filename)
+    if video_match or document_match or announcement_match or profile_match:
         return
     file_path = os.path.join(UPLOADS_DIR, filename)
     if os.path.isfile(file_path):
@@ -1356,12 +1387,16 @@ def get_uploaded_media(filename: str):
     _, auth_user, error = require_authenticated_user()
     if error:
         return error
-    item = find_video_by_local_filename(safe_name) or find_document_by_local_filename(safe_name)
-    if not item:
-        return jsonify({"error": "File not found"}), 404
-    if not user_can_access_item(auth_user, item):
-        return jsonify({"error": "Access denied"}), 403
-    return send_from_directory(UPLOADS_DIR, safe_name, conditional=True)
+    training_item = find_video_by_local_filename(safe_name) or find_document_by_local_filename(safe_name)
+    if training_item:
+        if not user_can_access_item(auth_user, training_item):
+            return jsonify({"error": "Access denied"}), 403
+        return send_from_directory(UPLOADS_DIR, safe_name, conditional=True)
+    if find_announcement_by_local_filename(safe_name):
+        return send_from_directory(UPLOADS_DIR, safe_name, conditional=True)
+    if find_user_by_local_image(safe_name):
+        return send_from_directory(UPLOADS_DIR, safe_name, conditional=True)
+    return jsonify({"error": "File not found"}), 404
 
 
 @app.route("/api/presence", methods=["GET"])
@@ -1572,8 +1607,11 @@ def update_profile(user_id: str):
         if branch:
             user["branch"] = branch
     if "imageFile" in data:
+        previous_image = str(user.get("imageFile") or "").strip()
         image_file = data.get("imageFile")
         user["imageFile"] = str(image_file) if image_file else None
+        if previous_image.startswith("LOCAL:") and previous_image != user["imageFile"]:
+            remove_uploaded_file_if_unused(previous_image.replace("LOCAL:", "", 1).strip())
     save_user_store(users)
     return jsonify({"ok": True, "user": user})
 
@@ -1671,8 +1709,11 @@ def update_staff(user_id: str):
         if branch:
             user["branch"] = branch
     if "imageFile" in data:
+        previous_image = str(user.get("imageFile") or "").strip()
         image_file = data.get("imageFile")
         user["imageFile"] = str(image_file) if image_file else None
+        if previous_image.startswith("LOCAL:") and previous_image != user["imageFile"]:
+            remove_uploaded_file_if_unused(previous_image.replace("LOCAL:", "", 1).strip())
     if "isActive" in data:
         user["isActive"] = bool(data.get("isActive"))
     save_user_store(users)
