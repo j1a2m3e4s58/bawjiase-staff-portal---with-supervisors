@@ -34,6 +34,7 @@ const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
 const OPTIONAL_API_TIMEOUT_MS = 1500;
+const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -66,6 +67,16 @@ function withSessionToken(url: string): string {
   return `${url}${separator}sessionToken=${encodeURIComponent(token)}`;
 }
 
+function handleSessionExpired() {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(AUTH_STORAGE_KEY);
+  } catch {
+    // ignore storage failures
+  }
+  window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
+}
+
 async function postMailApi(path: string, payload: Record<string, unknown>) {
   const token = getStoredSessionToken();
   const response = await fetch(`${MAIL_API_URL}${path}`, {
@@ -80,6 +91,10 @@ async function postMailApi(path: string, payload: Record<string, unknown>) {
     error?: string;
   };
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+      throw new Error("Session expired. Please log in again.");
+    }
     throw new Error(data.error || "Email could not be sent");
   }
 }
@@ -101,6 +116,10 @@ async function postMailApiJson(
     error?: string;
   };
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+      throw new Error("Session expired. Please log in again.");
+    }
     throw new Error(data.error || "Request failed");
   }
   return data;
@@ -116,6 +135,10 @@ async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
     error?: string;
   };
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+      throw new Error("Session expired. Please log in again.");
+    }
     throw new Error(data.error || "Request failed");
   }
   return data;
@@ -137,6 +160,10 @@ async function uploadMailApiFile(
     error?: string;
   };
   if (!response.ok) {
+    if (response.status === 401) {
+      handleSessionExpired();
+      throw new Error("Session expired. Please log in again.");
+    }
     throw new Error(data.error || "Upload failed");
   }
   return data;
