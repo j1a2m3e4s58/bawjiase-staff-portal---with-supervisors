@@ -13,7 +13,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { apiUploadTrainingDocument } from "@/lib/backend-client";
+import {
+  apiUploadTrainingDocument,
+  apiUploadTrainingDocumentFile,
+} from "@/lib/backend-client";
 import { DEPARTMENTS } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -74,7 +77,7 @@ export default function TrainingUploadDocumentPage() {
       const fileUrl =
         storageType === "Drive"
           ? `DRIVE:${driveInput.trim()}`
-          : `LOCAL:${localFile?.name ?? ""}`;
+          : `LOCAL:${(await apiUploadTrainingDocumentFile(localFile as File)).filename}`;
       const fileType =
         storageType === "Local" && localFile ? getFileType(localFile) : "drive";
 

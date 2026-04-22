@@ -14,7 +14,10 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { apiUploadTrainingVideo } from "@/lib/backend-client";
+import {
+  apiUploadTrainingVideo,
+  apiUploadTrainingVideoFile,
+} from "@/lib/backend-client";
 import { DEPARTMENTS } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -69,7 +72,7 @@ export default function TrainingUploadVideoPage() {
       const videoUrl =
         storageType === "Drive"
           ? `DRIVE:${driveId}`
-          : `LOCAL:${localFile?.name ?? ""}`;
+          : `LOCAL:${(await apiUploadTrainingVideoFile(localFile as File)).filename}`;
 
       await apiUploadTrainingVideo({
         title: title.trim(),

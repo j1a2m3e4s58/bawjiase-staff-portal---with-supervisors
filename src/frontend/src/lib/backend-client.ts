@@ -29,6 +29,7 @@ const HR_ACCESS_CODE = "BCB-HR-2026";
 const MAIL_API_URL = (
   import.meta.env.VITE_MAIL_API_URL || `${window.location.origin}/mail-api/api`
 ).replace(/\/$/, "");
+const MAIL_API_ROOT = MAIL_API_URL.replace(/\/api$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
@@ -109,6 +110,27 @@ async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
   };
   if (!response.ok) {
     throw new Error(data.error || "Request failed");
+  }
+  return data;
+}
+
+async function uploadMailApiFile(
+  path: string,
+  file: File,
+): Promise<Record<string, unknown>> {
+  const token = getStoredSessionToken();
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${MAIL_API_URL}${path}`, {
+    method: "POST",
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  });
+  const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
+    error?: string;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || "Upload failed");
   }
   return data;
 }
@@ -1971,7 +1993,27 @@ function isGoogleDocUrl(input: string) {
 
 function localAssetUrl(ref: string) {
   const filename = ref.replace(/^LOCAL:/, "").trim();
-  return filename ? `/uploads/${filename}` : "";
+  return filename ? `${MAIL_API_ROOT}/uploads/${filename}` : "";
+}
+
+export async function apiUploadTrainingVideoFile(
+  file: File,
+): Promise<{ filename: string; url: string }> {
+  const payload = await uploadMailApiFile("/uploads/training-video", file);
+  return {
+    filename: String(payload.filename ?? ""),
+    url: String(payload.url ?? ""),
+  };
+}
+
+export async function apiUploadTrainingDocumentFile(
+  file: File,
+): Promise<{ filename: string; url: string }> {
+  const payload = await uploadMailApiFile("/uploads/training-document", file);
+  return {
+    filename: String(payload.filename ?? ""),
+    url: String(payload.url ?? ""),
+  };
 }
 
 export function resolveTrainingVideoEmbedUrl(video: TrainingVideo): string {

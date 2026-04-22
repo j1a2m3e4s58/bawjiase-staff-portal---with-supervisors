@@ -8,8 +8,9 @@ from email.message import EmailMessage
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
+from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
@@ -29,6 +30,7 @@ NOTIFICATIONS_STORE_PATH = os.path.join(BASE_DIR, "notifications_store.json")
 TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(BASE_DIR, "training_video_progress_store.json")
 TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(BASE_DIR, "training_document_opens_store.json")
 TRAINING_REMINDERS_STORE_PATH = os.path.join(BASE_DIR, "training_reminders_store.json")
+UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 PRESENCE_TTL_SECONDS = 15 * 60
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
@@ -174,6 +176,7 @@ DEFAULT_PASSWORD_HASHES = {
 }
 
 app = Flask(__name__)
+os.makedirs(UPLOADS_DIR, exist_ok=True)
 
 
 def allowed_origins() -> set[str]:
@@ -1032,9 +1035,44 @@ def handle_options():
     return None
 
 
+def upload_public_url(filename: str) -> str:
+    return f"/uploads/{filename}"
+
+
+def save_uploaded_media(file_storage, kind: str) -> dict:
+    if not file_storage or not getattr(file_storage, "filename", ""):
+        raise ValueError("A file is required")
+    original_name = secure_filename(str(file_storage.filename))
+    if not original_name:
+        raise ValueError("Invalid file name")
+    ext = os.path.splitext(original_name)[1].lower()
+    if kind == "video":
+        allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    else:
+        allowed = {".pdf", ".doc", ".docx", ".xls", ".xlsx", ".ppt", ".pptx"}
+    if ext not in allowed:
+        raise ValueError("Unsupported file type")
+    filename = f"{kind}-{secrets.token_hex(8)}{ext}"
+    target_path = os.path.join(UPLOADS_DIR, filename)
+    file_storage.save(target_path)
+    return {
+        "filename": filename,
+        "url": upload_public_url(filename),
+        "contentType": str(getattr(file_storage, "mimetype", "") or "application/octet-stream"),
+    }
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"ok": True})
+
+
+@app.route("/uploads/<path:filename>", methods=["GET"])
+def get_uploaded_media(filename: str):
+    safe_name = secure_filename(filename)
+    if not safe_name or safe_name != filename:
+        return jsonify({"error": "Invalid file name"}), 400
+    return send_from_directory(UPLOADS_DIR, safe_name, conditional=True)
 
 
 @app.route("/api/presence", methods=["GET"])
@@ -1789,6 +1827,36 @@ def get_shared_forms():
     if error:
         return error
     return jsonify({"forms": load_json_list_store(FORMS_STORE_PATH)})
+
+
+@app.route("/api/uploads/training-video", methods=["POST", "OPTIONS"])
+def upload_training_video_file():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    try:
+        saved = save_uploaded_media(request.files.get("file"), "video")
+        return jsonify({"ok": True, **saved})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.route("/api/uploads/training-document", methods=["POST", "OPTIONS"])
+def upload_training_document_file():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    try:
+        saved = save_uploaded_media(request.files.get("file"), "document")
+        return jsonify({"ok": True, **saved})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
 
 
 @app.route("/api/content/forms", methods=["POST", "OPTIONS"])
