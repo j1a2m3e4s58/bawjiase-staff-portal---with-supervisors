@@ -244,6 +244,147 @@ def require_json():
     return data, None
 
 
+def extract_drive_file_id(value: str) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw.startswith("DRIVE:"):
+        return raw[6:].strip()
+    if "drive.google.com" not in raw:
+        return raw
+    if "/d/" in raw:
+        return raw.split("/d/")[1].split("/")[0].split("?")[0].strip()
+    if "id=" in raw:
+        return raw.split("id=")[1].split("&")[0].strip()
+    return raw
+
+
+def normalize_visibility_and_department(data: dict) -> tuple[str, str | None]:
+    visibility = str(data.get("visibility", "General")).strip()
+    if visibility not in {"General", "Department"}:
+        raise ValueError("Visibility must be General or Department")
+    department = str(data.get("department", "") or "").strip().upper() or None
+    if visibility == "Department" and not department:
+        raise ValueError("Department is required for department visibility")
+    if visibility == "General":
+        department = None
+    return visibility, department
+
+
+def normalize_non_empty_title(value: object, label: str) -> str:
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise ValueError(f"{label} is required")
+    return normalized
+
+
+def normalize_storage_type(value: object) -> str:
+    normalized = str(value or "Drive").strip()
+    if normalized not in {"Drive", "Local"}:
+        raise ValueError("Storage type must be Drive or Local")
+    return normalized
+
+
+def normalize_local_filename(value: object) -> str:
+    filename = secure_filename(str(value or "").strip())
+    if not filename:
+        raise ValueError("A valid uploaded file is required")
+    if not os.path.isfile(os.path.join(UPLOADS_DIR, filename)):
+        raise ValueError("Uploaded file could not be found")
+    return filename
+
+
+def normalize_form_file_url(value: object) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        raise ValueError("Form link is required")
+    if "docs.google.com" in raw:
+        return raw
+    drive_id = extract_drive_file_id(raw)
+    if not drive_id:
+        raise ValueError("A valid Google Drive link or file ID is required")
+    return drive_id
+
+
+def normalize_training_video_payload(data: dict, actor: dict) -> dict:
+    title = normalize_non_empty_title(data.get("title"), "Video title")
+    visibility, department = normalize_visibility_and_department(data)
+    storage_type = normalize_storage_type(data.get("storageType", "Drive"))
+    if storage_type == "Drive":
+        drive_ref = extract_drive_file_id(data.get("driveRef") or data.get("videoUrl"))
+        if not drive_ref:
+            raise ValueError("A valid Google Drive file ID or link is required")
+        video_url = f"DRIVE:{drive_ref}"
+        local_filename = None
+    else:
+        local_filename = normalize_local_filename(data.get("localFilename"))
+        video_url = f"LOCAL:{local_filename}"
+        drive_ref = None
+    return {
+        "id": next_content_id(load_json_list_store(TRAINING_VIDEOS_STORE_PATH)),
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "videoUrl": video_url,
+        "thumbnailUrl": data.get("thumbnailUrl"),
+        "duration": max(0, int(data.get("duration", 0) or 0)),
+        "category": str(data.get("category", "")).strip() or (department or "General"),
+        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibility": visibility,
+        "department": department,
+        "isMandatory": bool(data.get("isMandatory", False)),
+        "allowDownload": bool(data.get("allowDownload", False)),
+        "storageType": storage_type,
+        "driveRef": drive_ref,
+        "localFilename": local_filename,
+        "uploadedBy": actor["fullname"],
+        "uploadedAt": now_ms(),
+        "viewCount": max(0, int(data.get("viewCount", 0) or 0)),
+        "isArchived": bool(data.get("isArchived", False)),
+    }
+
+
+def normalize_training_document_payload(data: dict, actor: dict) -> dict:
+    title = normalize_non_empty_title(data.get("title"), "Document title")
+    visibility, department = normalize_visibility_and_department(data)
+    storage_type = normalize_storage_type(data.get("storageType", "Drive"))
+    if storage_type == "Drive":
+        drive_ref = str(data.get("driveRef") or "").strip()
+        file_url_raw = str(data.get("fileUrl") or "").strip()
+        if "docs.google.com" in file_url_raw:
+            file_url = file_url_raw
+            drive_ref = file_url_raw
+        else:
+            drive_ref = extract_drive_file_id(drive_ref or file_url_raw)
+            if not drive_ref:
+                raise ValueError("A valid Google Drive document link or file ID is required")
+            file_url = f"DRIVE:{drive_ref}"
+        local_filename = None
+    else:
+        local_filename = normalize_local_filename(data.get("localFilename"))
+        file_url = f"LOCAL:{local_filename}"
+        drive_ref = None
+    return {
+        "id": next_content_id(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)),
+        "title": title,
+        "description": str(data.get("description", "")).strip(),
+        "fileUrl": file_url,
+        "fileType": str(data.get("fileType", "")).strip() or "application/octet-stream",
+        "category": str(data.get("category", "")).strip() or (department or "General"),
+        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibility": visibility,
+        "department": department,
+        "isMandatory": bool(data.get("isMandatory", False)),
+        "allowDownload": bool(data.get("allowDownload", False)),
+        "storageType": storage_type,
+        "driveRef": drive_ref,
+        "localFilename": local_filename,
+        "uploadedBy": actor["fullname"],
+        "uploadedAt": now_ms(),
+        "downloadCount": max(0, int(data.get("downloadCount", 0) or 0)),
+        "isArchived": bool(data.get("isArchived", False)),
+    }
+
+
 def parse_session_token() -> str:
     header = str(request.headers.get("Authorization", "")).strip()
     if header.startswith("Bearer "):
@@ -1970,18 +2111,22 @@ def create_shared_form():
     if error:
         return error
     items = load_json_list_store(FORMS_STORE_PATH)
-    form = {
-        "id": next_content_id(items),
-        "title": str(data.get("title", "")).strip(),
-        "description": str(data.get("description", "")).strip(),
-        "fileUrl": str(data.get("fileUrl", "")).strip(),
-        "category": str(data.get("category", "")).strip() or actor["department"],
-        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
-        "visibility": str(data.get("visibility", "General")).strip() or "General",
-        "department": data.get("department"),
-        "createdAt": now_ms(),
-        "updatedAt": now_ms(),
-    }
+    try:
+        visibility, department = normalize_visibility_and_department(data)
+        form = {
+            "id": next_content_id(items),
+            "title": normalize_non_empty_title(data.get("title"), "Form title"),
+            "description": str(data.get("description", "")).strip(),
+            "fileUrl": normalize_form_file_url(data.get("fileUrl")),
+            "category": str(data.get("category", "")).strip() or actor["department"],
+            "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+            "visibility": visibility,
+            "department": department,
+            "createdAt": now_ms(),
+            "updatedAt": now_ms(),
+        }
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     items.insert(0, form)
     save_json_list_store(FORMS_STORE_PATH, items)
     delivery = fanout_content_notification(
@@ -2014,9 +2159,27 @@ def update_shared_form(item_id: int):
     form = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not form:
         return jsonify({"error": "Form not found"}), 404
-    for key in ["title", "description", "fileUrl", "category", "visibleTo", "visibility", "department"]:
-        if key in data:
-            form[key] = data.get(key)
+    try:
+        if "title" in data:
+            form["title"] = normalize_non_empty_title(data.get("title"), "Form title")
+        if "description" in data:
+            form["description"] = str(data.get("description", "")).strip()
+        if "fileUrl" in data:
+            form["fileUrl"] = normalize_form_file_url(data.get("fileUrl"))
+        if "category" in data:
+            form["category"] = str(data.get("category", "")).strip() or form["category"]
+        if "visibleTo" in data and isinstance(data.get("visibleTo"), list):
+            form["visibleTo"] = data.get("visibleTo")
+        if "visibility" in data or "department" in data:
+            merged = {
+                "visibility": data.get("visibility", form.get("visibility")),
+                "department": data.get("department", form.get("department")),
+            }
+            visibility, department = normalize_visibility_and_department(merged)
+            form["visibility"] = visibility
+            form["department"] = department
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     form["updatedAt"] = now_ms()
     save_json_list_store(FORMS_STORE_PATH, items)
     return jsonify({"ok": True, "form": form})
@@ -2059,27 +2222,10 @@ def create_shared_training_video():
     if error:
         return error
     items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
-    video = {
-        "id": next_content_id(items),
-        "title": str(data.get("title", "")).strip(),
-        "description": str(data.get("description", "")).strip(),
-        "videoUrl": str(data.get("videoUrl", "")).strip(),
-        "thumbnailUrl": data.get("thumbnailUrl"),
-        "duration": int(data.get("duration", 0) or 0),
-        "category": str(data.get("category", "")).strip() or "General",
-        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
-        "visibility": str(data.get("visibility", "General")).strip() or "General",
-        "department": data.get("department"),
-        "isMandatory": bool(data.get("isMandatory", False)),
-        "allowDownload": bool(data.get("allowDownload", False)),
-        "storageType": str(data.get("storageType", "Drive")).strip() or "Drive",
-        "driveRef": data.get("driveRef"),
-        "localFilename": data.get("localFilename"),
-        "uploadedBy": actor["fullname"],
-        "uploadedAt": now_ms(),
-        "viewCount": int(data.get("viewCount", 0) or 0),
-        "isArchived": bool(data.get("isArchived", False)),
-    }
+    try:
+        video = normalize_training_video_payload(data, actor)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     items.insert(0, video)
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
     video_subject = (
@@ -2281,26 +2427,10 @@ def create_shared_training_document():
     if error:
         return error
     items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
-    document = {
-        "id": next_content_id(items),
-        "title": str(data.get("title", "")).strip(),
-        "description": str(data.get("description", "")).strip(),
-        "fileUrl": str(data.get("fileUrl", "")).strip(),
-        "fileType": str(data.get("fileType", "")).strip(),
-        "category": str(data.get("category", "")).strip() or "General",
-        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
-        "visibility": str(data.get("visibility", "General")).strip() or "General",
-        "department": data.get("department"),
-        "isMandatory": bool(data.get("isMandatory", False)),
-        "allowDownload": bool(data.get("allowDownload", False)),
-        "storageType": str(data.get("storageType", "Drive")).strip() or "Drive",
-        "driveRef": data.get("driveRef"),
-        "localFilename": data.get("localFilename"),
-        "uploadedBy": actor["fullname"],
-        "uploadedAt": now_ms(),
-        "downloadCount": int(data.get("downloadCount", 0) or 0),
-        "isArchived": bool(data.get("isArchived", False)),
-    }
+    try:
+        document = normalize_training_document_payload(data, actor)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     items.insert(0, document)
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
     document_subject = (
