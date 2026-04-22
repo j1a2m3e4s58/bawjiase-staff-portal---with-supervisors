@@ -1,6 +1,6 @@
 import { NotificationBell } from "@/components/NotificationBell";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -14,6 +14,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { withBase } from "@/lib/app-base";
+import { resolveStoredAssetUrl } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import { Link, useLocation } from "@tanstack/react-router";
 import {
@@ -161,6 +162,7 @@ function Sidebar({ collapsed = false }: SidebarProps) {
       .toUpperCase() ?? "U";
 
   const visibleItems = NAV_ITEMS.filter((item) => canSeeNavItem(user, item));
+  const userImage = resolveStoredAssetUrl(user?.imageFile);
 
   return (
     <aside
@@ -251,9 +253,14 @@ function Sidebar({ collapsed = false }: SidebarProps) {
               data-ocid="appshell.user_menu.button"
             >
               <Avatar className="h-8 w-8 flex-shrink-0">
-                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                  {initials}
-                </AvatarFallback>
+                {userImage ? (
+                  <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
+                ) : null}
+                {!userImage ? (
+                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                    {initials}
+                  </AvatarFallback>
+                ) : null}
               </Avatar>
               {!collapsed && (
                 <div className="min-w-0 flex-1">
@@ -454,6 +461,7 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
       .join("")
       .slice(0, 2)
       .toUpperCase() ?? "U";
+  const userImage = resolveStoredAssetUrl(user?.imageFile);
 
   return (
     <header
@@ -488,9 +496,14 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
               data-ocid="appshell.topbar.user_menu.button"
             >
               <Avatar className="h-7 w-7">
-                <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                  {initials}
-                </AvatarFallback>
+                {userImage ? (
+                  <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
+                ) : null}
+                {!userImage ? (
+                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                    {initials}
+                  </AvatarFallback>
+                ) : null}
               </Avatar>
               {!isMobile && (
                 <span className="text-xs font-medium text-foreground max-w-[120px] truncate pr-1">
@@ -537,6 +550,7 @@ function DesktopTopNav() {
       .join("")
       .slice(0, 2)
       .toUpperCase() ?? "U";
+  const userImage = resolveStoredAssetUrl(user?.imageFile);
   const topNavItems: NavItem[] = [
     {
       to: "/",
@@ -624,9 +638,14 @@ function DesktopTopNav() {
                 data-ocid="appshell.desktop_user_menu.button"
               >
                 <Avatar className="h-9 w-9">
-                  <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
-                    {initials}
-                  </AvatarFallback>
+                  {userImage ? (
+                    <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
+                  ) : null}
+                  {!userImage ? (
+                    <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
+                      {initials}
+                    </AvatarFallback>
+                  ) : null}
                 </Avatar>
                 <div className="text-left min-w-0">
                   <div className="text-xs font-bold text-foreground max-w-[84px] truncate">
