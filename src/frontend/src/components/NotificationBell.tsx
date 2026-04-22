@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { apiGetUnreadNotificationCount } from "@/lib/backend-client";
+import { useAuth } from "@/store/auth";
 import { useNavigate } from "@tanstack/react-router";
 import { Bell } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
@@ -8,24 +9,53 @@ interface NotificationBellProps {
   className?: string;
 }
 
+const NOTIFICATION_COUNT_KEY = "bcb_unread_notification_count";
+
+function loadStoredUnreadCount(): number {
+  if (typeof window === "undefined") return 0;
+  try {
+    const raw = window.localStorage.getItem(NOTIFICATION_COUNT_KEY);
+    const value = Number(raw ?? "0");
+    return Number.isFinite(value) && value > 0 ? value : 0;
+  } catch {
+    return 0;
+  }
+}
+
+function saveStoredUnreadCount(count: number) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(NOTIFICATION_COUNT_KEY, String(Math.max(0, count)));
+  } catch {
+    // ignore storage failures
+  }
+}
+
 export function NotificationBell({ className }: NotificationBellProps) {
-  const [count, setCount] = useState(0);
+  const { user } = useAuth();
+  const [count, setCount] = useState(() => loadStoredUnreadCount());
   const navigate = useNavigate();
 
   const fetchCount = useCallback(async () => {
     try {
       const n = await apiGetUnreadNotificationCount();
       setCount(n);
+      saveStoredUnreadCount(n);
     } catch {
       // silent
     }
   }, []);
 
   useEffect(() => {
+    if (!user) {
+      setCount(0);
+      saveStoredUnreadCount(0);
+      return;
+    }
     fetchCount();
     const interval = setInterval(fetchCount, 60_000);
     return () => clearInterval(interval);
-  }, [fetchCount]);
+  }, [fetchCount, user]);
 
   return (
     <Button
