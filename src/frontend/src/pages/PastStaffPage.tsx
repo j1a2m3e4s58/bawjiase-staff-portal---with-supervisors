@@ -48,6 +48,7 @@ function formatDate(ts: bigint): string {
 const ROLE_LABELS: Record<User["role"], string> = {
   SuperAdmin: "Super Admin",
   HRAdmin: "HR Admin",
+  Supervisor: "Supervisor",
   GeneralStaff: "Staff",
 };
 

@@ -21,6 +21,7 @@ import type {
   TrainingDocument,
   TrainingVideo,
   User,
+  UserPermissions,
 } from "../types";
 
 const OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com";
@@ -174,10 +175,46 @@ type WireUser = Omit<User, "lastSeen" | "registrationTime"> & {
   registrationTime: string | number;
 };
 
+function deserializePermissions(raw: unknown): UserPermissions | undefined {
+  if (!raw || typeof raw !== "object") return undefined;
+  const source = raw as Record<string, unknown>;
+  return {
+    announcements: !!source.announcements,
+    forms: !!source.forms,
+    trainingVideos: !!source.trainingVideos,
+    trainingDocuments: !!source.trainingDocuments,
+    support: !!source.support,
+    userManagement: !!source.userManagement,
+  };
+}
+
+function deserializeScopeList(raw: unknown, fallback: string[] = []): string[] {
+  if (!Array.isArray(raw)) return [...fallback];
+  const normalized = raw
+    .map((item) => String(item ?? "").trim().toUpperCase())
+    .filter(Boolean);
+  return normalized.length > 0 ? normalized : [...fallback];
+}
+
 function deserializeUser(user: WireUser): User {
+  const raw = user as Record<string, unknown>;
   return {
     ...user,
     imageFile: typeof user.imageFile === "string" ? user.imageFile : null,
+    managedBranches: deserializeScopeList(raw.managedBranches),
+    managedDepartmentsByBranch:
+      raw.managedDepartmentsByBranch &&
+      typeof raw.managedDepartmentsByBranch === "object"
+        ? Object.fromEntries(
+            Object.entries(
+              raw.managedDepartmentsByBranch as Record<string, unknown>,
+            ).map(([branch, departments]) => [
+              branch.toUpperCase(),
+              deserializeScopeList(departments),
+            ]),
+          )
+        : {},
+    permissions: deserializePermissions(raw.permissions),
     lastSeen: BigInt(user.lastSeen ?? 0),
     registrationTime: BigInt(user.registrationTime ?? 0),
   };
@@ -604,6 +641,15 @@ function deserializeAnnouncement(raw: Record<string, unknown>): AnnouncementWith
     updatedAt: contentBigInt(raw.updatedAt),
     isDismissed: !!raw.isDismissed,
     isTrashed: !!raw.isTrashed,
+    visibility: raw.visibility === "Department" ? "Department" : "General",
+    department: typeof raw.department === "string" ? raw.department : null,
+    branchScope: deserializeScopeList(raw.branchScope, ["ALL"]),
+    departmentScope: deserializeScopeList(
+      raw.departmentScope,
+      typeof raw.department === "string" && raw.department
+        ? [String(raw.department).toUpperCase()]
+        : ["ALL"],
+    ),
     poll: pollRaw
       ? {
           id: contentId(pollRaw.id),
@@ -643,6 +689,13 @@ function deserializeForm(raw: Record<string, unknown>): PortalForm {
     visibility:
       raw.visibility === "Department" ? "Department" : "General",
     department: typeof raw.department === "string" ? raw.department : null,
+    branchScope: deserializeScopeList(raw.branchScope, ["ALL"]),
+    departmentScope: deserializeScopeList(
+      raw.departmentScope,
+      typeof raw.department === "string" && raw.department
+        ? [String(raw.department).toUpperCase()]
+        : ["ALL"],
+    ),
     createdAt: contentBigInt(raw.createdAt),
     updatedAt: contentBigInt(raw.updatedAt),
   };
@@ -662,6 +715,13 @@ function deserializeTrainingVideo(raw: Record<string, unknown>): TrainingVideo {
       : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
     visibility: raw.visibility === "Department" ? "Department" : "General",
     department: typeof raw.department === "string" ? raw.department : null,
+    branchScope: deserializeScopeList(raw.branchScope, ["ALL"]),
+    departmentScope: deserializeScopeList(
+      raw.departmentScope,
+      typeof raw.department === "string" && raw.department
+        ? [String(raw.department).toUpperCase()]
+        : ["ALL"],
+    ),
     isMandatory: !!raw.isMandatory,
     allowDownload: !!raw.allowDownload,
     storageType: raw.storageType === "Local" ? "Local" : "Drive",
@@ -687,6 +747,13 @@ function deserializeTrainingDocument(raw: Record<string, unknown>): TrainingDocu
       : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
     visibility: raw.visibility === "Department" ? "Department" : "General",
     department: typeof raw.department === "string" ? raw.department : null,
+    branchScope: deserializeScopeList(raw.branchScope, ["ALL"]),
+    departmentScope: deserializeScopeList(
+      raw.departmentScope,
+      typeof raw.department === "string" && raw.department
+        ? [String(raw.department).toUpperCase()]
+        : ["ALL"],
+    ),
     isMandatory: !!raw.isMandatory,
     allowDownload: !!raw.allowDownload,
     storageType: raw.storageType === "Local" ? "Local" : "Drive",

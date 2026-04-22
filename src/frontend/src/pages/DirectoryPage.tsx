@@ -52,6 +52,7 @@ const DIRECTORY_PAGE_SIZE = 24;
 const ROLE_LABELS: Record<User["role"], string> = {
   SuperAdmin: "Super Admin",
   HRAdmin: "HR Admin",
+  Supervisor: "Supervisor",
   GeneralStaff: "Staff",
 };
 
@@ -59,6 +60,7 @@ const ROLE_VARIANT: Record<User["role"], "default" | "secondary" | "outline"> =
   {
     SuperAdmin: "default",
     HRAdmin: "secondary",
+    Supervisor: "secondary",
     GeneralStaff: "outline",
   };
 

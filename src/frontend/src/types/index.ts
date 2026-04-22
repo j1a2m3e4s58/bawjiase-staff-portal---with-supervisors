@@ -25,7 +25,23 @@ export const BRANCHES = [
 
 export type Department = (typeof DEPARTMENTS)[number];
 export type Branch = (typeof BRANCHES)[number];
-export type Role = "GeneralStaff" | "HRAdmin" | "SuperAdmin";
+export type Role = "GeneralStaff" | "HRAdmin" | "SuperAdmin" | "Supervisor";
+export type PortalPermissionKey =
+  | "announcements"
+  | "forms"
+  | "trainingVideos"
+  | "trainingDocuments"
+  | "support"
+  | "userManagement";
+
+export interface UserPermissions {
+  announcements: boolean;
+  forms: boolean;
+  trainingVideos: boolean;
+  trainingDocuments: boolean;
+  support: boolean;
+  userManagement: boolean;
+}
 
 // ── Core User ─────────────────────────────────────────────────────────────────
 
@@ -40,6 +56,9 @@ export interface User {
   department: string;
   branch: string;
   imageFile: string | null;
+  managedBranches?: string[];
+  managedDepartmentsByBranch?: Record<string, string[]>;
+  permissions?: UserPermissions;
   isActive: boolean;
   isVerified: boolean;
   lastSeen: bigint;
@@ -81,6 +100,10 @@ export interface Announcement {
   updatedAt: bigint;
   isDismissed: boolean;
   isTrashed: boolean;
+  visibility?: "General" | "Department";
+  department?: string | null;
+  branchScope?: string[];
+  departmentScope?: string[];
 }
 
 export interface AnnouncementWithPoll extends Announcement {
@@ -118,6 +141,8 @@ export interface PortalForm {
   visibleTo: Role[];
   visibility?: "General" | "Department";
   department?: string | null;
+  branchScope?: string[];
+  departmentScope?: string[];
   createdAt: bigint;
   updatedAt: bigint;
 }
@@ -135,6 +160,8 @@ export interface TrainingVideo {
   visibleTo: Role[];
   visibility?: "General" | "Department";
   department?: string | null;
+  branchScope?: string[];
+  departmentScope?: string[];
   isMandatory?: boolean;
   allowDownload?: boolean;
   storageType?: "Drive" | "Local";
@@ -156,6 +183,8 @@ export interface TrainingDocument {
   visibleTo: Role[];
   visibility?: "General" | "Department";
   department?: string | null;
+  branchScope?: string[];
+  departmentScope?: string[];
   isMandatory?: boolean;
   allowDownload?: boolean;
   storageType?: "Drive" | "Local";

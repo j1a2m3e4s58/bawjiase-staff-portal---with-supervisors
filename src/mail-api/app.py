@@ -271,6 +271,89 @@ def normalize_visibility_and_department(data: dict) -> tuple[str, str | None]:
     return visibility, department
 
 
+def normalize_scope_list(value: object, *, empty_default: list[str] | None = None) -> list[str]:
+    if not isinstance(value, list):
+        return list(empty_default or [])
+    normalized: list[str] = []
+    seen = set()
+    for item in value:
+        current = str(item or "").strip().upper()
+        if not current:
+            continue
+        if current == "ALL":
+            return ["ALL"]
+        if current in seen:
+            continue
+        seen.add(current)
+        normalized.append(current)
+    return normalized or list(empty_default or [])
+
+
+def default_permissions_for_role(role: str) -> dict[str, bool]:
+    if role in {"SuperAdmin", "HRAdmin"}:
+        return {
+            "announcements": True,
+            "forms": True,
+            "trainingVideos": True,
+            "trainingDocuments": True,
+            "support": True,
+            "userManagement": True,
+        }
+    return {
+        "announcements": False,
+        "forms": False,
+        "trainingVideos": False,
+        "trainingDocuments": False,
+        "support": False,
+        "userManagement": False,
+    }
+
+
+def normalize_user_permissions(value: object, role: str) -> dict[str, bool]:
+    defaults = default_permissions_for_role(role)
+    if not isinstance(value, dict):
+        return defaults
+    normalized = dict(defaults)
+    for key in defaults:
+        if key in value:
+            normalized[key] = bool(value.get(key))
+    return normalized
+
+
+def normalize_managed_departments_by_branch(value: object) -> dict[str, list[str]]:
+    if not isinstance(value, dict):
+        return {}
+    normalized: dict[str, list[str]] = {}
+    for branch, departments in value.items():
+        branch_key = str(branch or "").strip().upper()
+        if not branch_key:
+            continue
+        normalized_departments = normalize_scope_list(departments, empty_default=[])
+        if normalized_departments:
+            normalized[branch_key] = normalized_departments
+    return normalized
+
+
+def derive_content_scope(
+    data: dict,
+    *,
+    visibility: str,
+    department: str | None,
+    existing: dict | None = None,
+) -> tuple[list[str], list[str]]:
+    branch_scope = normalize_scope_list(
+        data.get("branchScope", existing.get("branchScope") if existing else None),
+        empty_default=["ALL"],
+    )
+    department_scope = normalize_scope_list(
+        data.get("departmentScope", existing.get("departmentScope") if existing else None),
+        empty_default=[],
+    )
+    if not department_scope:
+        department_scope = [department] if visibility == "Department" and department else ["ALL"]
+    return branch_scope, department_scope
+
+
 def normalize_non_empty_title(value: object, label: str) -> str:
     normalized = str(value or "").strip()
     if not normalized:
@@ -324,6 +407,18 @@ def normalize_announcement_payload(data: dict, actor: dict, existing: dict | Non
     image_url = data.get("imageUrl", existing.get("imageUrl") if existing else None)
     file_url = data.get("fileUrl", existing.get("fileUrl") if existing else None)
     attachment_name = data.get("attachmentName", existing.get("attachmentName") if existing else None)
+    visibility, department = normalize_visibility_and_department(
+        {
+            "visibility": data.get("visibility", existing.get("visibility") if existing else "General"),
+            "department": data.get("department", existing.get("department") if existing else None),
+        }
+    )
+    branch_scope, department_scope = derive_content_scope(
+        data,
+        visibility=visibility,
+        department=department,
+        existing=existing,
+    )
     return {
         "title": title,
         "content": content,
@@ -333,12 +428,21 @@ def normalize_announcement_payload(data: dict, actor: dict, existing: dict | Non
         "attachmentName": attachment_name,
         "allowDownload": allow_download,
         "poll": poll if isinstance(poll, dict) else None,
+        "visibility": visibility,
+        "department": department,
+        "branchScope": branch_scope,
+        "departmentScope": department_scope,
     }
 
 
 def normalize_training_video_payload(data: dict, actor: dict) -> dict:
     title = normalize_non_empty_title(data.get("title"), "Video title")
     visibility, department = normalize_visibility_and_department(data)
+    branch_scope, department_scope = derive_content_scope(
+        data,
+        visibility=visibility,
+        department=department,
+    )
     storage_type = normalize_storage_type(data.get("storageType", "Drive"))
     if storage_type == "Drive":
         drive_ref = extract_drive_file_id(data.get("driveRef") or data.get("videoUrl"))
@@ -361,6 +465,8 @@ def normalize_training_video_payload(data: dict, actor: dict) -> dict:
         "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
         "visibility": visibility,
         "department": department,
+        "branchScope": branch_scope,
+        "departmentScope": department_scope,
         "isMandatory": bool(data.get("isMandatory", False)),
         "allowDownload": bool(data.get("allowDownload", False)),
         "storageType": storage_type,
@@ -376,6 +482,11 @@ def normalize_training_video_payload(data: dict, actor: dict) -> dict:
 def normalize_training_document_payload(data: dict, actor: dict) -> dict:
     title = normalize_non_empty_title(data.get("title"), "Document title")
     visibility, department = normalize_visibility_and_department(data)
+    branch_scope, department_scope = derive_content_scope(
+        data,
+        visibility=visibility,
+        department=department,
+    )
     storage_type = normalize_storage_type(data.get("storageType", "Drive"))
     if storage_type == "Drive":
         drive_ref = str(data.get("driveRef") or "").strip()
@@ -403,6 +514,8 @@ def normalize_training_document_payload(data: dict, actor: dict) -> dict:
         "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
         "visibility": visibility,
         "department": department,
+        "branchScope": branch_scope,
+        "departmentScope": department_scope,
         "isMandatory": bool(data.get("isMandatory", False)),
         "allowDownload": bool(data.get("allowDownload", False)),
         "storageType": storage_type,
@@ -499,16 +612,25 @@ def normalize_user(raw: dict) -> dict:
     email = validate_email(str(raw.get("email", "")))
     department = str(raw.get("department", "")).strip().upper()
     branch = str(raw.get("branch", "")).strip().upper()
+    role = str(raw.get("role", role_from_department(department))).strip() or role_from_department(department)
     return {
         "id": str(raw.get("id", "")).strip(),
         "fullname": str(raw.get("fullname", "")).strip(),
         "phone": str(raw.get("phone", "")).strip(),
         "email": email,
-        "role": str(raw.get("role", role_from_department(department))).strip() or role_from_department(department),
+        "role": role,
         "position": str(raw.get("position", "")).strip() or "Staff",
         "department": department,
         "branch": branch,
         "imageFile": raw.get("imageFile"),
+        "managedBranches": normalize_scope_list(
+            raw.get("managedBranches"),
+            empty_default=["ALL"] if role in {"SuperAdmin", "HRAdmin"} else [],
+        ),
+        "managedDepartmentsByBranch": normalize_managed_departments_by_branch(
+            raw.get("managedDepartmentsByBranch")
+        ),
+        "permissions": normalize_user_permissions(raw.get("permissions"), role),
         "isActive": bool(raw.get("isActive", True)),
         "isVerified": bool(raw.get("isVerified", True)),
         "lastSeen": int(raw.get("lastSeen", 0) or 0),
@@ -951,15 +1073,47 @@ def eligible_users_for_visibility(visibility: str, department: str | None = None
     return eligible
 
 
+def item_branch_scope(item: dict) -> list[str]:
+    return normalize_scope_list(item.get("branchScope"), empty_default=["ALL"])
+
+
+def item_department_scope(item: dict) -> list[str]:
+    derived_department = str(item.get("department", "")).strip().upper()
+    empty_default = [derived_department] if derived_department and str(item.get("visibility", "General")).strip() == "Department" else ["ALL"]
+    return normalize_scope_list(item.get("departmentScope"), empty_default=empty_default)
+
+
+def value_in_scope(scope: list[str], current_value: str) -> bool:
+    if "ALL" in scope:
+        return True
+    return str(current_value or "").strip().upper() in scope
+
+
+def eligible_users_for_item(item: dict) -> list[dict]:
+    users = load_user_store()
+    eligible = [
+        user
+        for user in users
+        if user["isActive"] and user["isVerified"] and not user["isArchived"]
+    ]
+    branch_scope = item_branch_scope(item)
+    department_scope = item_department_scope(item)
+    return [
+        user
+        for user in eligible
+        if value_in_scope(branch_scope, str(user.get("branch", "")))
+        and value_in_scope(department_scope, str(user.get("department", "")))
+    ]
+
+
 def user_can_access_item(user: dict, item: dict) -> bool:
-    if user["role"] == "SuperAdmin":
+    if user["role"] in {"SuperAdmin", "HRAdmin"}:
         return True
     if bool(item.get("isArchived", False)):
         return False
-    visibility = str(item.get("visibility", "General")).strip()
-    if visibility == "Department":
-        return str(user.get("department", "")).strip().upper() == str(item.get("department", "")).strip().upper()
-    return True
+    return value_in_scope(item_branch_scope(item), str(user.get("branch", ""))) and value_in_scope(
+        item_department_scope(item), str(user.get("department", ""))
+    )
 
 
 def filter_items_for_user(items: list[dict], user: dict) -> list[dict]:
@@ -1051,9 +1205,18 @@ def fanout_content_notification(
     visibility: str,
     department: str | None,
     link_to: str | None,
+    branch_scope: list[str] | None = None,
+    department_scope: list[str] | None = None,
     send_external_emails: bool = False,
 ) -> dict[str, int]:
-    users = eligible_users_for_visibility(visibility, department)
+    users = eligible_users_for_item(
+        {
+            "visibility": visibility,
+            "department": department,
+            "branchScope": branch_scope or ["ALL"],
+            "departmentScope": department_scope or ([department] if department else ["ALL"]),
+        }
+    )
     notification_count = create_notifications_for_users(
         users,
         kind=kind,
@@ -1268,7 +1431,7 @@ def send_training_reminders(kind: str, item_id: int) -> dict[str, int]:
     item = get_training_video_by_id(item_id) if kind_key == "video" else get_training_document_by_id(item_id)
     if not item or item.get("isArchived"):
         raise ValueError("Training item not found")
-    eligible = eligible_users_for_visibility(item.get("visibility", "General"), item.get("department"))
+    eligible = eligible_users_for_item(item)
     completed_or_opened = (
         get_video_completed_user_ids(item_id)
         if kind_key == "video"
@@ -2054,10 +2217,10 @@ def auth_password_reset():
 
 @app.route("/api/content/announcements", methods=["GET"])
 def get_shared_announcements():
-    _, _, error = require_authenticated_user()
+    _, auth_user, error = require_authenticated_user()
     if error:
         return error
-    return jsonify({"announcements": load_json_list_store(ANNOUNCEMENTS_STORE_PATH)})
+    return jsonify({"announcements": filter_items_for_user(load_json_list_store(ANNOUNCEMENTS_STORE_PATH), auth_user)})
 
 
 @app.route("/api/content/announcements", methods=["POST", "OPTIONS"])
@@ -2278,6 +2441,11 @@ def create_shared_form():
     items = load_json_list_store(FORMS_STORE_PATH)
     try:
         visibility, department = normalize_visibility_and_department(data)
+        branch_scope, department_scope = derive_content_scope(
+            data,
+            visibility=visibility,
+            department=department,
+        )
         form = {
             "id": next_content_id(items),
             "title": normalize_non_empty_title(data.get("title"), "Form title"),
@@ -2287,6 +2455,8 @@ def create_shared_form():
             "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
             "visibility": visibility,
             "department": department,
+            "branchScope": branch_scope,
+            "departmentScope": department_scope,
             "createdAt": now_ms(),
             "updatedAt": now_ms(),
         }
@@ -2304,6 +2474,8 @@ def create_shared_form():
         item_title=form["title"],
         visibility=form["visibility"],
         department=form.get("department"),
+        branch_scope=form.get("branchScope"),
+        department_scope=form.get("departmentScope"),
         link_to="/forms",
         send_external_emails=send_external_emails,
     )
@@ -2336,14 +2508,29 @@ def update_shared_form(item_id: int):
             form["category"] = str(data.get("category", "")).strip() or form["category"]
         if "visibleTo" in data and isinstance(data.get("visibleTo"), list):
             form["visibleTo"] = data.get("visibleTo")
-        if "visibility" in data or "department" in data:
+        if (
+            "visibility" in data
+            or "department" in data
+            or "branchScope" in data
+            or "departmentScope" in data
+        ):
             merged = {
                 "visibility": data.get("visibility", form.get("visibility")),
                 "department": data.get("department", form.get("department")),
+                "branchScope": data.get("branchScope", form.get("branchScope")),
+                "departmentScope": data.get("departmentScope", form.get("departmentScope")),
             }
             visibility, department = normalize_visibility_and_department(merged)
+            branch_scope, department_scope = derive_content_scope(
+                merged,
+                visibility=visibility,
+                department=department,
+                existing=form,
+            )
             form["visibility"] = visibility
             form["department"] = department
+            form["branchScope"] = branch_scope
+            form["departmentScope"] = department_scope
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
     form["updatedAt"] = now_ms()
@@ -2420,6 +2607,8 @@ def create_shared_training_video():
         item_title=video["title"],
         visibility=video["visibility"],
         department=video.get("department"),
+        branch_scope=video.get("branchScope"),
+        department_scope=video.get("departmentScope"),
         link_to="/training",
         send_external_emails=send_external_emails,
     )
@@ -2627,6 +2816,8 @@ def create_shared_training_document():
         item_title=document["title"],
         visibility=document["visibility"],
         department=document.get("department"),
+        branch_scope=document.get("branchScope"),
+        department_scope=document.get("departmentScope"),
         link_to="/training",
         send_external_emails=send_external_emails,
     )
@@ -2775,7 +2966,7 @@ def get_admin_training_overview():
         if bool(video.get("isArchived", False)):
             continue
         video_id = int(video.get("id", 0) or 0)
-        eligible_users = eligible_users_for_visibility(video.get("visibility", "General"), video.get("department"))
+        eligible_users = eligible_users_for_item(video)
         watched_user_ids = {
             entry["userId"]
             for entry in progress_items
@@ -2807,7 +2998,7 @@ def get_admin_training_overview():
         if bool(document.get("isArchived", False)):
             continue
         document_id = int(document.get("id", 0) or 0)
-        eligible_users = eligible_users_for_visibility(document.get("visibility", "General"), document.get("department"))
+        eligible_users = eligible_users_for_item(document)
         opened_user_ids = {
             entry["userId"]
             for entry in open_items
