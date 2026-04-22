@@ -15,6 +15,7 @@ import {
   apiDismissAnnouncement,
   apiGetAnnouncements,
   apiGetDashboardOverview,
+  resolveAnnouncementAssetUrl,
   apiTrashAnnouncement,
   apiVoteAnnouncementPoll,
 } from "@/lib/backend-client";
@@ -149,16 +150,18 @@ function AnnouncementAttachment({
   compact?: boolean;
 }) {
   if (!ann.fileUrl && !ann.imageUrl) return null;
+  const resolvedImageUrl = resolveAnnouncementAssetUrl(ann.imageUrl);
+  const resolvedFileUrl = resolveAnnouncementAssetUrl(ann.fileUrl);
 
   const filename = ann.attachmentName || "Attached file";
   const linkLabel = ann.allowDownload ? "Download File" : "View File";
 
   return (
     <div className={compact ? "mt-3 space-y-3" : "mt-4 space-y-4"}>
-      {ann.imageUrl && (
+      {resolvedImageUrl && (
         <div className="overflow-hidden rounded-xl border border-border/30 bg-muted/30">
           <img
-            src={ann.imageUrl}
+            src={resolvedImageUrl}
             alt={ann.title}
             className={
               compact
@@ -169,7 +172,7 @@ function AnnouncementAttachment({
         </div>
       )}
 
-      {ann.fileUrl && (
+      {resolvedFileUrl && (
         <div className="flex items-center justify-between gap-3 flex-wrap rounded-xl border border-border/30 bg-background/50 px-4 py-3">
           <div className="min-w-0">
             <p className="text-sm font-semibold text-foreground truncate">
@@ -181,7 +184,7 @@ function AnnouncementAttachment({
           </div>
           <Button asChild size="sm" variant="outline">
             <a
-              href={ann.fileUrl}
+              href={resolvedFileUrl}
               target="_blank"
               rel="noreferrer"
               download={ann.allowDownload ? filename : undefined}
@@ -901,12 +904,31 @@ export default function DashboardPage() {
   const canAccessITArea = user?.department?.toUpperCase() === "IT";
 
   useEffect(() => {
-    Promise.all([apiGetDashboardOverview(), apiGetAnnouncements(user?.id)])
-      .then(([nextOverview, nextAnnouncements]) => {
+    let cancelled = false;
+
+    async function loadDashboard() {
+      try {
+        const [nextOverview, nextAnnouncements] = await Promise.all([
+          apiGetDashboardOverview(),
+          apiGetAnnouncements(user?.id),
+        ]);
+        if (cancelled) return;
         setOverview(nextOverview);
         setAnnouncements(nextAnnouncements);
-      })
-      .finally(() => setLoading(false));
+      } catch {
+        if (cancelled) return;
+        setOverview(null);
+        setAnnouncements([]);
+        toast.error("Dashboard data could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadDashboard();
+    return () => {
+      cancelled = true;
+    };
   }, [user?.id]);
 
   return (

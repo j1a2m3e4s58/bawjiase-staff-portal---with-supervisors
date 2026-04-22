@@ -115,39 +115,64 @@ export default function TrainingHubPage() {
     setLoadingVideos(true);
     setLoadingDocuments(true);
 
-    apiGetTrainingVideos()
-      .then(async (items) => {
+    async function loadVideos() {
+      try {
+        const items = await apiGetTrainingVideos();
         if (cancelled) return;
         setVideos(items);
         const progressEntries = await Promise.all(
           items.map(async (video) => {
-            const progress = await apiGetMyVideoProgress(video.id);
-            return [video.id, progress?.progressPercent ?? 0] as const;
+            try {
+              const progress = await apiGetMyVideoProgress(video.id);
+              return [video.id, progress?.progressPercent ?? 0] as const;
+            } catch {
+              return [video.id, 0] as const;
+            }
           }),
         );
         if (cancelled) return;
         setVideoProgress(Object.fromEntries(progressEntries));
-      })
-      .finally(() => {
+      } catch {
+        if (cancelled) return;
+        setVideos([]);
+        setVideoProgress({});
+        toast.error("Training videos could not be loaded. Please try again.");
+      } finally {
         if (!cancelled) setLoadingVideos(false);
-      });
+      }
+    }
 
-    apiGetTrainingDocuments()
-      .then(async (items) => {
+    async function loadDocuments() {
+      try {
+        const items = await apiGetTrainingDocuments();
         if (cancelled) return;
         setDocuments(items);
         const openedEntries = await Promise.all(
           items.map(async (doc) => {
-            const state = await apiGetMyDocumentOpenState(doc.id);
-            return [doc.id, state.isOpened] as const;
+            try {
+              const state = await apiGetMyDocumentOpenState(doc.id);
+              return [doc.id, state.isOpened] as const;
+            } catch {
+              return [doc.id, false] as const;
+            }
           }),
         );
         if (cancelled) return;
         setDocumentOpened(Object.fromEntries(openedEntries));
-      })
-      .finally(() => {
+      } catch {
+        if (cancelled) return;
+        setDocuments([]);
+        setDocumentOpened({});
+        toast.error(
+          "Training documents could not be loaded. Please try again.",
+        );
+      } finally {
         if (!cancelled) setLoadingDocuments(false);
-      });
+      }
+    }
+
+    void loadVideos();
+    void loadDocuments();
 
     return () => {
       cancelled = true;

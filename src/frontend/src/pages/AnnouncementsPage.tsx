@@ -548,10 +548,27 @@ export default function AnnouncementsPage() {
 
   useEffect(() => {
     if (!user) return;
-    apiGetAnnouncements(user.id).then((data) => {
-      setAnnouncements(data);
-      setLoading(false);
-    });
+    const currentUserId = user.id;
+    let cancelled = false;
+
+    async function loadAnnouncements() {
+      try {
+        const data = await apiGetAnnouncements(currentUserId);
+        if (cancelled) return;
+        setAnnouncements(data);
+      } catch {
+        if (cancelled) return;
+        setAnnouncements([]);
+        toast.error("Announcements could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    void loadAnnouncements();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   useEffect(() => {

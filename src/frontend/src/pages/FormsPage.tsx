@@ -347,10 +347,26 @@ export default function FormsPage() {
   const [isDeleting, setIsDeleting] = useState(false);
 
   useEffect(() => {
-    apiGetForms(user).then((data) => {
-      setForms(data);
-      setIsLoading(false);
-    });
+    let cancelled = false;
+
+    async function loadForms() {
+      try {
+        const data = await apiGetForms(user);
+        if (cancelled) return;
+        setForms(data);
+      } catch {
+        if (cancelled) return;
+        setForms([]);
+        toast.error("Forms could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void loadForms();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   const filtered = useMemo(() => {

@@ -177,10 +177,26 @@ export default function NotificationsPage() {
 
   useEffect(() => {
     if (!user) return;
-    apiGetNotifications().then((data) => {
-      setNotifications(data);
-      setIsLoading(false);
-    });
+    let cancelled = false;
+
+    async function loadNotifications() {
+      try {
+        const data = await apiGetNotifications();
+        if (cancelled) return;
+        setNotifications(data);
+      } catch {
+        if (cancelled) return;
+        setNotifications([]);
+        toast.error("Notifications could not be loaded. Please try again.");
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
+    }
+
+    void loadNotifications();
+    return () => {
+      cancelled = true;
+    };
   }, [user]);
 
   useEffect(() => {
