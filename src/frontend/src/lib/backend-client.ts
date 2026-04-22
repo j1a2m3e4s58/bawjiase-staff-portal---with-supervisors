@@ -59,6 +59,13 @@ function getStoredSessionToken(): string | null {
   }
 }
 
+function withSessionToken(url: string): string {
+  const token = getStoredSessionToken();
+  if (!token) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}sessionToken=${encodeURIComponent(token)}`;
+}
+
 async function postMailApi(path: string, payload: Record<string, unknown>) {
   const token = getStoredSessionToken();
   const response = await fetch(`${MAIL_API_URL}${path}`, {
@@ -1942,7 +1949,7 @@ function isGoogleDocUrl(input: string) {
 
 function localAssetUrl(ref: string) {
   const filename = ref.replace(/^LOCAL:/, "").trim();
-  return filename ? `${MAIL_API_ROOT}/uploads/${filename}` : "";
+  return filename ? withSessionToken(`${MAIL_API_ROOT}/uploads/${filename}`) : "";
 }
 
 export async function apiUploadTrainingVideoFile(

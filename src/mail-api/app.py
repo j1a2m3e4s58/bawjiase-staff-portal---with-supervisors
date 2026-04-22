@@ -208,6 +208,14 @@ def require_json():
     return data, None
 
 
+def parse_session_token() -> str:
+    header = str(request.headers.get("Authorization", "")).strip()
+    if header.startswith("Bearer "):
+        return header[7:].strip()
+    query_token = str(request.args.get("sessionToken", "")).strip()
+    return query_token
+
+
 def validate_email(email: str) -> str:
     normalized = (email or "").strip().lower()
     if not normalized.endswith(OFFICIAL_EMAIL_DOMAIN):
@@ -585,16 +593,8 @@ def revoke_user_sessions(user_id: str) -> None:
     if filtered != sessions:
         save_sessions(filtered)
 
-
-def parse_bearer_token() -> str:
-    header = str(request.headers.get("Authorization", "")).strip()
-    if not header.startswith("Bearer "):
-        return ""
-    return header[7:].strip()
-
-
 def require_authenticated_user():
-    token = parse_bearer_token()
+    token = parse_session_token()
     if not token:
         return None, None, (jsonify({"error": "Authentication required"}), 401)
     sessions = load_sessions()
@@ -742,6 +742,21 @@ def eligible_users_for_visibility(visibility: str, department: str | None = None
             if str(user.get("department", "")).strip().upper() == normalized_department
         ]
     return eligible
+
+
+def user_can_access_item(user: dict, item: dict) -> bool:
+    if user["role"] == "SuperAdmin":
+        return True
+    if bool(item.get("isArchived", False)):
+        return False
+    visibility = str(item.get("visibility", "General")).strip()
+    if visibility == "Department":
+        return str(user.get("department", "")).strip().upper() == str(item.get("department", "")).strip().upper()
+    return True
+
+
+def filter_items_for_user(items: list[dict], user: dict) -> list[dict]:
+    return [item for item in items if user_can_access_item(user, item)]
 
 
 def create_notifications_for_users(
@@ -956,6 +971,44 @@ def reminder_link_for_kind(kind: str, item_id: int) -> str:
     return f"/training/document/{item_id}"
 
 
+def find_video_by_local_filename(filename: str) -> dict | None:
+    items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
+    return next(
+        (
+            item
+            for item in items
+            if str(item.get("storageType", "")).strip() == "Local"
+            and str(item.get("localFilename", "")).strip() == filename
+        ),
+        None,
+    )
+
+
+def find_document_by_local_filename(filename: str) -> dict | None:
+    items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
+    return next(
+        (
+            item
+            for item in items
+            if str(item.get("storageType", "")).strip() == "Local"
+            and str(item.get("localFilename", "")).strip() == filename
+        ),
+        None,
+    )
+
+
+def remove_uploaded_file_if_unused(filename: str) -> None:
+    if not filename:
+        return
+    video_match = find_video_by_local_filename(filename)
+    document_match = find_document_by_local_filename(filename)
+    if video_match or document_match:
+        return
+    file_path = os.path.join(UPLOADS_DIR, filename)
+    if os.path.isfile(file_path):
+        os.remove(file_path)
+
+
 def send_training_reminders(kind: str, item_id: int) -> dict[str, int]:
     kind_key = "video" if kind == "video" else "document"
     item = get_training_video_by_id(item_id) if kind_key == "video" else get_training_document_by_id(item_id)
@@ -1074,6 +1127,14 @@ def get_uploaded_media(filename: str):
     safe_name = secure_filename(filename)
     if not safe_name or safe_name != filename:
         return jsonify({"error": "Invalid file name"}), 400
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    item = find_video_by_local_filename(safe_name) or find_document_by_local_filename(safe_name)
+    if not item:
+        return jsonify({"error": "File not found"}), 404
+    if not user_can_access_item(auth_user, item):
+        return jsonify({"error": "Access denied"}), 403
     return send_from_directory(UPLOADS_DIR, safe_name, conditional=True)
 
 
@@ -1825,10 +1886,10 @@ def empty_shared_announcement_trash():
 
 @app.route("/api/content/forms", methods=["GET"])
 def get_shared_forms():
-    _, _, error = require_authenticated_user()
+    _, auth_user, error = require_authenticated_user()
     if error:
         return error
-    return jsonify({"forms": load_json_list_store(FORMS_STORE_PATH)})
+    return jsonify({"forms": filter_items_for_user(load_json_list_store(FORMS_STORE_PATH), auth_user)})
 
 
 @app.route("/api/uploads/training-video", methods=["POST", "OPTIONS"])
@@ -1943,11 +2004,11 @@ def delete_shared_form(item_id: int):
 
 @app.route("/api/content/training/videos", methods=["GET"])
 def get_shared_training_videos():
-    _, _, error = require_authenticated_user()
+    _, auth_user, error = require_authenticated_user()
     if error:
         return error
     items = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
-    return jsonify({"videos": items})
+    return jsonify({"videos": filter_items_for_user(items, auth_user)})
 
 
 @app.route("/api/content/training/videos", methods=["POST", "OPTIONS"])
@@ -2023,6 +2084,8 @@ def get_my_training_video_progress(item_id: int):
     video = get_training_video_by_id(item_id)
     if not video or bool(video.get("isArchived", False)):
         return jsonify({"error": "Video not found"}), 404
+    if not user_can_access_item(auth_user, video):
+        return jsonify({"error": "Access denied"}), 403
     progress_items = load_training_video_progress_store()
     item = next(
         (
@@ -2049,6 +2112,8 @@ def update_my_training_video_progress(item_id: int):
     video = get_training_video_by_id(item_id)
     if not video or bool(video.get("isArchived", False)):
         return jsonify({"error": "Video not found"}), 404
+    if not user_can_access_item(auth_user, video):
+        return jsonify({"error": "Access denied"}), 403
     progress_percent = max(0, min(100, int(data.get("progressPercent", 0) or 0)))
     progress_items = load_training_video_progress_store()
     entry = next(
@@ -2066,6 +2131,17 @@ def update_my_training_video_progress(item_id: int):
         "isComplete": progress_percent >= 98,
         "lastWatched": now_ms(),
     }
+    previous_percent = int(entry.get("progressPercent", 0) or 0) if entry else 0
+    is_local_video = str(video.get("storageType", "")).strip() == "Local"
+    if is_local_video:
+        if progress_percent < previous_percent:
+            progress_percent = previous_percent
+        elif progress_percent > previous_percent + 20:
+            return jsonify({"error": "Invalid progress update"}), 400
+        if progress_percent >= 98 and previous_percent < 80:
+            return jsonify({"error": "Progress jumped too far ahead"}), 400
+        payload["progressPercent"] = progress_percent
+        payload["isComplete"] = progress_percent >= 98
     if entry:
         entry.update(payload)
     else:
@@ -2138,20 +2214,23 @@ def delete_shared_training_video(item_id: int):
     if error:
         return error
     items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
+    target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     if len(filtered) == len(items):
         return jsonify({"error": "Video not found"}), 404
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, filtered)
+    if target and str(target.get("storageType", "")).strip() == "Local":
+        remove_uploaded_file_if_unused(str(target.get("localFilename", "")).strip())
     return jsonify({"ok": True})
 
 
 @app.route("/api/content/training/documents", methods=["GET"])
 def get_shared_training_documents():
-    _, _, error = require_authenticated_user()
+    _, auth_user, error = require_authenticated_user()
     if error:
         return error
     items = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
-    return jsonify({"documents": items})
+    return jsonify({"documents": filter_items_for_user(items, auth_user)})
 
 
 @app.route("/api/content/training/documents", methods=["POST", "OPTIONS"])
@@ -2226,6 +2305,8 @@ def get_my_training_document_open_state(item_id: int):
     document = get_training_document_by_id(item_id)
     if not document or bool(document.get("isArchived", False)):
         return jsonify({"error": "Document not found"}), 404
+    if not user_can_access_item(auth_user, document):
+        return jsonify({"error": "Access denied"}), 403
     open_items = load_training_document_opens_store()
     item = next(
         (
@@ -2249,6 +2330,8 @@ def mark_training_document_opened(item_id: int):
     document = get_training_document_by_id(item_id)
     if not document or bool(document.get("isArchived", False)):
         return jsonify({"error": "Document not found"}), 404
+    if not user_can_access_item(auth_user, document):
+        return jsonify({"error": "Access denied"}), 403
     open_items = load_training_document_opens_store()
     entry = next(
         (
@@ -2327,10 +2410,13 @@ def delete_shared_training_document(item_id: int):
     if error:
         return error
     items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
+    target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     if len(filtered) == len(items):
         return jsonify({"error": "Document not found"}), 404
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, filtered)
+    if target and str(target.get("storageType", "")).strip() == "Local":
+        remove_uploaded_file_if_unused(str(target.get("localFilename", "")).strip())
     return jsonify({"ok": True})
 
 
