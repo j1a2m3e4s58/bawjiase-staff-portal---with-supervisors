@@ -7,6 +7,8 @@ It creates:
 - `bawjiase-staff-api`: Python web service for email and shared presence endpoints
 - `bawjiase-staff-preview`: static frontend site
 
+The frontend build uses `VITE_MAIL_API_URL=https://bawjiase-staff-api.onrender.com/api` so upload and API requests go directly to the Render API service during preview deploys.
+
 ## How to deploy
 
 1. Push this repo to GitHub.

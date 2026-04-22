@@ -94,8 +94,10 @@ export default function TrainingUploadDocumentPage() {
       });
       toast.success("Document uploaded successfully");
       navigate({ to: "/training" });
-    } catch {
-      toast.error("Upload failed. Please try again.");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Upload failed. Please try again.",
+      );
     } finally {
       setSubmitting(false);
     }
