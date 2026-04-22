@@ -33,7 +33,7 @@ const MAIL_API_ROOT = MAIL_API_URL.replace(/\/api$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
-const OPTIONAL_API_TIMEOUT_MS = 1500;
+const OPTIONAL_API_TIMEOUT_MS = 8000;
 const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -947,7 +947,6 @@ export async function apiConfirmPasswordReset(
 // ── Profile ───────────────────────────────────────────────────────────────────
 
 export async function apiGetMyProfile(userId: string): Promise<User | null> {
-  await delay(300);
   await refreshUsersCache();
   const sharedPresence = await fetchSharedPresenceMap();
   applyPresenceMap(_mockUsers, sharedPresence);
@@ -960,7 +959,6 @@ export async function apiUpdateMyProfile(
   userId: string,
   req: UpdateProfileRequest,
 ): Promise<ApiResult<User>> {
-  await delay(400);
   try {
     const payload = await postMailApiJson(
       `/users/${encodeURIComponent(userId)}/profile`,
@@ -981,7 +979,6 @@ export async function apiUpdateMyProfile(
 // ── Staff ─────────────────────────────────────────────────────────────────────
 
 export async function apiGetActiveStaff(): Promise<User[]> {
-  await delay(400);
   await refreshUsersCache();
   const sharedPresence = await fetchSharedPresenceMap();
   applyPresenceMap(_mockUsers, sharedPresence);
@@ -996,7 +993,6 @@ export async function apiGetActiveStaff(): Promise<User[]> {
 }
 
 export async function apiGetArchivedStaff(): Promise<User[]> {
-  await delay(400);
   try {
     const payload = await getMailApiJson("/staff/archived");
     const users = (Array.isArray(payload.users) ? (payload.users as WireUser[]) : [])
@@ -1016,7 +1012,6 @@ export async function apiGetArchivedStaff(): Promise<User[]> {
 }
 
 export async function apiGetStaffMember(userId: string): Promise<User | null> {
-  await delay(200);
   await refreshUsersCache();
   return fetchUserById(userId);
 }
@@ -1025,7 +1020,6 @@ export async function apiUpdateStaff(
   userId: string,
   req: UpdateStaffRequest,
 ): Promise<ApiResult<User>> {
-  await delay(400);
   try {
     const payload = await postMailApiJson(
       `/staff/${encodeURIComponent(userId)}/update`,
@@ -1046,7 +1040,6 @@ export async function apiUpdateStaff(
 export async function apiArchiveStaff(
   userId: string,
 ): Promise<ApiResult<null>> {
-  await delay(300);
   try {
     await postMailApi(`/staff/${encodeURIComponent(userId)}/archive`, {});
     await refreshUsersCache();
@@ -1059,7 +1052,6 @@ export async function apiArchiveStaff(
 export async function apiRestoreStaff(
   userId: string,
 ): Promise<ApiResult<null>> {
-  await delay(300);
   try {
     await postMailApi(`/staff/${encodeURIComponent(userId)}/restore`, {});
     await refreshUsersCache();
@@ -2024,12 +2016,26 @@ export async function apiUploadAnnouncementAssetFile(
   };
 }
 
-export function resolveAnnouncementAssetUrl(raw: string | null | undefined): string | null {
+export async function apiUploadProfilePhotoFile(
+  file: File,
+): Promise<{ filename: string; url: string }> {
+  const payload = await uploadMailApiFile("/uploads/profile-photo", file);
+  return {
+    filename: String(payload.filename ?? ""),
+    url: String(payload.url ?? ""),
+  };
+}
+
+export function resolveStoredAssetUrl(raw: string | null | undefined): string | null {
   if (!raw) return null;
   if (raw.startsWith("LOCAL:")) {
     return localAssetUrl(raw);
   }
   return raw;
+}
+
+export function resolveAnnouncementAssetUrl(raw: string | null | undefined): string | null {
+  return resolveStoredAssetUrl(raw);
 }
 
 export function resolveTrainingVideoEmbedUrl(video: TrainingVideo): string {

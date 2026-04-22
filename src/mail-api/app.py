@@ -2165,6 +2165,21 @@ def upload_announcement_asset_file():
         return jsonify({"error": str(exc)}), 400
 
 
+@app.route("/api/uploads/profile-photo", methods=["POST", "OPTIONS"])
+def upload_profile_photo_file():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    try:
+        saved = save_uploaded_media(request.files.get("file"), "profile")
+        return jsonify({"ok": True, **saved})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
 @app.route("/api/content/forms", methods=["POST", "OPTIONS"])
 def create_shared_form():
     preflight = handle_options()

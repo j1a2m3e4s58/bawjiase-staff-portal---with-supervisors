@@ -25,9 +25,9 @@ import {
   type UpdateStaffRequest,
   apiArchiveStaff,
   apiGetActiveStaff,
+  resolveStoredAssetUrl,
   apiUpdateStaff,
 } from "@/lib/backend-client";
-import { normalizePublicPath } from "@/lib/app-base";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS, type User } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
@@ -159,7 +159,7 @@ function StaffCard({
   const online = isOnline(staff);
   const initials = getInitials(staff.fullname);
   const canArchive = canEdit && !isSelf && staff.role !== "SuperAdmin";
-  const profileImage = normalizePublicPath(staff.imageFile);
+  const profileImage = resolveStoredAssetUrl(staff.imageFile);
 
   return (
     <div

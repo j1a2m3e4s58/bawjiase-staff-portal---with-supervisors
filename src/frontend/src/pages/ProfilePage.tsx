@@ -18,9 +18,10 @@ import { Separator } from "@/components/ui/separator";
 import {
   type UpdateProfileRequest,
   apiGetMyProfile,
+  apiUploadProfilePhotoFile,
   apiUpdateMyProfile,
+  resolveStoredAssetUrl,
 } from "@/lib/backend-client";
-import { normalizePublicPath } from "@/lib/app-base";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS } from "@/types";
 import type { Role } from "@/types";
@@ -159,6 +160,14 @@ export default function ProfilePage() {
     };
   }, [user]);
 
+  useEffect(() => {
+    return () => {
+      if (photoPreview?.startsWith("blob:")) {
+        URL.revokeObjectURL(photoPreview);
+      }
+    };
+  }, [photoPreview]);
+
   function handleAvatarClick() {
     if (isEditing) fileInputRef.current?.click();
   }
@@ -170,12 +179,15 @@ export default function ProfilePage() {
       toast.error("Please select an image file");
       return;
     }
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Please keep profile photos under 10 MB");
+      return;
+    }
+    if (photoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(photoPreview);
+    }
     setPhotoFile(file);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      setPhotoPreview(ev.target?.result as string);
-    };
-    reader.readAsDataURL(file);
+    setPhotoPreview(URL.createObjectURL(file));
   }
 
   function handleCancelEdit() {
@@ -186,6 +198,9 @@ export default function ProfilePage() {
     setBranch(user.branch);
     setItCode("");
     setItCodeError("");
+    if (photoPreview?.startsWith("blob:")) {
+      URL.revokeObjectURL(photoPreview);
+    }
     setPhotoPreview(null);
     setPhotoFile(null);
     setIsEditing(false);
@@ -225,7 +240,8 @@ export default function ProfilePage() {
 
       // Photo upload (placeholder — attach to imageFile field)
       if (photoFile) {
-        req.imageFile = photoPreview ?? undefined;
+        const uploaded = await apiUploadProfilePhotoFile(photoFile);
+        req.imageFile = `LOCAL:${uploaded.filename}`;
       }
 
       const result = await apiUpdateMyProfile(user.id, req);
@@ -236,6 +252,9 @@ export default function ProfilePage() {
         setItCode("");
         setItCodeError("");
         setPhotoFile(null);
+        if (photoPreview?.startsWith("blob:")) {
+          URL.revokeObjectURL(photoPreview);
+        }
         setPhotoPreview(null);
       } else {
         toast.error(result.err ?? "Failed to update profile");
@@ -262,7 +281,7 @@ export default function ProfilePage() {
 
   if (!user) return null;
 
-  const displayPhoto = photoPreview ?? normalizePublicPath(user.imageFile);
+  const displayPhoto = photoPreview ?? resolveStoredAssetUrl(user.imageFile);
   const initials = getInitials(user.fullname);
 
   return (
