@@ -1333,7 +1333,6 @@ export async function apiCreateAnnouncement(
   req: CreateAnnouncementRequest,
   author: Pick<User, "id" | "fullname" | "department">,
 ): Promise<ApiResult<AnnouncementWithPoll>> {
-  await delay(450);
   const cleanPollOptions = (req.pollOptions ?? [])
     .map((option) => option.trim())
     .filter(Boolean);
@@ -1377,7 +1376,6 @@ export async function apiUpdateAnnouncement(
   id: number,
   req: UpdateAnnouncementRequest,
 ): Promise<ApiResult<AnnouncementWithPoll>> {
-  await delay(350);
   const announcement = _announcements.find((item) => item.id === id);
   if (!announcement) return err("Announcement not found");
   if (id >= 1000) {

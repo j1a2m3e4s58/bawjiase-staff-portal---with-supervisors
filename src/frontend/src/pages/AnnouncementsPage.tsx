@@ -331,7 +331,7 @@ function AnnouncementModal({
 }: {
   open: boolean;
   onClose: () => void;
-  onSave: (data: AnnouncementFormData) => void;
+  onSave: (data: AnnouncementFormData) => Promise<void>;
   editing: AnnouncementWithPoll | null;
 }) {
   const [form, setForm] = useState<AnnouncementFormData>({
@@ -379,10 +379,12 @@ function AnnouncementModal({
       return;
     }
     setSubmitting(true);
-    await new Promise((r) => setTimeout(r, 400));
-    onSave(form);
-    setSubmitting(false);
-    onClose();
+    try {
+      await onSave(form);
+      onClose();
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
