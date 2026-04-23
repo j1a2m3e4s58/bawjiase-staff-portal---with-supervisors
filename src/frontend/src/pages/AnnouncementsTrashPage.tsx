@@ -25,7 +25,6 @@ import {
   apiDeleteAnnouncement,
   apiEmptyAnnouncementTrash,
   apiGetTrashedAnnouncements,
-  apiLogAction,
   apiRestoreAnnouncement,
   formatAudienceSummary,
   getManageableBranches,
@@ -193,7 +192,6 @@ export default function AnnouncementsTrashPage() {
     }
     setTrashed((prev) => prev.filter((a) => a.id !== id));
     toast.success("Announcement restored");
-    apiLogAction("Admin", "RESTORE_ANNOUNCEMENT", `ID:${id}`, "—");
   }
 
   async function handleDelete(id: number) {
@@ -204,7 +202,6 @@ export default function AnnouncementsTrashPage() {
     }
     setTrashed((prev) => prev.filter((a) => a.id !== id));
     toast.success("Announcement permanently deleted");
-    apiLogAction("Admin", "DELETE_ANNOUNCEMENT", `ID:${id}`, "—");
   }
 
   async function handleEmptyTrash() {
@@ -216,7 +213,6 @@ export default function AnnouncementsTrashPage() {
     setTrashed([]);
     setEmptyTrashOpen(false);
     toast.success("Trash emptied");
-    apiLogAction("Admin", "EMPTY_TRASH", "All announcements", "—");
   }
 
   const availableBranches = useMemo(() => {

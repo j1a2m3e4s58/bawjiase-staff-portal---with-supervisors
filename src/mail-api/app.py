@@ -980,6 +980,22 @@ def record_audit_log(
     return entry
 
 
+def record_content_audit(actor: dict, action: str, module: str, item: dict | None) -> None:
+    if not item:
+        return
+    record_audit_log(
+        actor,
+        action,
+        {
+            "module": module,
+            "id": int(item.get("id", 0) or 0),
+            "title": str(item.get("title", "")).strip(),
+            "branchScope": item_branch_scope(item),
+            "departmentScope": item_department_scope(item),
+        },
+    )
+
+
 def load_training_video_progress_store() -> list[dict]:
     items = load_json_list_store(TRAINING_VIDEO_PROGRESS_STORE_PATH)
     normalized = []
@@ -2655,6 +2671,7 @@ def create_shared_announcement():
     }
     items.insert(0, announcement)
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    record_content_audit(actor, "CREATE_ANNOUNCEMENT", "announcement", announcement)
     return jsonify({"ok": True, "announcement": announcement})
 
 
@@ -2692,6 +2709,7 @@ def update_shared_announcement(item_id: int):
     announcement.update(payload)
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    record_content_audit(actor, "UPDATE_ANNOUNCEMENT", "announcement", announcement)
     if previous_image.startswith("LOCAL:") and previous_image != str(announcement.get("imageUrl") or "").strip():
         remove_uploaded_file_if_unused(previous_image.replace("LOCAL:", "", 1).strip())
     if previous_file.startswith("LOCAL:") and previous_file != str(announcement.get("fileUrl") or "").strip():
@@ -2716,6 +2734,7 @@ def trash_shared_announcement(item_id: int):
     announcement["isTrashed"] = True
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    record_content_audit(actor, "TRASH_ANNOUNCEMENT", "announcement", announcement)
     return jsonify({"ok": True})
 
 
@@ -2736,6 +2755,7 @@ def restore_shared_announcement(item_id: int):
     announcement["isTrashed"] = False
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
+    record_content_audit(actor, "RESTORE_ANNOUNCEMENT", "announcement", announcement)
     return jsonify({"ok": True})
 
 
@@ -2755,6 +2775,7 @@ def delete_shared_announcement(item_id: int):
         return jsonify({"error": "Access denied"}), 403
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, filtered)
+    record_content_audit(actor, "DELETE_ANNOUNCEMENT", "announcement", target)
     cleanup_local_announcement_assets(target)
     return jsonify({"ok": True})
 
@@ -2764,7 +2785,7 @@ def empty_shared_announcement_trash():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_staff_manager()
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
@@ -2775,6 +2796,11 @@ def empty_shared_announcement_trash():
     )
     for item in trashed_items:
         cleanup_local_announcement_assets(item)
+    record_audit_log(
+        actor,
+        "EMPTY_ANNOUNCEMENT_TRASH",
+        {"module": "announcement", "deletedCount": len(trashed_items)},
+    )
     return jsonify({"ok": True})
 
 
@@ -2892,6 +2918,7 @@ def create_shared_form():
         return denial
     items.insert(0, form)
     save_json_list_store(FORMS_STORE_PATH, items)
+    record_content_audit(actor, "CREATE_FORM", "form", form)
     delivery = fanout_content_notification(
         kind="system",
         title="New Form Available",
@@ -2973,6 +3000,7 @@ def update_shared_form(item_id: int):
         return denial
     form["updatedAt"] = now_ms()
     save_json_list_store(FORMS_STORE_PATH, items)
+    record_content_audit(actor, "UPDATE_FORM", "form", form)
     return jsonify({"ok": True, "form": form})
 
 
@@ -2992,6 +3020,7 @@ def delete_shared_form(item_id: int):
         return jsonify({"error": "Access denied"}), 403
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(FORMS_STORE_PATH, filtered)
+    record_content_audit(actor, "DELETE_FORM", "form", target)
     return jsonify({"ok": True})
 
 
@@ -3031,6 +3060,7 @@ def create_shared_training_video():
         return denial
     items.insert(0, video)
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
+    record_content_audit(actor, "CREATE_TRAINING_VIDEO", "trainingVideo", video)
     video_subject = (
         "Bawjiase Staff Portal - Mandatory Training Assigned"
         if video["isMandatory"]
@@ -3194,6 +3224,7 @@ def archive_shared_training_video(item_id: int):
         return jsonify({"error": "Access denied"}), 403
     video["isArchived"] = True
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
+    record_content_audit(actor, "ARCHIVE_TRAINING_VIDEO", "trainingVideo", video)
     return jsonify({"ok": True})
 
 
@@ -3213,6 +3244,7 @@ def delete_shared_training_video(item_id: int):
         return jsonify({"error": "Access denied"}), 403
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, filtered)
+    record_content_audit(actor, "DELETE_TRAINING_VIDEO", "trainingVideo", target)
     if target and str(target.get("storageType", "")).strip() == "Local":
         remove_uploaded_file_if_unused(str(target.get("localFilename", "")).strip())
     return jsonify({"ok": True})
@@ -3254,6 +3286,7 @@ def create_shared_training_document():
         return denial
     items.insert(0, document)
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
+    record_content_audit(actor, "CREATE_TRAINING_DOCUMENT", "trainingDocument", document)
     document_subject = (
         "Bawjiase Staff Portal - Mandatory Training Document"
         if document["isMandatory"]
@@ -3392,6 +3425,7 @@ def archive_shared_training_document(item_id: int):
         return jsonify({"error": "Access denied"}), 403
     document["isArchived"] = True
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
+    record_content_audit(actor, "ARCHIVE_TRAINING_DOCUMENT", "trainingDocument", document)
     return jsonify({"ok": True})
 
 
@@ -3411,6 +3445,7 @@ def delete_shared_training_document(item_id: int):
         return jsonify({"error": "Access denied"}), 403
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, filtered)
+    record_content_audit(actor, "DELETE_TRAINING_DOCUMENT", "trainingDocument", target)
     if target and str(target.get("storageType", "")).strip() == "Local":
         remove_uploaded_file_if_unused(str(target.get("localFilename", "")).strip())
     return jsonify({"ok": True})

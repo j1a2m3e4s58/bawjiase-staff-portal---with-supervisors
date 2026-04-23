@@ -24,7 +24,6 @@ import {
   apiCreateAnnouncement,
   apiDismissAnnouncement,
   apiGetAnnouncements,
-  apiLogAction,
   resolveAnnouncementAssetUrl,
   apiTrashAnnouncement,
   apiUpdateAnnouncement,
@@ -765,7 +764,6 @@ export default function AnnouncementsPage() {
     }
     setAnnouncements((prev) => prev.filter((a) => a.id !== id));
     toast.success("Moved to trash");
-    apiLogAction("Admin", "TRASH_ANNOUNCEMENT", `ID:${id}`, "—");
   }
 
   function handleEdit(ann: AnnouncementWithPoll) {

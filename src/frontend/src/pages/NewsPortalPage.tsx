@@ -16,7 +16,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import {
   apiCreateAnnouncement,
-  apiLogAction,
   apiUploadAnnouncementAssetFile,
   canManageAllDepartmentsForBranch,
   formatAudienceSummary,
@@ -270,7 +269,6 @@ function NewsPortalForm() {
         return;
       }
 
-      await apiLogAction(user.fullname, "CREATE_ANNOUNCEMENT", title.trim(), "-");
       toast.success("News posted successfully");
       resetForm();
     } finally {
