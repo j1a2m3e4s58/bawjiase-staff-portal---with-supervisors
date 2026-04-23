@@ -35,6 +35,7 @@ import {
   getManageableBranches,
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
+  userCanManageScopedItem,
   userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
@@ -350,13 +351,13 @@ function FormDialog({
 
 interface FormCardProps {
   form: PortalForm;
-  canAdmin: boolean;
+  canManage: boolean;
   onEdit: (form: PortalForm) => void;
   onDelete: (form: PortalForm) => void;
   index: number;
 }
 
-function FormCard({ form, canAdmin, onEdit, onDelete, index }: FormCardProps) {
+function FormCard({ form, canManage, onEdit, onDelete, index }: FormCardProps) {
   const categoryColor =
     CATEGORY_COLORS[form.category] ?? CATEGORY_COLORS.General;
   const audienceSummary = formatAudienceSummary(
@@ -389,7 +390,7 @@ function FormCard({ form, canAdmin, onEdit, onDelete, index }: FormCardProps) {
         </div>
 
         <div className="grid grid-cols-2 gap-2 sm:flex sm:flex-shrink-0 sm:items-center sm:gap-1.5">
-          {canAdmin && (
+          {canManage && (
             <>
               <Button
                 type="button"
@@ -709,14 +710,14 @@ export default function FormsPage() {
             />
           ) : (
             <div className="grid md:grid-cols-2 gap-3">
-              {filtered.map((form, index) => (
-                <FormCard
-                  key={form.id}
-                  form={form}
-                  canAdmin={canAdmin}
-                  onEdit={(item) => {
-                    setEditingForm(item);
-                    setDialogOpen(true);
+                {filtered.map((form, index) => (
+                  <FormCard
+                    key={form.id}
+                    form={form}
+                    canManage={userCanManageScopedItem(user, form, "forms")}
+                    onEdit={(item) => {
+                      setEditingForm(item);
+                      setDialogOpen(true);
                   }}
                   onDelete={setDeleteTarget}
                   index={index + 1}

@@ -34,6 +34,7 @@ import {
   getManageableBranches,
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
+  userCanManageScopedItem,
   userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
@@ -1049,7 +1050,7 @@ export default function AnnouncementsPage() {
                       onDismiss={handleDismiss}
                       onEdit={handleEdit}
                       onTrash={handleTrash}
-                      isAdmin={isAdmin}
+                      isAdmin={userCanManageScopedItem(user, ann, "announcements")}
                     />
                   ))}
                 </div>

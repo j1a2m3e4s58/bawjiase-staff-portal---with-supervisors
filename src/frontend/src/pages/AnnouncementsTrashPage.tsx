@@ -15,16 +15,27 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   apiDeleteAnnouncement,
   apiEmptyAnnouncementTrash,
   apiGetTrashedAnnouncements,
   apiLogAction,
   apiRestoreAnnouncement,
+  formatAudienceSummary,
+  getManageableBranches,
+  getManageableDepartmentsForBranch,
 } from "@/lib/backend-client";
+import { useAuth } from "@/store/auth";
 import type { Announcement } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
 import { ArchiveRestore, Trash2 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
@@ -48,6 +59,10 @@ function TrashedCard({
 }) {
   const category = ann.category || "General";
   const colorClass = CATEGORY_COLORS[category] ?? CATEGORY_COLORS.General;
+  const audienceSummary = formatAudienceSummary(
+    ann.branchScope,
+    ann.departmentScope,
+  );
   const date = new Date(Number(ann.createdAt)).toLocaleDateString("en-GH", {
     day: "numeric",
     month: "short",
@@ -74,6 +89,9 @@ function TrashedCard({
         </h3>
         <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
           {ann.content}
+        </p>
+        <p className="text-xs text-muted-foreground mt-2">
+          {audienceSummary}
         </p>
         <p className="text-[10px] text-muted-foreground/60 mt-2">
           By {ann.authorName}
@@ -135,10 +153,14 @@ function TrashedCard({
 // ── Page ──────────────────────────────────────────────────────────────────────
 
 export default function AnnouncementsTrashPage() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [trashed, setTrashed] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
+  const manageableBranches = getManageableBranches(user);
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +219,55 @@ export default function AnnouncementsTrashPage() {
     apiLogAction("Admin", "EMPTY_TRASH", "All announcements", "—");
   }
 
+  const availableBranches = useMemo(() => {
+    const visible = new Set<string>();
+    trashed.forEach((announcement) => {
+      (announcement.branchScope ?? ["ALL"]).forEach((branch) => {
+        if (branch !== "ALL") visible.add(branch);
+      });
+    });
+    const ordered = manageableBranches.length > 0 ? manageableBranches : Array.from(visible);
+    return ordered.filter((branch) => visible.has(branch));
+  }, [manageableBranches, trashed]);
+
+  const availableDepartments = useMemo(() => {
+    const visible = new Set<string>();
+    trashed
+      .filter((announcement) => {
+        if (branchFilter === "ALL") return true;
+        const branches = announcement.branchScope ?? ["ALL"];
+        return branches.includes("ALL") || branches.includes(branchFilter);
+      })
+      .forEach((announcement) => {
+        (announcement.departmentScope ?? ["ALL"]).forEach((department) => {
+          if (department !== "ALL") visible.add(department);
+        });
+      });
+    if (branchFilter !== "ALL") {
+      const manageable = getManageableDepartmentsForBranch(user, branchFilter);
+      return manageable.filter((department) => visible.has(department));
+    }
+    return Array.from(visible).sort();
+  }, [branchFilter, trashed, user]);
+
+  const filteredTrash = useMemo(
+    () =>
+      trashed.filter((announcement) => {
+        const branches = announcement.branchScope ?? ["ALL"];
+        const departments = announcement.departmentScope ?? ["ALL"];
+        const branchMatches =
+          branchFilter === "ALL" ||
+          branches.includes("ALL") ||
+          branches.includes(branchFilter);
+        const departmentMatches =
+          departmentFilter === "ALL" ||
+          departments.includes("ALL") ||
+          departments.includes(departmentFilter);
+        return branchMatches && departmentMatches;
+      }),
+    [branchFilter, departmentFilter, trashed],
+  );
+
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto space-y-6" data-ocid="trash.page">
@@ -212,6 +283,32 @@ export default function AnnouncementsTrashPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Select value={branchFilter} onValueChange={setBranchFilter}>
+              <SelectTrigger className="w-40">
+                <SelectValue placeholder="Branch scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All branches</SelectItem>
+                {availableBranches.map((branch) => (
+                  <SelectItem key={branch} value={branch}>
+                    {branch}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Department scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All departments</SelectItem>
+                {availableDepartments.map((department) => (
+                  <SelectItem key={department} value={department}>
+                    {department}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button
               type="button"
               variant="outline"
@@ -268,10 +365,10 @@ export default function AnnouncementsTrashPage() {
         </div>
 
         {/* Count badge */}
-        {!loading && trashed.length > 0 && (
+        {!loading && filteredTrash.length > 0 && (
           <div className="flex items-center gap-2">
             <Badge variant="secondary" className="text-xs">
-              {trashed.length} item{trashed.length !== 1 ? "s" : ""} in trash
+              {filteredTrash.length} item{filteredTrash.length !== 1 ? "s" : ""} in trash
             </Badge>
           </div>
         )}
@@ -283,16 +380,16 @@ export default function AnnouncementsTrashPage() {
               <SkeletonCard key={String(i)} lines={3} />
             ))}
           </div>
-        ) : trashed.length === 0 ? (
+        ) : filteredTrash.length === 0 ? (
           <EmptyState
             icon={<Trash2 className="h-10 w-10" />}
             title="Trash is empty"
-            description="No announcements have been moved to the trash."
+            description="No trashed announcements match the current branch or department filter."
             data-ocid="trash.empty_state"
           />
         ) : (
           <div className="space-y-3" data-ocid="trash.list">
-            {trashed.map((ann) => (
+            {filteredTrash.map((ann) => (
               <TrashedCard
                 key={String(ann.id)}
                 ann={ann}

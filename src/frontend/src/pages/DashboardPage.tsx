@@ -18,6 +18,11 @@ import {
   resolveAnnouncementAssetUrl,
   apiTrashAnnouncement,
   apiVoteAnnouncementPoll,
+  formatAudienceSummary,
+  getManageableBranches,
+  getManageableDepartmentsForBranch,
+  userCanManageScopedItem,
+  userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import type {
@@ -25,6 +30,7 @@ import type {
   DashboardOverview,
   PollOption,
 } from "@/types";
+import { DEPARTMENTS } from "@/types";
 import { Link } from "@tanstack/react-router";
 import {
   BarChart3,
@@ -342,6 +348,9 @@ function NewsViewDialog({
                 <p className="mt-2 text-sm text-muted-foreground">
                   Posted by {ann.authorName}
                 </p>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {formatAudienceSummary(ann.branchScope, ann.departmentScope)}
+                </p>
               </div>
             </div>
           </DialogHeader>
@@ -477,6 +486,9 @@ function AnnouncementCard({
       <p className="mt-3 text-xs text-muted-foreground">
         Posted by {ann.authorName}
       </p>
+      <p className="mt-1 text-xs text-muted-foreground">
+        {formatAudienceSummary(ann.branchScope, ann.departmentScope)}
+      </p>
       {ann.poll && (
         <div className="mt-3 rounded-lg bg-muted/40 p-3 text-xs text-muted-foreground">
           <span className="font-semibold text-foreground">Poll:</span>{" "}
@@ -492,6 +504,19 @@ function AnnouncementCard({
 }
 
 function WelcomePanel({ fullname }: { fullname: string }) {
+  const { user } = useAuth();
+  const manageableBranches = getManageableBranches(user);
+  const supervisorScopeSummary =
+    user?.role === "Supervisor"
+      ? manageableBranches.map((branch) =>
+          formatAudienceSummary(
+            [branch],
+            getManageableDepartmentsForBranch(user, branch).length === DEPARTMENTS.length
+              ? ["ALL"]
+              : getManageableDepartmentsForBranch(user, branch),
+          ),
+        )
+      : [];
   return (
     <section className="rounded-2xl bg-secondary/40 border border-secondary/30 p-6 md:p-7 min-h-[148px] flex flex-col md:flex-row md:items-center justify-between gap-5">
       <div>
@@ -503,7 +528,7 @@ function WelcomePanel({ fullname }: { fullname: string }) {
           branch-level oversight.
         </p>
       </div>
-      <RoleGuard roles={["SuperAdmin", "HRAdmin"]}>
+      <RoleGuard roles={["SuperAdmin", "HRAdmin", "Supervisor"]} permission="announcements">
         <div className="flex md:flex-col gap-3 md:min-w-[132px]">
           <Button asChild size="sm" className="font-bold">
             <Link to="/news-portal">
@@ -519,6 +544,20 @@ function WelcomePanel({ fullname }: { fullname: string }) {
           </Button>
         </div>
       </RoleGuard>
+      {supervisorScopeSummary.length > 0 ? (
+        <div className="w-full rounded-xl border border-border/40 bg-background/40 p-4">
+          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+            My Supervisor Scope
+          </div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {supervisorScopeSummary.map((summary) => (
+              <Badge key={summary} variant="outline">
+                {summary}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -534,9 +573,7 @@ function NewsFeed({
   const [selectedAnnouncement, setSelectedAnnouncement] =
     useState<AnnouncementWithPoll | null>(null);
   const [viewOpen, setViewOpen] = useState(false);
-  const canManage =
-    user?.department?.toUpperCase() === "IT" ||
-    user?.department?.toUpperCase() === "HR";
+  const canManage = userHasPermission(user, "announcements");
 
   useEffect(() => {
     setNewsItems(announcements);
@@ -610,7 +647,7 @@ function NewsFeed({
                     <AnnouncementCard
                       key={ann.id}
                       ann={ann}
-                      canManage={canManage}
+                      canManage={userCanManageScopedItem(user, ann, "announcements")}
                       onDismiss={handleDismiss}
                       onTrash={handleTrash}
                       onOpen={(announcement) => {
@@ -627,7 +664,11 @@ function NewsFeed({
           <NewsViewDialog
             ann={selectedAnnouncement}
             open={viewOpen}
-            canManage={canManage}
+            canManage={
+              selectedAnnouncement
+                ? userCanManageScopedItem(user, selectedAnnouncement, "announcements")
+                : false
+            }
             onDismiss={handleDismiss}
             onTrash={handleTrash}
             onOpenChange={(open) => {

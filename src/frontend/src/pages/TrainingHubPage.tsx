@@ -24,6 +24,8 @@ import {
   apiGetMyVideoProgress,
   apiGetTrainingDocuments,
   apiGetTrainingVideos,
+  formatAudienceSummary,
+  userCanManageScopedItem,
   userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
@@ -87,8 +89,6 @@ export default function TrainingHubPage() {
   const canManageVideoModule = userHasPermission(user, "trainingVideos");
   const canManageDocumentModule = userHasPermission(user, "trainingDocuments");
   const canOpenTrainingAdmin = canManageVideoModule || canManageDocumentModule;
-  const isAdmin = user?.role === "HRAdmin" || user?.role === "SuperAdmin";
-
   const [tab, setTab] = useState("videos");
   const [videos, setVideos] = useState<TrainingVideo[]>([]);
   const [documents, setDocuments] = useState<TrainingDocument[]>([]);
@@ -526,6 +526,9 @@ export default function TrainingHubPage() {
                             {video.category}
                           </Badge>
                         </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAudienceSummary(video.branchScope, video.departmentScope)}
+                        </div>
 
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <div className="flex items-center gap-1.5">
@@ -552,7 +555,7 @@ export default function TrainingHubPage() {
                             <PlayCircle className="h-4 w-4" />
                             Watch Video
                           </Button>
-                          {isAdmin && (
+                          {userCanManageScopedItem(user, video, "trainingVideos") && (
                             <>
                               <Button
                                 type="button"
@@ -645,6 +648,9 @@ export default function TrainingHubPage() {
                             {doc.category}
                           </Badge>
                         </div>
+                        <div className="text-xs text-muted-foreground">
+                          {formatAudienceSummary(doc.branchScope, doc.departmentScope)}
+                        </div>
 
                         <div className="flex items-center justify-between text-xs text-muted-foreground">
                           <div>{formatDate(doc.uploadedAt)}</div>
@@ -662,7 +668,7 @@ export default function TrainingHubPage() {
                             <ExternalLink className="h-4 w-4" />
                             Open Document
                           </Button>
-                          {isAdmin && (
+                          {userCanManageScopedItem(user, doc, "trainingDocuments") && (
                             <>
                               <Button
                                 type="button"

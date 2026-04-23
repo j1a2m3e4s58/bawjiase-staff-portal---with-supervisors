@@ -985,6 +985,38 @@ export function getScopeCoverageWarning(
   return null;
 }
 
+export function userCanManageScopedItem(
+  user: User | null | undefined,
+  item: {
+    branchScope?: string[] | null;
+    departmentScope?: string[] | null;
+  },
+  permission: keyof UserPermissions,
+): boolean {
+  if (!userHasPermission(user, permission)) return false;
+  if (!user) return false;
+  if (user.role === "SuperAdmin" || user.role === "HRAdmin") return true;
+  const branches = normalizedScope(item.branchScope, ["ALL"]);
+  const departments = normalizedScope(item.departmentScope, ["ALL"]);
+  if (branches.includes("ALL")) return false;
+  return branches.every((branch) => {
+    const branchKey = branch.toUpperCase();
+    const manageableBranches = getManageableBranches(user).map((value) =>
+      value.toUpperCase(),
+    );
+    if (!manageableBranches.includes(branchKey)) return false;
+    const manageableDepartments = getManageableDepartmentsForBranch(user, branchKey).map(
+      (value) => value.toUpperCase(),
+    );
+    if (departments.includes("ALL")) {
+      return manageableDepartments.length === DEPARTMENTS.length;
+    }
+    return departments.every((department) =>
+      manageableDepartments.includes(department.toUpperCase()),
+    );
+  });
+}
+
 function userMatchesScopedItem(
   user: User | null | undefined,
   item: {
