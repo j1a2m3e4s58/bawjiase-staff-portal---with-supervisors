@@ -4,6 +4,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -11,9 +18,12 @@ import {
   apiCreateAnnouncement,
   apiLogAction,
   apiUploadAnnouncementAssetFile,
+  getManageableBranches,
+  getManageableDepartmentsForBranch,
 } from "@/lib/backend-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
+import { DEPARTMENTS } from "@/types";
 import { Link } from "@tanstack/react-router";
 import {
   Camera,
@@ -52,6 +62,8 @@ function NewsPortalForm() {
   const [pollQuestion, setPollQuestion] = useState("");
   const [pollOptions, setPollOptions] = useState(["", ""]);
   const [publishing, setPublishing] = useState(false);
+  const [branchTarget, setBranchTarget] = useState("ALL");
+  const [departmentTarget, setDepartmentTarget] = useState("ALL");
   const [cameraReady, setCameraReady] = useState(false);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState("");
@@ -63,6 +75,26 @@ function NewsPortalForm() {
     () => (user?.department === "HR" ? "HR" : "IT"),
     [user?.department],
   );
+  const manageableBranches = useMemo(() => getManageableBranches(user), [user]);
+  const canTargetAllBranches =
+    user?.role === "SuperAdmin" || user?.role === "HRAdmin";
+  const manageableDepartments = useMemo(
+    () =>
+      branchTarget === "ALL"
+        ? [...DEPARTMENTS]
+        : getManageableDepartmentsForBranch(user, branchTarget),
+    [branchTarget, user],
+  );
+  const canTargetAllDepartments =
+    user?.role === "SuperAdmin" ||
+    user?.role === "HRAdmin" ||
+    manageableDepartments.length === DEPARTMENTS.length;
+
+  useEffect(() => {
+    if (!canTargetAllBranches && branchTarget === "ALL" && manageableBranches.length > 0) {
+      setBranchTarget(manageableBranches[0]);
+    }
+  }, [branchTarget, canTargetAllBranches, manageableBranches]);
 
   const stopCamera = useCallback(() => {
     const tracks = streamRef.current?.getTracks() ?? [];
@@ -197,6 +229,11 @@ function NewsPortalForm() {
           allowDownload,
           pollQuestion,
           pollOptions,
+          branchScope: branchTarget === "ALL" ? ["ALL"] : [branchTarget],
+          departmentScope:
+            departmentTarget === "ALL" ? ["ALL"] : [departmentTarget],
+          visibility: departmentTarget === "ALL" ? "General" : "Department",
+          department: departmentTarget === "ALL" ? null : departmentTarget,
         },
         {
           id: user.id,
@@ -290,6 +327,48 @@ function NewsPortalForm() {
                 placeholder="What's happening?"
                 className="min-h-[150px] rounded-xl resize-none"
               />
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Branch Audience</Label>
+                <Select value={branchTarget} onValueChange={setBranchTarget}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {canTargetAllBranches ? (
+                      <SelectItem value="ALL">All branches</SelectItem>
+                    ) : null}
+                    {manageableBranches.map((branch) => (
+                      <SelectItem key={branch} value={branch}>
+                        {branch}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Department Audience</Label>
+                <Select
+                  value={departmentTarget}
+                  onValueChange={setDepartmentTarget}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {canTargetAllDepartments ? (
+                      <SelectItem value="ALL">All departments</SelectItem>
+                    ) : null}
+                    {manageableDepartments.map((department) => (
+                      <SelectItem key={department} value={department}>
+                        {department}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>
@@ -539,7 +618,8 @@ export default function NewsPortalPage() {
         </div>
 
         <RoleGuard
-          roles={["SuperAdmin", "HRAdmin"]}
+          roles={["SuperAdmin", "HRAdmin", "Supervisor"]}
+          permission="announcements"
           fallback={
             <div className="rounded-2xl border border-border/40 bg-card/60 p-8 text-center">
               <Megaphone className="mx-auto h-10 w-10 text-primary" />

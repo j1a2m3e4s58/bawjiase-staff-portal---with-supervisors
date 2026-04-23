@@ -7,12 +7,18 @@ import { withBase } from "./app-base";
  * All functions are designed to be swapped to real actor calls.
  */
 
+import {
+  BRANCHES,
+  DEPARTMENTS,
+} from "../types";
 import type {
   Announcement,
   AnnouncementWithPoll,
   ApiResult,
   AuditLog,
+  Branch,
   DashboardOverview,
+  Department,
   IncidentReport,
   Notification,
   PortalForm,
@@ -268,6 +274,9 @@ export interface UpdateStaffRequest extends UpdateProfileRequest {
   role?: string;
   isActive?: boolean;
   accessCode?: string;
+  managedBranches?: string[];
+  managedDepartmentsByBranch?: Record<string, string[]>;
+  permissions?: UserPermissions;
 }
 
 // Simulate backend calls — replace actor body when bindgen exposes methods
@@ -833,6 +842,77 @@ function isPortalStaff(user: User) {
   return !["MASTER ADMIN", "System Admin"].includes(user.fullname);
 }
 
+function normalizedScope(values: string[] | null | undefined, fallback: string[] = ["ALL"]) {
+  const normalized = (values ?? [])
+    .map((value) => String(value ?? "").trim().toUpperCase())
+    .filter(Boolean);
+  return normalized.length > 0 ? normalized : [...fallback];
+}
+
+export function userHasPermission(
+  user: User | null | undefined,
+  permission: keyof UserPermissions,
+): boolean {
+  if (!user) return false;
+  if (user.role === "SuperAdmin" || user.role === "HRAdmin") return true;
+  return !!user.permissions?.[permission];
+}
+
+export function getManageableBranches(user: User | null | undefined): string[] {
+  if (!user) return [];
+  if (user.role === "SuperAdmin" || user.role === "HRAdmin") {
+    return [...BRANCHES];
+  }
+  const scope = normalizedScope(user.managedBranches, []);
+  return scope.includes("ALL")
+    ? [...BRANCHES]
+    : BRANCHES.filter((branch) => scope.includes(branch.toUpperCase()));
+}
+
+export function getManageableDepartmentsForBranch(
+  user: User | null | undefined,
+  branch: string,
+): string[] {
+  if (!user) return [];
+  if (user.role === "SuperAdmin" || user.role === "HRAdmin") {
+    return [...DEPARTMENTS];
+  }
+  const branchKey = branch.trim().toUpperCase();
+  const departments = user.managedDepartmentsByBranch?.[branchKey] ?? [];
+  const scope = normalizedScope(departments, []);
+  return scope.includes("ALL")
+    ? [...DEPARTMENTS]
+    : DEPARTMENTS.filter((department) => scope.includes(department.toUpperCase()));
+}
+
+function userMatchesScopedItem(
+  user: User | null | undefined,
+  item: {
+    branchScope?: string[] | null;
+    departmentScope?: string[] | null;
+    visibility?: "General" | "Department";
+    department?: string | null;
+  },
+) {
+  if (!user) return false;
+  if (user.role === "SuperAdmin" || user.role === "HRAdmin") return true;
+  const branchScope = normalizedScope(item.branchScope, ["ALL"]);
+  const derivedDepartmentScope =
+    item.departmentScope && item.departmentScope.length > 0
+      ? item.departmentScope
+      : item.visibility === "Department" && item.department
+        ? [item.department]
+        : ["ALL"];
+  const departmentScope = normalizedScope(derivedDepartmentScope, ["ALL"]);
+  const branchMatches =
+    branchScope.includes("ALL") ||
+    branchScope.includes(user.branch.trim().toUpperCase());
+  const departmentMatches =
+    departmentScope.includes("ALL") ||
+    departmentScope.includes(user.department.trim().toUpperCase());
+  return branchMatches && departmentMatches;
+}
+
 export async function apiRegister(
   req: RegisterRequest,
 ): Promise<ApiResult<User>> {
@@ -1343,6 +1423,10 @@ export interface CreateAnnouncementRequest {
   allowDownload?: boolean;
   pollQuestion?: string;
   pollOptions?: string[];
+  branchScope?: string[];
+  departmentScope?: string[];
+  visibility?: "General" | "Department";
+  department?: string | null;
 }
 
 export interface UpdateAnnouncementRequest
@@ -1366,9 +1450,11 @@ export async function apiGetAnnouncements(
   } catch {
     // Keep local seeded announcements if shared content is unavailable.
   }
+  const authUser = getStoredAuthUser();
   const dismissedIds = getDismissedAnnouncementIds(userId);
   return _announcements
     .filter((a) => !a.isTrashed && !dismissedIds.has(a.id))
+    .filter((a) => userMatchesScopedItem(authUser, a))
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 }
 
@@ -1404,6 +1490,14 @@ export async function apiCreateAnnouncement(
       fileUrl: req.fileUrl ?? null,
       attachmentName: req.attachmentName ?? null,
       allowDownload: req.allowDownload ?? true,
+      visibility: req.visibility ?? "General",
+      department: req.visibility === "Department" ? (req.department ?? null) : null,
+      branchScope: req.branchScope ?? ["ALL"],
+      departmentScope:
+        req.departmentScope ??
+        (req.visibility === "Department" && req.department
+          ? [req.department]
+          : ["ALL"]),
       poll:
         req.pollQuestion?.trim() && cleanPollOptions.length >= 2
           ? {
@@ -1797,26 +1891,17 @@ export interface CreateFormRequest {
   visibleTo: PortalForm["visibleTo"];
   visibility?: PortalForm["visibility"];
   department?: string | null;
+  branchScope?: string[];
+  departmentScope?: string[];
   sendExternalEmails?: boolean;
 }
 
 function canManageForms(user?: User | null) {
-  return (
-    user?.role === "SuperAdmin" ||
-    user?.department === "IT" ||
-    user?.department === "HR"
-  );
+  return userHasPermission(user, "forms");
 }
 
 function canUserSeeForm(form: PortalForm, user?: User | null) {
-  if (user?.role === "SuperAdmin") return true;
-  if (form.visibility === "Department") {
-    return (
-      !!user?.department &&
-      user.department.toUpperCase() === (form.department ?? "").toUpperCase()
-    );
-  }
-  return true;
+  return userMatchesScopedItem(user, form);
 }
 
 export function apiExtractDriveFileId(driveRef: string): string {
@@ -1881,6 +1966,12 @@ export async function apiCreateForm(
       visibility: req.visibility ?? "General",
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,
+      branchScope: req.branchScope ?? ["ALL"],
+      departmentScope:
+        req.departmentScope ??
+        (req.visibility === "Department" && req.department
+          ? [req.department]
+          : ["ALL"]),
       sendExternalEmails: !!req.sendExternalEmails,
     });
     const rawForm = payload.form as Record<string, unknown> | undefined;
@@ -1905,6 +1996,8 @@ export async function apiUpdateForm(
       const payload = await postMailApiJson(`/content/forms/${id}/update`, {
         ...req,
         fileUrl: req.fileUrl ? apiExtractDriveFileId(req.fileUrl) : undefined,
+        branchScope: req.branchScope,
+        departmentScope: req.departmentScope,
       });
       const rawForm = payload.form as Record<string, unknown> | undefined;
       if (!rawForm) return err("Form not found");
@@ -1956,6 +2049,8 @@ export interface UploadVideoRequest {
   storageType: "Drive" | "Local";
   visibility: "General" | "Department";
   department?: string;
+  branchScope?: string[];
+  departmentScope?: string[];
   mandatory?: boolean;
   allowDownload?: boolean;
   sendExternalEmails?: boolean;
@@ -1969,6 +2064,8 @@ export interface UploadDocumentRequest {
   storageType: "Drive" | "Local";
   visibility: "General" | "Department";
   department?: string;
+  branchScope?: string[];
+  departmentScope?: string[];
   mandatory?: boolean;
   allowDownload?: boolean;
   sendExternalEmails?: boolean;
@@ -2033,7 +2130,10 @@ function getPortalActiveUsers() {
 }
 
 function isTrainingManager(user: User | null | undefined) {
-  return user?.role === "HRAdmin" || user?.role === "SuperAdmin";
+  return (
+    userHasPermission(user, "trainingVideos") ||
+    userHasPermission(user, "trainingDocuments")
+  );
 }
 
 function extractDriveId(input: string): string {
@@ -2157,35 +2257,19 @@ function currentTrainingUser() {
 }
 
 function canUserAccessVideo(video: TrainingVideo, user: User | null) {
-  if (!user) return false;
-  if (user.role === "SuperAdmin") return true;
-  if (video.visibility !== "Department") return true;
-  return (
-    user.department.toUpperCase() === (video.department ?? "").toUpperCase()
-  );
+  return userMatchesScopedItem(user, video);
 }
 
 function canUserAccessDocument(doc: TrainingDocument, user: User | null) {
-  if (!user) return false;
-  if (user.role === "SuperAdmin") return true;
-  if (doc.visibility !== "Department") return true;
-  return user.department.toUpperCase() === (doc.department ?? "").toUpperCase();
+  return userMatchesScopedItem(user, doc);
 }
 
 function eligibleUsersForVideo(video: TrainingVideo) {
-  return getPortalActiveUsers().filter((user) =>
-    video.visibility === "Department"
-      ? user.department.toUpperCase() === (video.department ?? "").toUpperCase()
-      : true,
-  );
+  return getPortalActiveUsers().filter((user) => userMatchesScopedItem(user, video));
 }
 
 function eligibleUsersForDocument(doc: TrainingDocument) {
-  return getPortalActiveUsers().filter((user) =>
-    doc.visibility === "Department"
-      ? user.department.toUpperCase() === (doc.department ?? "").toUpperCase()
-      : true,
-  );
+  return getPortalActiveUsers().filter((user) => userMatchesScopedItem(user, doc));
 }
 
 const _trainingVideos: TrainingVideo[] = [
@@ -2463,6 +2547,12 @@ export async function apiUploadTrainingVideo(
       visibility: req.visibility,
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,
+      branchScope: req.branchScope ?? ["ALL"],
+      departmentScope:
+        req.departmentScope ??
+        (req.visibility === "Department" && req.department
+          ? [req.department]
+          : ["ALL"]),
       isMandatory: !!req.mandatory,
       allowDownload: !!req.allowDownload,
       storageType: req.storageType,
@@ -2631,6 +2721,12 @@ export async function apiUploadTrainingDocument(
       visibility: req.visibility,
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,
+      branchScope: req.branchScope ?? ["ALL"],
+      departmentScope:
+        req.departmentScope ??
+        (req.visibility === "Department" && req.department
+          ? [req.department]
+          : ["ALL"]),
       isMandatory: !!req.mandatory,
       allowDownload: !!req.allowDownload,
       storageType: req.storageType,

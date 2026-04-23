@@ -575,16 +575,28 @@ export default function DirectoryPage() {
             </p>
           </div>
           {canEdit && (
-            <Button
-              type="button"
-              variant="outline"
-              className="gap-2"
-              onClick={() => navigate({ to: "/directory/past-staff" })}
-              data-ocid="directory.past_staff_button"
-            >
-              <UserX className="h-4 w-4" />
-              Past Staff
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => navigate({ to: "/directory/supervisors" })}
+                data-ocid="directory.supervisor_button"
+              >
+                <ShieldCheck className="h-4 w-4" />
+                Supervisors
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="gap-2"
+                onClick={() => navigate({ to: "/directory/past-staff" })}
+                data-ocid="directory.past_staff_button"
+              >
+                <UserX className="h-4 w-4" />
+                Past Staff
+              </Button>
+            </div>
           )}
         </div>
 

@@ -552,6 +552,19 @@ def role_from_department(department: str) -> str:
     return "GeneralStaff"
 
 
+def is_global_manager(user: dict | None) -> bool:
+    return bool(user) and str(user.get("role", "")).strip() in {"SuperAdmin", "HRAdmin"}
+
+
+def user_has_permission(user: dict, permission_key: str) -> bool:
+    if is_global_manager(user):
+        return True
+    permissions = user.get("permissions")
+    if not isinstance(permissions, dict):
+        return False
+    return bool(permissions.get(permission_key, False))
+
+
 def now_ms() -> int:
     return int(time.time() * 1000)
 
@@ -947,6 +960,15 @@ def require_staff_manager():
     return token, user, None
 
 
+def require_module_manager(permission_key: str):
+    token, user, error = require_authenticated_user()
+    if error:
+        return token, user, error
+    if not user_has_permission(user, permission_key):
+        return token, user, (jsonify({"error": "Admin access required"}), 403)
+    return token, user, None
+
+
 def generate_verification_code() -> str:
     return f"{secrets.randbelow(900000) + 100000:06d}"
 
@@ -1089,6 +1111,62 @@ def value_in_scope(scope: list[str], current_value: str) -> bool:
     return str(current_value or "").strip().upper() in scope
 
 
+def branch_allowed_for_user(user: dict, branch: str) -> bool:
+    if is_global_manager(user):
+        return True
+    managed_branches = normalize_scope_list(user.get("managedBranches"), empty_default=[])
+    return value_in_scope(managed_branches, branch)
+
+
+def department_allowed_for_user(user: dict, branch: str, department: str) -> bool:
+    if is_global_manager(user):
+        return True
+    managed = normalize_managed_departments_by_branch(user.get("managedDepartmentsByBranch"))
+    branch_departments = managed.get(str(branch or "").strip().upper())
+    if not branch_departments:
+        return False
+    return value_in_scope(branch_departments, department)
+
+
+def can_manage_scope(user: dict, branch_scope: list[str], department_scope: list[str]) -> bool:
+    if is_global_manager(user):
+        return True
+    if "ALL" in branch_scope:
+        return False
+    normalized_departments = department_scope if department_scope else ["ALL"]
+    managed_departments = normalize_managed_departments_by_branch(
+        user.get("managedDepartmentsByBranch")
+    )
+    for branch in [item for item in branch_scope if item != "ALL"]:
+        if not branch_allowed_for_user(user, branch):
+            return False
+        branch_managed_departments = managed_departments.get(branch, [])
+        for department in normalized_departments:
+            if department == "ALL":
+                if "ALL" not in branch_managed_departments:
+                    return False
+            elif not department_allowed_for_user(user, branch, department):
+                return False
+    return True
+
+
+def ensure_content_management_access(
+    user: dict,
+    *,
+    permission_key: str,
+    branch_scope: list[str],
+    department_scope: list[str],
+) -> tuple[bool, tuple]:
+    if not user_has_permission(user, permission_key):
+        return False, (jsonify({"error": "You do not have permission to manage this module"}), 403)
+    if not can_manage_scope(user, branch_scope, department_scope):
+        return False, (
+            jsonify({"error": "You are not allowed to manage content for that branch or department"}),
+            403,
+        )
+    return True, ()
+
+
 def eligible_users_for_item(item: dict) -> list[dict]:
     users = load_user_store()
     eligible = [
@@ -1118,6 +1196,14 @@ def user_can_access_item(user: dict, item: dict) -> bool:
 
 def filter_items_for_user(items: list[dict], user: dict) -> list[dict]:
     return [item for item in items if user_can_access_item(user, item)]
+
+
+def user_can_manage_item(user: dict, item: dict, permission_key: str) -> bool:
+    if is_global_manager(user):
+        return True
+    if not user_has_permission(user, permission_key):
+        return False
+    return can_manage_scope(user, item_branch_scope(item), item_department_scope(item))
 
 
 def create_notifications_for_users(
@@ -1856,7 +1942,7 @@ def update_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_staff_manager()
     if error:
         return error
     data, error = require_json()
@@ -1880,11 +1966,29 @@ def update_staff(user_id: str):
         user["position"] = str(data.get("position", "")).strip() or user["position"]
     if "department" in data and requested_department:
         user["department"] = requested_department
-        user["role"] = role_from_department(requested_department)
+        if user.get("role") != "Supervisor":
+            user["role"] = role_from_department(requested_department)
     if "branch" in data:
         branch = str(data.get("branch", "")).strip().upper()
         if branch:
             user["branch"] = branch
+    if "role" in data:
+        requested_role = str(data.get("role", "")).strip()
+        if requested_role in {"GeneralStaff", "Supervisor", "HRAdmin", "SuperAdmin"}:
+            user["role"] = requested_role
+    if "managedBranches" in data:
+        user["managedBranches"] = normalize_scope_list(
+            data.get("managedBranches"),
+            empty_default=["ALL"] if user["role"] in {"SuperAdmin", "HRAdmin"} else [],
+        )
+    if "managedDepartmentsByBranch" in data:
+        user["managedDepartmentsByBranch"] = normalize_managed_departments_by_branch(
+            data.get("managedDepartmentsByBranch")
+        )
+    if "permissions" in data:
+        user["permissions"] = normalize_user_permissions(data.get("permissions"), user["role"])
+    else:
+        user["permissions"] = normalize_user_permissions(user.get("permissions"), user["role"])
     if "imageFile" in data:
         previous_image = str(user.get("imageFile") or "").strip()
         image_file = data.get("imageFile")
@@ -2228,7 +2332,7 @@ def create_shared_announcement():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, actor, error = require_staff_manager()
+    _, actor, error = require_module_manager("announcements")
     if error:
         return error
     data, error = require_json()
@@ -2239,6 +2343,14 @@ def create_shared_announcement():
         payload = normalize_announcement_payload(data, actor)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    allowed, denial = ensure_content_management_access(
+        actor,
+        permission_key="announcements",
+        branch_scope=item_branch_scope(payload),
+        department_scope=item_department_scope(payload),
+    )
+    if not allowed:
+        return denial
     announcement = {
         "id": next_content_id(items),
         **payload,
@@ -2259,7 +2371,7 @@ def update_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, actor, error = require_staff_manager()
+    _, actor, error = require_module_manager("announcements")
     if error:
         return error
     data, error = require_json()
@@ -2269,10 +2381,20 @@ def update_shared_announcement(item_id: int):
     announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
+    if not user_can_manage_item(actor, announcement, "announcements"):
+        return jsonify({"error": "Access denied"}), 403
     try:
         payload = normalize_announcement_payload(data, actor, announcement)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    allowed, denial = ensure_content_management_access(
+        actor,
+        permission_key="announcements",
+        branch_scope=item_branch_scope(payload),
+        department_scope=item_department_scope(payload),
+    )
+    if not allowed:
+        return denial
     previous_image = str(announcement.get("imageUrl") or "").strip()
     previous_file = str(announcement.get("fileUrl") or "").strip()
     announcement.update(payload)
@@ -2290,13 +2412,15 @@ def trash_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("announcements")
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
     announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
+    if not user_can_manage_item(actor, announcement, "announcements"):
+        return jsonify({"error": "Access denied"}), 403
     announcement["isTrashed"] = True
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
@@ -2308,13 +2432,15 @@ def restore_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("announcements")
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
     announcement = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
+    if not user_can_manage_item(actor, announcement, "announcements"):
+        return jsonify({"error": "Access denied"}), 403
     announcement["isTrashed"] = False
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
@@ -2326,13 +2452,15 @@ def delete_shared_announcement(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("announcements")
     if error:
         return error
     items = load_json_list_store(ANNOUNCEMENTS_STORE_PATH)
     target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not target:
         return jsonify({"error": "Announcement not found"}), 404
+    if not user_can_manage_item(actor, target, "announcements"):
+        return jsonify({"error": "Access denied"}), 403
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, filtered)
     cleanup_local_announcement_assets(target)
@@ -2371,7 +2499,7 @@ def upload_training_video_file():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, _, error = require_module_manager("trainingVideos")
     if error:
         return error
     try:
@@ -2386,7 +2514,7 @@ def upload_training_document_file():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, _, error = require_module_manager("trainingDocuments")
     if error:
         return error
     try:
@@ -2401,7 +2529,7 @@ def upload_announcement_asset_file():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, _, error = require_module_manager("announcements")
     if error:
         return error
     try:
@@ -2431,7 +2559,7 @@ def create_shared_form():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, actor, error = require_staff_manager()
+    _, actor, error = require_module_manager("forms")
     if error:
         return error
     data, error = require_json()
@@ -2462,6 +2590,14 @@ def create_shared_form():
         }
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    allowed, denial = ensure_content_management_access(
+        actor,
+        permission_key="forms",
+        branch_scope=branch_scope,
+        department_scope=department_scope,
+    )
+    if not allowed:
+        return denial
     items.insert(0, form)
     save_json_list_store(FORMS_STORE_PATH, items)
     delivery = fanout_content_notification(
@@ -2487,7 +2623,7 @@ def update_shared_form(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("forms")
     if error:
         return error
     data, error = require_json()
@@ -2497,6 +2633,8 @@ def update_shared_form(item_id: int):
     form = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not form:
         return jsonify({"error": "Form not found"}), 404
+    if not user_can_manage_item(actor, form, "forms"):
+        return jsonify({"error": "Access denied"}), 403
     try:
         if "title" in data:
             form["title"] = normalize_non_empty_title(data.get("title"), "Form title")
@@ -2533,6 +2671,14 @@ def update_shared_form(item_id: int):
             form["departmentScope"] = department_scope
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    allowed, denial = ensure_content_management_access(
+        actor,
+        permission_key="forms",
+        branch_scope=item_branch_scope(form),
+        department_scope=item_department_scope(form),
+    )
+    if not allowed:
+        return denial
     form["updatedAt"] = now_ms()
     save_json_list_store(FORMS_STORE_PATH, items)
     return jsonify({"ok": True, "form": form})
@@ -2543,13 +2689,16 @@ def delete_shared_form(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("forms")
     if error:
         return error
     items = load_json_list_store(FORMS_STORE_PATH)
-    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
-    if len(filtered) == len(items):
+    target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
+    if not target:
         return jsonify({"error": "Form not found"}), 404
+    if not user_can_manage_item(actor, target, "forms"):
+        return jsonify({"error": "Access denied"}), 403
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(FORMS_STORE_PATH, filtered)
     return jsonify({"ok": True})
 
@@ -2568,7 +2717,7 @@ def create_shared_training_video():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, actor, error = require_staff_manager()
+    _, actor, error = require_module_manager("trainingVideos")
     if error:
         return error
     data, error = require_json()
@@ -2580,6 +2729,14 @@ def create_shared_training_video():
         video = normalize_training_video_payload(data, actor)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    allowed, denial = ensure_content_management_access(
+        actor,
+        permission_key="trainingVideos",
+        branch_scope=item_branch_scope(video),
+        department_scope=item_department_scope(video),
+    )
+    if not allowed:
+        return denial
     items.insert(0, video)
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
     video_subject = (
@@ -2692,7 +2849,7 @@ def update_my_training_video_progress(item_id: int):
 
 @app.route("/api/content/training/videos/stats", methods=["GET"])
 def get_training_video_stats():
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_module_manager("trainingVideos")
     if error:
         return error
     items = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
@@ -2700,6 +2857,8 @@ def get_training_video_stats():
     stats = []
     for video in items:
         if bool(video.get("isArchived", False)):
+            continue
+        if not user_can_manage_item(auth_user, video, "trainingVideos"):
             continue
         video_id = int(video.get("id", 0) or 0)
         watched_count = len(
@@ -2732,13 +2891,15 @@ def archive_shared_training_video(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("trainingVideos")
     if error:
         return error
     items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
     video = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not video:
         return jsonify({"error": "Video not found"}), 404
+    if not user_can_manage_item(actor, video, "trainingVideos"):
+        return jsonify({"error": "Access denied"}), 403
     video["isArchived"] = True
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
     return jsonify({"ok": True})
@@ -2749,14 +2910,16 @@ def delete_shared_training_video(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("trainingVideos")
     if error:
         return error
     items = load_json_list_store(TRAINING_VIDEOS_STORE_PATH)
     target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
-    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
-    if len(filtered) == len(items):
+    if not target:
         return jsonify({"error": "Video not found"}), 404
+    if not user_can_manage_item(actor, target, "trainingVideos"):
+        return jsonify({"error": "Access denied"}), 403
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, filtered)
     if target and str(target.get("storageType", "")).strip() == "Local":
         remove_uploaded_file_if_unused(str(target.get("localFilename", "")).strip())
@@ -2777,7 +2940,7 @@ def create_shared_training_document():
     preflight = handle_options()
     if preflight:
         return preflight
-    _, actor, error = require_staff_manager()
+    _, actor, error = require_module_manager("trainingDocuments")
     if error:
         return error
     data, error = require_json()
@@ -2789,6 +2952,14 @@ def create_shared_training_document():
         document = normalize_training_document_payload(data, actor)
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
+    allowed, denial = ensure_content_management_access(
+        actor,
+        permission_key="trainingDocuments",
+        branch_scope=item_branch_scope(document),
+        department_scope=item_department_scope(document),
+    )
+    if not allowed:
+        return denial
     items.insert(0, document)
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
     document_subject = (
@@ -2884,7 +3055,7 @@ def mark_training_document_opened(item_id: int):
 
 @app.route("/api/content/training/documents/stats", methods=["GET"])
 def get_training_document_stats():
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_module_manager("trainingDocuments")
     if error:
         return error
     items = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
@@ -2892,6 +3063,8 @@ def get_training_document_stats():
     stats = []
     for document in items:
         if bool(document.get("isArchived", False)):
+            continue
+        if not user_can_manage_item(auth_user, document, "trainingDocuments"):
             continue
         document_id = int(document.get("id", 0) or 0)
         opened_count = len(
@@ -2916,13 +3089,15 @@ def archive_shared_training_document(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("trainingDocuments")
     if error:
         return error
     items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
     document = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
     if not document:
         return jsonify({"error": "Document not found"}), 404
+    if not user_can_manage_item(actor, document, "trainingDocuments"):
+        return jsonify({"error": "Access denied"}), 403
     document["isArchived"] = True
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
     return jsonify({"ok": True})
@@ -2933,14 +3108,16 @@ def delete_shared_training_document(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, actor, error = require_module_manager("trainingDocuments")
     if error:
         return error
     items = load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH)
     target = next((item for item in items if int(item.get("id", 0) or 0) == item_id), None)
-    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
-    if len(filtered) == len(items):
+    if not target:
         return jsonify({"error": "Document not found"}), 404
+    if not user_can_manage_item(actor, target, "trainingDocuments"):
+        return jsonify({"error": "Access denied"}), 403
+    filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, filtered)
     if target and str(target.get("storageType", "")).strip() == "Local":
         remove_uploaded_file_if_unused(str(target.get("localFilename", "")).strip())
@@ -2949,9 +3126,14 @@ def delete_shared_training_document(item_id: int):
 
 @app.route("/api/content/training/admin-overview", methods=["GET"])
 def get_admin_training_overview():
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_authenticated_user()
     if error:
         return error
+    if not (
+        user_has_permission(auth_user, "trainingVideos")
+        or user_has_permission(auth_user, "trainingDocuments")
+    ):
+        return jsonify({"error": "Admin access required"}), 403
     videos = refresh_training_video_counts(load_json_list_store(TRAINING_VIDEOS_STORE_PATH))
     documents = refresh_training_document_counts(load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH))
     users = [
@@ -2964,6 +3146,8 @@ def get_admin_training_overview():
     video_stats = []
     for video in videos:
         if bool(video.get("isArchived", False)):
+            continue
+        if not user_can_manage_item(auth_user, video, "trainingVideos"):
             continue
         video_id = int(video.get("id", 0) or 0)
         eligible_users = eligible_users_for_item(video)
@@ -2996,6 +3180,8 @@ def get_admin_training_overview():
     document_stats = []
     for document in documents:
         if bool(document.get("isArchived", False)):
+            continue
+        if not user_can_manage_item(auth_user, document, "trainingDocuments"):
             continue
         document_id = int(document.get("id", 0) or 0)
         eligible_users = eligible_users_for_item(document)
@@ -3038,9 +3224,14 @@ def send_video_training_reminder(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_module_manager("trainingVideos")
     if error:
         return error
+    video = get_training_video_by_id(item_id)
+    if not video:
+        return jsonify({"error": "Video not found"}), 404
+    if not user_can_manage_item(auth_user, video, "trainingVideos"):
+        return jsonify({"error": "Access denied"}), 403
     try:
         delivery = send_training_reminders("video", item_id)
     except ValueError:
@@ -3053,9 +3244,14 @@ def send_document_training_reminder(item_id: int):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_module_manager("trainingDocuments")
     if error:
         return error
+    document = get_training_document_by_id(item_id)
+    if not document:
+        return jsonify({"error": "Document not found"}), 404
+    if not user_can_manage_item(auth_user, document, "trainingDocuments"):
+        return jsonify({"error": "Access denied"}), 403
     try:
         delivery = send_training_reminders("document", item_id)
     except ValueError:

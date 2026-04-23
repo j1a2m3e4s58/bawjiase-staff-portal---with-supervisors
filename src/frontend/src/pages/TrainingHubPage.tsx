@@ -24,6 +24,7 @@ import {
   apiGetMyVideoProgress,
   apiGetTrainingDocuments,
   apiGetTrainingVideos,
+  userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import type { TrainingDocument, TrainingVideo } from "@/types";
@@ -83,6 +84,9 @@ export default function TrainingHubPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user } = useAuth();
+  const canManageVideoModule = userHasPermission(user, "trainingVideos");
+  const canManageDocumentModule = userHasPermission(user, "trainingDocuments");
+  const canOpenTrainingAdmin = canManageVideoModule || canManageDocumentModule;
   const isAdmin = user?.role === "HRAdmin" || user?.role === "SuperAdmin";
 
   const [tab, setTab] = useState("videos");
@@ -270,19 +274,21 @@ export default function TrainingHubPage() {
         <PortalCard
           className="overflow-hidden"
           action={
-            <RoleGuard roles={["SuperAdmin", "HRAdmin"]}>
+            <RoleGuard roles={["SuperAdmin", "HRAdmin", "Supervisor"]} fallback={null}>
               <div className="flex flex-wrap gap-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="gap-1.5"
-                  onClick={() => navigate({ to: "/training/admin" })}
-                >
-                  <LayoutGrid className="h-4 w-4" />
-                  Dashboard
-                </Button>
-                {tab === "videos" ? (
+                {canOpenTrainingAdmin ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => navigate({ to: "/training/admin" })}
+                  >
+                    <LayoutGrid className="h-4 w-4" />
+                    Dashboard
+                  </Button>
+                ) : null}
+                {tab === "videos" && canManageVideoModule ? (
                   <Button
                     type="button"
                     size="sm"
@@ -292,7 +298,7 @@ export default function TrainingHubPage() {
                     <Upload className="h-4 w-4" />
                     Upload Video
                   </Button>
-                ) : (
+                ) : tab === "documents" && canManageDocumentModule ? (
                   <Button
                     type="button"
                     size="sm"
@@ -304,7 +310,7 @@ export default function TrainingHubPage() {
                     <Upload className="h-4 w-4" />
                     Upload Document
                   </Button>
-                )}
+                ) : null}
               </div>
             </RoleGuard>
           }

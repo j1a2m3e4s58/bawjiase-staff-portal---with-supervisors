@@ -29,6 +29,7 @@ import {
   apiTrashAnnouncement,
   apiUpdateAnnouncement,
   apiVoteAnnouncementPoll,
+  userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import type { AnnouncementWithPoll, PollOption } from "@/types";
@@ -542,9 +543,7 @@ export default function AnnouncementsPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AnnouncementWithPoll | null>(null);
   const [visibleCount, setVisibleCount] = useState(ANNOUNCEMENTS_PAGE_SIZE);
-  const isAdmin =
-    user?.department?.toUpperCase() === "IT" ||
-    user?.department?.toUpperCase() === "HR";
+  const isAdmin = userHasPermission(user, "announcements");
 
   useEffect(() => {
     if (!user) return;
@@ -687,7 +686,7 @@ export default function AnnouncementsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <RoleGuard roles={["SuperAdmin", "HRAdmin"]}>
+            <RoleGuard roles={["SuperAdmin", "HRAdmin", "Supervisor"]} permission="announcements">
               <Button
                 asChild
                 size="sm"
@@ -804,7 +803,7 @@ export default function AnnouncementsPage() {
         )}
 
         {/* Floating action button (admin) */}
-        <RoleGuard roles={["SuperAdmin", "HRAdmin"]}>
+        <RoleGuard roles={["SuperAdmin", "HRAdmin", "Supervisor"]} permission="announcements">
           <button
             type="button"
             onClick={handleCreate}

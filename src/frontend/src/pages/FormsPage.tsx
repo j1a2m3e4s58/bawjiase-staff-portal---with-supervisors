@@ -30,9 +30,12 @@ import {
   apiGetForms,
   apiOpenFormUrl,
   apiUpdateForm,
+  getManageableBranches,
+  getManageableDepartmentsForBranch,
+  userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
-import type { PortalForm, Role } from "@/types";
+import { BRANCHES, DEPARTMENTS, type PortalForm, type Role, type User } from "@/types";
 import { isOk } from "@/types";
 import {
   Download,
@@ -78,11 +81,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 function canManageForms(user: ReturnType<typeof useAuth>["user"]) {
-  return (
-    user?.role === "SuperAdmin" ||
-    user?.department === "IT" ||
-    user?.department === "HR"
-  );
+  return userHasPermission(user, "forms");
 }
 
 interface FormDialogProps {
@@ -91,6 +90,7 @@ interface FormDialogProps {
   initial?: PortalForm;
   onSave: (req: CreateFormRequest) => Promise<void>;
   isSaving: boolean;
+  currentUser: User | null;
 }
 
 function FormDialog({
@@ -99,6 +99,7 @@ function FormDialog({
   initial,
   onSave,
   isSaving,
+  currentUser,
 }: FormDialogProps) {
   const [title, setTitle] = useState(initial?.title ?? "");
   const [category, setCategory] = useState<string>(
@@ -106,13 +107,35 @@ function FormDialog({
   );
   const [fileUrl, setFileUrl] = useState(initial?.fileUrl ?? "");
   const [sendExternalEmails, setSendExternalEmails] = useState(false);
+  const manageableBranches = getManageableBranches(currentUser);
+  const canTargetAllBranches =
+    currentUser?.role === "SuperAdmin" || currentUser?.role === "HRAdmin";
+  const [branchTarget, setBranchTarget] = useState("ALL");
+  const [departmentTarget, setDepartmentTarget] = useState("ALL");
+  const manageableDepartments = branchTarget === "ALL"
+    ? [...DEPARTMENTS]
+    : getManageableDepartmentsForBranch(currentUser, branchTarget);
+  const canTargetAllDepartments =
+    currentUser?.role === "SuperAdmin" ||
+    currentUser?.role === "HRAdmin" ||
+    manageableDepartments.length === DEPARTMENTS.length;
 
   useEffect(() => {
     setTitle(initial?.title ?? "");
     setCategory(initial?.category ?? "General");
     setFileUrl(initial?.fileUrl ?? "");
     setSendExternalEmails(false);
-  }, [initial]);
+    setBranchTarget(
+      initial?.branchScope?.[0] ??
+        (canTargetAllBranches ? "ALL" : manageableBranches[0] ?? "ALL"),
+    );
+    setDepartmentTarget(
+      initial?.departmentScope?.[0] ??
+        (initial?.visibility === "Department" && initial.department
+          ? initial.department
+          : "ALL"),
+    );
+  }, [initial, canTargetAllBranches, manageableBranches]);
 
   async function handleSubmit() {
     if (!title.trim() || !category.trim() || !fileUrl.trim()) {
@@ -126,8 +149,10 @@ function FormDialog({
       fileUrl: apiExtractDriveFileId(fileUrl),
       category,
       visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"] as Role[],
-      visibility: "General",
-      department: null,
+      visibility: departmentTarget === "ALL" ? "General" : "Department",
+      department: departmentTarget === "ALL" ? null : departmentTarget,
+      branchScope: branchTarget === "ALL" ? ["ALL"] : [branchTarget],
+      departmentScope: departmentTarget === "ALL" ? ["ALL"] : [departmentTarget],
       sendExternalEmails: initial ? false : sendExternalEmails,
     });
   }
@@ -191,6 +216,42 @@ function FormDialog({
               Drive file links are stored as file IDs. Google Docs, Sheets, and
               Slides links stay as full links so they open correctly.
             </p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label>Branch Audience</Label>
+              <Select value={branchTarget} onValueChange={setBranchTarget}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {canTargetAllBranches ? <SelectItem value="ALL">All branches</SelectItem> : null}
+                  {manageableBranches.map((branch) => (
+                    <SelectItem key={branch} value={branch}>
+                      {branch}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department Audience</Label>
+              <Select value={departmentTarget} onValueChange={setDepartmentTarget}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {canTargetAllDepartments ? (
+                    <SelectItem value="ALL">All departments</SelectItem>
+                  ) : null}
+                  {manageableDepartments.map((item) => (
+                    <SelectItem key={item} value={item}>
+                      {item}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           {!initial ? (
             <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
@@ -533,6 +594,7 @@ export default function FormsPage() {
         initial={editingForm}
         onSave={handleSave}
         isSaving={isSaving}
+        currentUser={user ?? null}
       />
 
       <ConfirmDialog

@@ -26,6 +26,9 @@ const AnnouncementsTrashPage = lazy(
 );
 const FormsPage = lazy(() => import("@/pages/FormsPage"));
 const DirectoryPage = lazy(() => import("@/pages/DirectoryPage"));
+const SupervisorManagementPage = lazy(
+  () => import("@/pages/SupervisorManagementPage"),
+);
 const PastStaffPage = lazy(() => import("@/pages/PastStaffPage"));
 const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
 const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
@@ -223,6 +226,12 @@ const directoryPastRoute = createRoute({
   component: PastStaffPage,
 });
 
+const supervisorManagementRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/directory/supervisors",
+  component: SupervisorManagementPage,
+});
+
 const trainingRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/training",
@@ -324,6 +333,7 @@ const routeTree = rootRoute.addChildren([
     announcementsTrashRoute,
     directoryRoute,
     directoryPastRoute,
+    supervisorManagementRoute,
     trainingRoute,
     trainingVideoRoute,
     trainingDocumentRoute,

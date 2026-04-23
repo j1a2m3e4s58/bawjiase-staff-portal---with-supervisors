@@ -15,10 +15,13 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  getManageableBranches,
+  getManageableDepartmentsForBranch,
   apiUploadTrainingVideo,
   apiUploadTrainingVideoFile,
 } from "@/lib/backend-client";
 import { DEPARTMENTS } from "@/types";
+import { useAuth } from "@/store/auth";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -28,7 +31,7 @@ import {
   Upload,
   Video,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 const MAX_VIDEO_UPLOAD_MB = 1024;
@@ -53,6 +56,7 @@ function formatFileSize(bytes: number): string {
 
 export default function TrainingUploadVideoPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -62,11 +66,24 @@ export default function TrainingUploadVideoPage() {
   const [visibility, setVisibility] = useState<"General" | "Department">(
     "General",
   );
+  const [branchTarget, setBranchTarget] = useState("ALL");
   const [department, setDepartment] = useState("");
   const [mandatory, setMandatory] = useState(false);
   const [allowDownload, setAllowDownload] = useState(false);
   const [sendExternalEmails, setSendExternalEmails] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const manageableBranches = getManageableBranches(user);
+  const canTargetAllBranches =
+    user?.role === "SuperAdmin" || user?.role === "HRAdmin";
+  const manageableDepartments =
+    branchTarget === "ALL"
+      ? [...DEPARTMENTS]
+      : getManageableDepartmentsForBranch(user, branchTarget);
+  useEffect(() => {
+    if (!canTargetAllBranches && manageableBranches.length > 0) {
+      setBranchTarget((current) => (current === "ALL" ? manageableBranches[0] : current));
+    }
+  }, [canTargetAllBranches, manageableBranches]);
 
   const driveId = driveInput ? extractDriveId(driveInput) : "";
   const isValid =
@@ -101,6 +118,9 @@ export default function TrainingUploadVideoPage() {
         storageType,
         visibility,
         department: visibility === "Department" ? department : undefined,
+        branchScope: branchTarget === "ALL" ? ["ALL"] : [branchTarget],
+        departmentScope:
+          visibility === "Department" && department ? [department] : ["ALL"],
         mandatory,
         allowDownload,
         sendExternalEmails,
@@ -122,7 +142,8 @@ export default function TrainingUploadVideoPage() {
   return (
     <AppShell>
       <RoleGuard
-        roles={["SuperAdmin", "HRAdmin"]}
+        roles={["SuperAdmin", "HRAdmin", "Supervisor"]}
+        permission="trainingVideos"
         fallback={
           <div className="text-center py-16 text-muted-foreground">
             You do not have permission to upload training videos.
@@ -289,6 +310,24 @@ export default function TrainingUploadVideoPage() {
             <PortalCard title="Visibility &amp; Access" elevated>
               <div className="space-y-4">
                 <div className="space-y-1.5">
+                  <Label>Branch Audience</Label>
+                  <Select value={branchTarget} onValueChange={setBranchTarget}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {canTargetAllBranches ? (
+                        <SelectItem value="ALL">All branches</SelectItem>
+                      ) : null}
+                      {manageableBranches.map((branch) => (
+                        <SelectItem key={branch} value={branch}>
+                          {branch}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
                   <Label>Visible To *</Label>
                   <Select
                     value={visibility}
@@ -318,7 +357,7 @@ export default function TrainingUploadVideoPage() {
                         <SelectValue placeholder="Select department..." />
                       </SelectTrigger>
                       <SelectContent>
-                        {DEPARTMENTS.map((d) => (
+                        {manageableDepartments.map((d) => (
                           <SelectItem key={d} value={d}>
                             {d}
                           </SelectItem>
