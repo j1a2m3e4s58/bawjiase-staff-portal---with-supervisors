@@ -250,6 +250,10 @@ function AnnouncementCard({
 }) {
   const category = getAnnouncementCategory(ann);
   const colorClass = CATEGORY_COLORS[category] ?? CATEGORY_COLORS.General;
+  const audienceSummary = formatAudienceSummary(
+    ann.branchScope,
+    ann.departmentScope,
+  );
   const date = new Date(Number(ann.createdAt)).toLocaleDateString("en-GH", {
     day: "numeric",
     month: "long",
@@ -277,6 +281,9 @@ function AnnouncementCard({
       </h3>
       <p className="text-sm text-muted-foreground leading-relaxed">
         {ann.content}
+      </p>
+      <p className="mt-3 text-xs text-muted-foreground">
+        {audienceSummary}
       </p>
       <AnnouncementAttachment ann={ann} />
       <p className="text-xs text-muted-foreground/70 mt-3">
@@ -702,6 +709,9 @@ export default function AnnouncementsPage() {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [filterCategory, setFilterCategory] = useState("all");
+  const manageableBranches = getManageableBranches(user);
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<AnnouncementWithPoll | null>(null);
   const [visibleCount, setVisibleCount] = useState(ANNOUNCEMENTS_PAGE_SIZE);
@@ -734,7 +744,7 @@ export default function AnnouncementsPage() {
 
   useEffect(() => {
     setVisibleCount(ANNOUNCEMENTS_PAGE_SIZE);
-  }, [deferredSearch, filterCategory]);
+  }, [branchFilter, deferredSearch, departmentFilter, filterCategory]);
 
   async function handleDismiss(id: number) {
     if (!user) return;
@@ -817,9 +827,67 @@ export default function AnnouncementsPage() {
     }
   }
 
+  const availableBranches = useMemo(() => {
+    const visible = new Set<string>();
+    announcements.forEach((announcement) => {
+      (announcement.branchScope ?? ["ALL"]).forEach((branch) => {
+        if (branch !== "ALL") visible.add(branch);
+      });
+    });
+    const ordered = manageableBranches.length > 0 ? manageableBranches : Array.from(visible);
+    return ordered.filter((branch) => visible.has(branch));
+  }, [announcements, manageableBranches]);
+
+  const availableDepartments = useMemo(() => {
+    const visible = new Set<string>();
+    announcements
+      .filter((announcement) => {
+        if (branchFilter === "ALL") return true;
+        const branches = announcement.branchScope ?? ["ALL"];
+        return branches.includes("ALL") || branches.includes(branchFilter);
+      })
+      .forEach((announcement) => {
+        (announcement.departmentScope ?? ["ALL"]).forEach((department) => {
+          if (department !== "ALL") visible.add(department);
+        });
+      });
+    if (branchFilter !== "ALL") {
+      const manageable = getManageableDepartmentsForBranch(user, branchFilter);
+      return manageable.filter((department) => visible.has(department));
+    }
+    return Array.from(visible).sort();
+  }, [announcements, branchFilter, user]);
+
+  useEffect(() => {
+    if (branchFilter !== "ALL" && availableBranches.length > 0 && !availableBranches.includes(branchFilter)) {
+      setBranchFilter("ALL");
+    }
+  }, [availableBranches, branchFilter]);
+
+  useEffect(() => {
+    if (
+      departmentFilter !== "ALL" &&
+      availableDepartments.length > 0 &&
+      !availableDepartments.includes(departmentFilter)
+    ) {
+      setDepartmentFilter("ALL");
+    }
+  }, [availableDepartments, departmentFilter]);
+
   const filtered = useMemo(() => announcements.filter((a) => {
     if (a.isTrashed) return false;
     const cat = getAnnouncementCategory(a);
+    const branches = a.branchScope ?? ["ALL"];
+    const departments = a.departmentScope ?? ["ALL"];
+    const branchMatches =
+      branchFilter === "ALL" ||
+      branches.includes("ALL") ||
+      branches.includes(branchFilter);
+    const departmentMatches =
+      departmentFilter === "ALL" ||
+      departments.includes("ALL") ||
+      departments.includes(departmentFilter);
+    if (!branchMatches || !departmentMatches) return false;
     if (filterCategory !== "all" && cat !== filterCategory) return false;
     if (
       deferredSearch &&
@@ -827,7 +895,7 @@ export default function AnnouncementsPage() {
     )
       return false;
     return true;
-  }), [announcements, deferredSearch, filterCategory]);
+  }), [announcements, branchFilter, deferredSearch, departmentFilter, filterCategory]);
 
   const visibleAnnouncements = useMemo(
     () => filtered.slice(0, visibleCount),
@@ -896,7 +964,39 @@ export default function AnnouncementsPage() {
               className="pl-9"
               data-ocid="announcements.search.search_input"
             />
-          </div>
+            </div>
+          <Select value={branchFilter} onValueChange={setBranchFilter}>
+            <SelectTrigger
+              className="w-44"
+              data-ocid="announcements.branch_filter.select"
+            >
+              <SelectValue placeholder="Branch scope" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All branches</SelectItem>
+              {availableBranches.map((branch) => (
+                <SelectItem key={branch} value={branch}>
+                  {branch}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+            <SelectTrigger
+              className="w-44"
+              data-ocid="announcements.department_filter.select"
+            >
+              <SelectValue placeholder="Department scope" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="ALL">All departments</SelectItem>
+              {availableDepartments.map((department) => (
+                <SelectItem key={department} value={department}>
+                  {department}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
           <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger
               className="w-36"

@@ -236,6 +236,22 @@ export default function SupervisorManagementPage() {
     );
   }, [managedBranches, managedDepartmentsByBranch, role]);
 
+  const supervisorModuleSummary = useMemo(
+    () =>
+      (
+        [
+          ["announcements", "Announcements"],
+          ["forms", "Forms Centre"],
+          ["trainingVideos", "Training Videos"],
+          ["trainingDocuments", "Training Documents"],
+          ["support", "Support Admin"],
+        ] as const
+      )
+        .filter(([key]) => permissions[key])
+        .map(([, label]) => label),
+    [permissions],
+  );
+
   return (
     <AppShell>
       <RoleGuard
@@ -486,6 +502,24 @@ export default function SupervisorManagementPage() {
                               {summary}
                             </div>
                           ))}
+                        </div>
+                        <div>
+                          <div className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Enabled modules
+                          </div>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            {supervisorModuleSummary.length > 0 ? (
+                              supervisorModuleSummary.map((label) => (
+                                <Badge key={label} variant="outline">
+                                  {label}
+                                </Badge>
+                              ))
+                            ) : (
+                              <span className="text-sm text-muted-foreground">
+                                No module permissions selected yet.
+                              </span>
+                            )}
+                          </div>
                         </div>
                         {supervisorWarnings.length > 0 ? (
                           <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3">

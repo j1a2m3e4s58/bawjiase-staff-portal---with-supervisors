@@ -359,6 +359,10 @@ interface FormCardProps {
 function FormCard({ form, canAdmin, onEdit, onDelete, index }: FormCardProps) {
   const categoryColor =
     CATEGORY_COLORS[form.category] ?? CATEGORY_COLORS.General;
+  const audienceSummary = formatAudienceSummary(
+    form.branchScope,
+    form.departmentScope,
+  );
 
   return (
     <div
@@ -378,6 +382,9 @@ function FormCard({ form, canAdmin, onEdit, onDelete, index }: FormCardProps) {
             <Badge className={`mt-2 text-[11px] ${categoryColor}`}>
               {form.category}
             </Badge>
+            <p className="mt-2 text-xs text-muted-foreground">
+              {audienceSummary}
+            </p>
           </div>
         </div>
 
@@ -444,10 +451,13 @@ function FormCard({ form, canAdmin, onEdit, onDelete, index }: FormCardProps) {
 export default function FormsPage() {
   const { user } = useAuth();
   const canAdmin = canManageForms(user);
+  const manageableBranches = getManageableBranches(user);
 
   const [forms, setForms] = useState<PortalForm[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingForm, setEditingForm] = useState<PortalForm | undefined>();
   const [isSaving, setIsSaving] = useState(false);
@@ -479,13 +489,72 @@ export default function FormsPage() {
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return forms;
-    return forms.filter(
-      (form) =>
+    return forms.filter((form) => {
+      const branchScope = form.branchScope ?? ["ALL"];
+      const departmentScope = form.departmentScope ?? ["ALL"];
+      const branchMatches =
+        branchFilter === "ALL" ||
+        branchScope.includes("ALL") ||
+        branchScope.includes(branchFilter);
+      const departmentMatches =
+        departmentFilter === "ALL" ||
+        departmentScope.includes("ALL") ||
+        departmentScope.includes(departmentFilter);
+      if (!branchMatches || !departmentMatches) return false;
+      if (!query) return true;
+      return (
         form.title.toLowerCase().includes(query) ||
-        form.category.toLowerCase().includes(query),
-    );
-  }, [forms, search]);
+        form.category.toLowerCase().includes(query)
+      );
+    });
+  }, [branchFilter, departmentFilter, forms, search]);
+
+  const availableBranches = useMemo(() => {
+    const visible = new Set<string>();
+    forms.forEach((form) => {
+      (form.branchScope ?? ["ALL"]).forEach((branch) => {
+        if (branch !== "ALL") visible.add(branch);
+      });
+    });
+    const ordered = manageableBranches.length > 0 ? manageableBranches : Array.from(visible);
+    return ordered.filter((branch) => visible.has(branch));
+  }, [forms, manageableBranches]);
+
+  const availableDepartments = useMemo(() => {
+    const visible = new Set<string>();
+    forms
+      .filter((form) => {
+        if (branchFilter === "ALL") return true;
+        const branches = form.branchScope ?? ["ALL"];
+        return branches.includes("ALL") || branches.includes(branchFilter);
+      })
+      .forEach((form) => {
+        (form.departmentScope ?? ["ALL"]).forEach((department) => {
+          if (department !== "ALL") visible.add(department);
+        });
+      });
+    if (branchFilter !== "ALL") {
+      const manageable = getManageableDepartmentsForBranch(user, branchFilter);
+      return manageable.filter((department) => visible.has(department));
+    }
+    return Array.from(visible).sort();
+  }, [branchFilter, forms, user]);
+
+  useEffect(() => {
+    if (branchFilter !== "ALL" && availableBranches.length > 0 && !availableBranches.includes(branchFilter)) {
+      setBranchFilter("ALL");
+    }
+  }, [availableBranches, branchFilter]);
+
+  useEffect(() => {
+    if (
+      departmentFilter !== "ALL" &&
+      availableDepartments.length > 0 &&
+      !availableDepartments.includes(departmentFilter)
+    ) {
+      setDepartmentFilter("ALL");
+    }
+  }, [availableDepartments, departmentFilter]);
 
   async function handleSave(req: CreateFormRequest) {
     setIsSaving(true);
@@ -559,19 +628,45 @@ export default function FormsPage() {
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3 lg:min-w-[520px]">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <div className="flex flex-col sm:flex-row gap-3 lg:min-w-[520px]">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   className="pl-9"
                   placeholder="Search forms..."
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
                   data-ocid="forms.search_input"
-                />
-              </div>
-              {canAdmin && (
-                <Button
+                  />
+                </div>
+                <Select value={branchFilter} onValueChange={setBranchFilter}>
+                  <SelectTrigger className="sm:w-[180px]">
+                    <SelectValue placeholder="Branch scope" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All branches</SelectItem>
+                    {availableBranches.map((branch) => (
+                      <SelectItem key={branch} value={branch}>
+                        {branch}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                  <SelectTrigger className="sm:w-[180px]">
+                    <SelectValue placeholder="Department scope" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ALL">All departments</SelectItem>
+                    {availableDepartments.map((department) => (
+                      <SelectItem key={department} value={department}>
+                        {department}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {canAdmin && (
+                  <Button
                   type="button"
                   className="gap-2"
                   onClick={() => {
