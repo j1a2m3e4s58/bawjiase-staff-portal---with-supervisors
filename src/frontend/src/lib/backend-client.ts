@@ -495,6 +495,29 @@ async function getOptionalApi(
   }
 }
 
+async function postKeepaliveApi(
+  path: string,
+  payload: Record<string, unknown>,
+  sessionTokenOverride?: string | null,
+): Promise<void> {
+  const token = sessionTokenOverride ?? getStoredSessionToken();
+  const url = token
+    ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
+    : `${MAIL_API_URL}${path}`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      keepalive: true,
+    });
+  } catch {
+    // Ignore keepalive failures so logout can still continue locally.
+  }
+}
+
 function currentPresenceTimestampMs(): bigint {
   return BigInt(Date.now());
 }
@@ -547,7 +570,7 @@ async function pingSharedPresence(userId: string, sessionTokenOverride?: string 
 }
 
 async function logoutSharedPresence(userId: string, sessionTokenOverride?: string | null) {
-  await postOptionalApi("/presence/logout", { userId }, sessionTokenOverride);
+  await postKeepaliveApi("/presence/logout", { userId }, sessionTokenOverride);
 }
 
 export async function apiSetPresenceOffline(
@@ -1124,7 +1147,7 @@ export async function apiLogout(
     await logoutSharedPresence(userId, sessionTokenOverride);
   }
   try {
-    await postMailApi("/auth/logout", {});
+    await postKeepaliveApi("/auth/logout", {}, sessionTokenOverride);
   } catch {
     // Ignore logout API failures so the local session can still clear.
   }
