@@ -1408,8 +1408,6 @@ def eligible_users_for_item(item: dict) -> list[dict]:
 
 
 def user_can_access_item(user: dict, item: dict) -> bool:
-    if user["role"] in {"SuperAdmin", "HRAdmin"}:
-        return True
     if bool(item.get("isArchived", False)):
         return False
     return value_in_scope(item_branch_scope(item), str(user.get("branch", ""))) and value_in_scope(
