@@ -997,6 +997,22 @@ export function getScopeCoverageWarning(
   return null;
 }
 
+export function formatManageableScopeSummary(user: User | null | undefined): string | null {
+  if (!user || user.role !== "Supervisor") return null;
+  const branches = getManageableBranches(user);
+  if (branches.length === 0) return "Supervisor scope is not assigned yet.";
+  return branches
+    .map((branch) =>
+      formatAudienceSummary(
+        [branch],
+        getManageableDepartmentsForBranch(user, branch).length === DEPARTMENTS.length
+          ? ["ALL"]
+          : getManageableDepartmentsForBranch(user, branch),
+      ).replace("Visible to:", "Acting scope:"),
+    )
+    .join(" | ");
+}
+
 export function userCanManageScopedItem(
   user: User | null | undefined,
   item: {

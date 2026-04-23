@@ -1352,6 +1352,23 @@ def can_manage_scope(user: dict, branch_scope: list[str], department_scope: list
     return True
 
 
+def manageable_scope_message(user: dict) -> str:
+    if is_global_manager(user):
+        return "You can manage all branches and departments."
+    managed_branches = normalize_scope_list(user.get("managedBranches"), empty_default=[])
+    managed_departments = normalize_managed_departments_by_branch(
+        user.get("managedDepartmentsByBranch")
+    )
+    if not managed_branches:
+        return "No supervisor branch scope is assigned to your account."
+    parts = []
+    for branch in managed_branches:
+        departments = managed_departments.get(branch, [])
+        label = "all departments" if "ALL" in departments else ", ".join(departments)
+        parts.append(f"{branch} > {label or 'no departments'}")
+    return f"You can only manage: {'; '.join(parts)}."
+
+
 def ensure_content_management_access(
     user: dict,
     *,
@@ -1363,10 +1380,14 @@ def ensure_content_management_access(
         return False, (jsonify({"error": "You do not have permission to manage this module"}), 403)
     if not can_manage_scope(user, branch_scope, department_scope):
         return False, (
-            jsonify({"error": "You are not allowed to manage content for that branch or department"}),
+            jsonify({"error": manageable_scope_message(user)}),
             403,
         )
     return True, ()
+
+
+def scoped_access_denial(user: dict):
+    return jsonify({"error": manageable_scope_message(user)}), 403
 
 
 def eligible_users_for_item(item: dict) -> list[dict]:
@@ -2821,7 +2842,7 @@ def update_shared_announcement(item_id: int):
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
     if not user_can_manage_item(actor, announcement, "announcements"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     try:
         payload = normalize_announcement_payload(data, actor, announcement)
     except ValueError as exc:
@@ -2860,7 +2881,7 @@ def trash_shared_announcement(item_id: int):
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
     if not user_can_manage_item(actor, announcement, "announcements"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     announcement["isTrashed"] = True
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
@@ -2881,7 +2902,7 @@ def restore_shared_announcement(item_id: int):
     if not announcement:
         return jsonify({"error": "Announcement not found"}), 404
     if not user_can_manage_item(actor, announcement, "announcements"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     announcement["isTrashed"] = False
     announcement["updatedAt"] = now_ms()
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, items)
@@ -2902,7 +2923,7 @@ def delete_shared_announcement(item_id: int):
     if not target:
         return jsonify({"error": "Announcement not found"}), 404
     if not user_can_manage_item(actor, target, "announcements"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(ANNOUNCEMENTS_STORE_PATH, filtered)
     record_content_audit(actor, "DELETE_ANNOUNCEMENT", "announcement", target)
@@ -3083,7 +3104,7 @@ def update_shared_form(item_id: int):
     if not form:
         return jsonify({"error": "Form not found"}), 404
     if not user_can_manage_item(actor, form, "forms"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     try:
         if "title" in data:
             form["title"] = normalize_non_empty_title(data.get("title"), "Form title")
@@ -3147,7 +3168,7 @@ def delete_shared_form(item_id: int):
     if not target:
         return jsonify({"error": "Form not found"}), 404
     if not user_can_manage_item(actor, target, "forms"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(FORMS_STORE_PATH, filtered)
     record_content_audit(actor, "DELETE_FORM", "form", target)
@@ -3351,7 +3372,7 @@ def archive_shared_training_video(item_id: int):
     if not video:
         return jsonify({"error": "Video not found"}), 404
     if not user_can_manage_item(actor, video, "trainingVideos"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     video["isArchived"] = True
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, items)
     record_content_audit(actor, "ARCHIVE_TRAINING_VIDEO", "trainingVideo", video)
@@ -3371,7 +3392,7 @@ def delete_shared_training_video(item_id: int):
     if not target:
         return jsonify({"error": "Video not found"}), 404
     if not user_can_manage_item(actor, target, "trainingVideos"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(TRAINING_VIDEOS_STORE_PATH, filtered)
     record_content_audit(actor, "DELETE_TRAINING_VIDEO", "trainingVideo", target)
@@ -3552,7 +3573,7 @@ def archive_shared_training_document(item_id: int):
     if not document:
         return jsonify({"error": "Document not found"}), 404
     if not user_can_manage_item(actor, document, "trainingDocuments"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     document["isArchived"] = True
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, items)
     record_content_audit(actor, "ARCHIVE_TRAINING_DOCUMENT", "trainingDocument", document)
@@ -3572,7 +3593,7 @@ def delete_shared_training_document(item_id: int):
     if not target:
         return jsonify({"error": "Document not found"}), 404
     if not user_can_manage_item(actor, target, "trainingDocuments"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(actor)
     filtered = [item for item in items if int(item.get("id", 0) or 0) != item_id]
     save_json_list_store(TRAINING_DOCUMENTS_STORE_PATH, filtered)
     record_content_audit(actor, "DELETE_TRAINING_DOCUMENT", "trainingDocument", target)
@@ -3692,7 +3713,7 @@ def send_video_training_reminder(item_id: int):
     if not video:
         return jsonify({"error": "Video not found"}), 404
     if not user_can_manage_item(auth_user, video, "trainingVideos"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(auth_user)
     try:
         delivery = send_training_reminders("video", item_id)
     except ValueError:
@@ -3712,7 +3733,7 @@ def send_document_training_reminder(item_id: int):
     if not document:
         return jsonify({"error": "Document not found"}), 404
     if not user_can_manage_item(auth_user, document, "trainingDocuments"):
-        return jsonify({"error": "Access denied"}), 403
+        return scoped_access_denial(auth_user)
     try:
         delivery = send_training_reminders("document", item_id)
     except ValueError:

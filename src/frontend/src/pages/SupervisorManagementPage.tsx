@@ -17,7 +17,7 @@ import {
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS, type User, type UserPermissions } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, KeyRound, Search, ShieldCheck, Users } from "lucide-react";
+import { ArrowLeft, ArrowRightLeft, KeyRound, Search, ShieldCheck, UserX, Users } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
@@ -48,6 +48,7 @@ export default function SupervisorManagementPage() {
   const [managedBranches, setManagedBranches] = useState<string[]>([]);
   const [managedDepartmentsByBranch, setManagedDepartmentsByBranch] = useState<Record<string, string[]>>({});
   const [permissions, setPermissions] = useState<UserPermissions>(DEFAULT_PERMISSIONS);
+  const [transferToId, setTransferToId] = useState("");
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -205,6 +206,78 @@ export default function SupervisorManagementPage() {
     }
   }
 
+  async function handleRemoveSupervisor() {
+    if (!selectedUser) return;
+    setSaving(true);
+    try {
+      const result = await apiUpdateStaff(selectedUser.id, {
+        role: "GeneralStaff",
+        managedBranches: [],
+        managedDepartmentsByBranch: {},
+        permissions: DEFAULT_PERMISSIONS,
+      });
+      if ("err" in result) {
+        toast.error(result.err);
+        return;
+      }
+      setStaff((current) =>
+        current.map((member) => (member.id === result.ok.id ? result.ok : member)),
+      );
+      setRole("GeneralStaff");
+      setManagedBranches([]);
+      setManagedDepartmentsByBranch({});
+      setPermissions(DEFAULT_PERMISSIONS);
+      toast.success("Supervisor access removed");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTransferSupervisor() {
+    if (!selectedUser || !transferToId) return;
+    const transferTarget = staff.find((member) => member.id === transferToId);
+    if (!transferTarget) return;
+    if (role !== "Supervisor") {
+      toast.error("Select an active supervisor before transferring access.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const targetResult = await apiUpdateStaff(transferTarget.id, {
+        role: "Supervisor",
+        managedBranches,
+        managedDepartmentsByBranch,
+        permissions,
+      });
+      if ("err" in targetResult) {
+        toast.error(targetResult.err);
+        return;
+      }
+      const sourceResult = await apiUpdateStaff(selectedUser.id, {
+        role: "GeneralStaff",
+        managedBranches: [],
+        managedDepartmentsByBranch: {},
+        permissions: DEFAULT_PERMISSIONS,
+      });
+      if ("err" in sourceResult) {
+        toast.error(sourceResult.err);
+        return;
+      }
+      setStaff((current) =>
+        current.map((member) => {
+          if (member.id === targetResult.ok.id) return targetResult.ok;
+          if (member.id === sourceResult.ok.id) return sourceResult.ok;
+          return member;
+        }),
+      );
+      setSelectedId(targetResult.ok.id);
+      setTransferToId("");
+      toast.success(`Supervisor access transferred to ${targetResult.ok.fullname}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   const supervisorWarnings = useMemo(() => {
     if (role !== "Supervisor") return [];
     if (managedBranches.length === 0) {
@@ -348,6 +421,77 @@ export default function SupervisorManagementPage() {
                     <p className="text-sm text-muted-foreground">
                       {selectedUser.email} · {selectedUser.branch} · {selectedUser.department}
                     </p>
+                  </div>
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                      <div className="flex items-start gap-3">
+                        <UserX className="mt-0.5 h-5 w-5 text-destructive" />
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <h3 className="font-medium text-foreground">
+                              Remove supervisor access
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              Use this when the staff member is transferred, no longer supervises, or stops working with the bank.
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            disabled={saving || selectedUser.role !== "Supervisor"}
+                            onClick={handleRemoveSupervisor}
+                          >
+                            Remove Supervisor Access
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-xl border border-border/50 bg-background/40 p-4">
+                      <div className="flex items-start gap-3">
+                        <ArrowRightLeft className="mt-0.5 h-5 w-5 text-primary" />
+                        <div className="flex-1 space-y-3">
+                          <div>
+                            <h3 className="font-medium text-foreground">
+                              Transfer supervisor access
+                            </h3>
+                            <p className="text-xs text-muted-foreground">
+                              Copies this supervisor's branch, department, and module access to another staff member, then removes it from this one.
+                            </p>
+                          </div>
+                          <div className="flex flex-col gap-2 sm:flex-row">
+                            <Select value={transferToId} onValueChange={setTransferToId}>
+                              <SelectTrigger className="flex-1">
+                                <SelectValue placeholder="Transfer to..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {staff
+                                  .filter((member) => member.id !== selectedUser.id)
+                                  .map((member) => (
+                                    <SelectItem key={member.id} value={member.id}>
+                                      {member.fullname}
+                                    </SelectItem>
+                                  ))}
+                              </SelectContent>
+                            </Select>
+                            <Button
+                              type="button"
+                              size="sm"
+                              disabled={
+                                saving ||
+                                selectedUser.role !== "Supervisor" ||
+                                !transferToId
+                              }
+                              onClick={handleTransferSupervisor}
+                            >
+                              Transfer
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
 
                   <div className="grid gap-6 xl:grid-cols-2">

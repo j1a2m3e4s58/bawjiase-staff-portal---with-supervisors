@@ -19,6 +19,7 @@ import {
   apiUploadAnnouncementAssetFile,
   canManageAllDepartmentsForBranch,
   formatAudienceSummary,
+  formatManageableScopeSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
@@ -113,6 +114,7 @@ function NewsPortalForm() {
     branchTarget === "ALL" ? ["ALL"] : [branchTarget],
     departmentTarget === "ALL" ? ["ALL"] : [departmentTarget],
   );
+  const actingScope = formatManageableScopeSummary(user);
   const scopeWarning = getScopeCoverageWarning(
     user,
     branchTarget,
@@ -295,6 +297,11 @@ function NewsPortalForm() {
       )}
 
       <form onSubmit={handleSubmit} className="space-y-5">
+        {actingScope ? (
+          <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+            {actingScope}
+          </div>
+        ) : null}
         <div className="rounded-2xl border border-border/40 bg-card/70 p-6 shadow-sm">
           <div className="flex items-start justify-between gap-4 flex-wrap">
             <div className="flex items-center gap-3">

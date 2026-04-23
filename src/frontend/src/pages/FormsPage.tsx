@@ -32,6 +32,7 @@ import {
   apiUpdateForm,
   canManageAllDepartmentsForBranch,
   formatAudienceSummary,
+  formatManageableScopeSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
@@ -453,6 +454,7 @@ export default function FormsPage() {
   const { user } = useAuth();
   const canAdmin = canManageForms(user);
   const manageableBranches = getManageableBranches(user);
+  const actingScope = formatManageableScopeSummary(user);
 
   const [forms, setForms] = useState<PortalForm[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -617,6 +619,11 @@ export default function FormsPage() {
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6" data-ocid="forms.page">
+        {actingScope ? (
+          <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+            {actingScope}
+          </div>
+        ) : null}
         <div className="glass-card rounded-xl p-5 space-y-5">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>

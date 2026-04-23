@@ -16,6 +16,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   canManageAllDepartmentsForBranch,
   formatAudienceSummary,
+  formatManageableScopeSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
@@ -101,6 +102,7 @@ export default function TrainingUploadDocumentPage() {
     branchTarget,
     visibility === "Department" ? department : "ALL",
   );
+  const actingScope = formatManageableScopeSummary(user);
 
   const isValid =
     title.trim().length > 0 &&
@@ -212,6 +214,11 @@ export default function TrainingUploadDocumentPage() {
               Upload Training Document
             </h1>
           </div>
+          {actingScope ? (
+            <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+              {actingScope}
+            </div>
+          ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Basic Info */}

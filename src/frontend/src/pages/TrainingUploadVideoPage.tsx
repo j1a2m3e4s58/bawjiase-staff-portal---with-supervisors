@@ -17,6 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   canManageAllDepartmentsForBranch,
   formatAudienceSummary,
+  formatManageableScopeSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
@@ -119,6 +120,7 @@ export default function TrainingUploadVideoPage() {
     branchTarget,
     visibility === "Department" ? department : "ALL",
   );
+  const actingScope = formatManageableScopeSummary(user);
 
   const driveId = driveInput ? extractDriveId(driveInput) : "";
   const isValid =
@@ -204,6 +206,11 @@ export default function TrainingUploadVideoPage() {
               Upload Training Video
             </h1>
           </div>
+          {actingScope ? (
+            <div className="rounded-xl border border-primary/30 bg-primary/10 px-4 py-3 text-sm font-medium text-primary">
+              {actingScope}
+            </div>
+          ) : null}
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Basic Info */}
