@@ -712,9 +712,19 @@ def normalize_last_seen_ms(value: object) -> int:
     return last_seen
 
 
-def user_is_online(last_seen_ms: object) -> bool:
+def user_has_active_session(user_id: str) -> bool:
+    normalized_user_id = str(user_id or "").strip()
+    if not normalized_user_id:
+        return False
+    sessions = load_sessions()
+    return any(str(session.get("userId", "")).strip() == normalized_user_id for session in sessions.values())
+
+
+def user_is_online(last_seen_ms: object, user_id: str | None = None) -> bool:
     value = normalize_last_seen_ms(last_seen_ms)
     if value <= 0:
+        return False
+    if user_id and not user_has_active_session(user_id):
         return False
     return value >= now_ms() - (ONLINE_WINDOW_SECONDS * 1000)
 
@@ -765,7 +775,7 @@ def serialize_user_with_presence(user: dict, presence: dict[str, int] | None = N
     serialized = dict(user)
     last_seen = normalize_last_seen_ms(serialized.get("lastSeen", 0))
     serialized["lastSeen"] = last_seen
-    serialized["isOnlineNow"] = user_is_online(last_seen)
+    serialized["isOnlineNow"] = user_is_online(last_seen, str(serialized.get("id", "")).strip())
     return serialized
 
 

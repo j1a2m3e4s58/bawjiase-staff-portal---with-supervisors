@@ -505,6 +505,13 @@ async function postKeepaliveApi(
     ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
     : `${MAIL_API_URL}${path}`;
   try {
+    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+      const body = new Blob([JSON.stringify(payload)], {
+        type: "application/json",
+      });
+      const sent = navigator.sendBeacon(url, body);
+      if (sent) return;
+    }
     await fetch(url, {
       method: "POST",
       headers: {
