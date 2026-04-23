@@ -698,6 +698,20 @@ def load_presence_store() -> dict[str, int]:
     }
 
 
+def normalize_presence_timestamp(timestamp: int) -> int:
+    value = int(timestamp or 0)
+    if value <= 0:
+        return 0
+    # Older builds may have written milliseconds instead of seconds.
+    if value > 10_000_000_000:
+        value = value // 1000
+    now = int(time.time())
+    # Discard obviously broken future timestamps.
+    if value > now + 60:
+        return 0
+    return value
+
+
 def save_presence_store(store: dict[str, int]) -> None:
     atomic_write_json(PRESENCE_STORE_PATH, store)
 
@@ -705,9 +719,9 @@ def save_presence_store(store: dict[str, int]) -> None:
 def prune_presence(store: dict[str, int]) -> dict[str, int]:
     cutoff = int(time.time()) - PRESENCE_TTL_SECONDS
     return {
-        str(user_id): int(timestamp)
+        str(user_id): normalize_presence_timestamp(timestamp)
         for user_id, timestamp in store.items()
-        if int(timestamp) >= cutoff
+        if normalize_presence_timestamp(timestamp) >= cutoff
     }
 
 
