@@ -1055,7 +1055,6 @@ function userMatchesScopedItem(
   },
 ) {
   if (!user) return false;
-  if (user.role === "SuperAdmin" || user.role === "HRAdmin") return true;
   const branchScope = normalizedScope(item.branchScope, ["ALL"]);
   const derivedDepartmentScope =
     item.departmentScope && item.departmentScope.length > 0
