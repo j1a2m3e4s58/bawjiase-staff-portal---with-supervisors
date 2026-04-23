@@ -167,6 +167,7 @@ function ActionBadge({ action }: { action: string }) {
     CREATE:
       "bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30",
     UPDATE: "bg-primary/15 text-primary border-primary/30",
+    SUPERVISOR: "bg-primary/15 text-primary border-primary/30",
     DELETE: "bg-destructive/15 text-destructive border-destructive/30",
     ARCHIVE:
       "bg-orange-500/15 text-orange-600 dark:text-orange-400 border-orange-500/30",

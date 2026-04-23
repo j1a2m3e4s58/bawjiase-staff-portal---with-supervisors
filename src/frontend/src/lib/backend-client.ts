@@ -827,6 +827,18 @@ function deserializeTrainingDocument(raw: Record<string, unknown>): TrainingDocu
   };
 }
 
+function deserializeAuditLog(raw: Record<string, unknown>): AuditLog {
+  return {
+    id: contentId(raw.id),
+    actorId: String(raw.actorId ?? "system"),
+    actorName: String(raw.actorName ?? "System"),
+    action: String(raw.action ?? ""),
+    target: String(raw.target ?? ""),
+    ipAddress: String(raw.ipAddress ?? "unknown"),
+    timestamp: contentBigInt(raw.timestamp),
+  };
+}
+
 function replaceSharedAnnouncements(items: AnnouncementWithPoll[]) {
   _announcements.splice(0, _announcements.length, ...items);
 }
@@ -3544,6 +3556,20 @@ export async function apiLogAction(
   target: string,
   ipAddress: string,
 ): Promise<void> {
+  try {
+    const payload = await postMailApiJson("/audit-logs", {
+      action,
+      target,
+      ipAddress,
+    });
+    const rawLog = payload.log as Record<string, unknown> | undefined;
+    if (rawLog) {
+      _auditLogs.unshift(deserializeAuditLog(rawLog));
+    }
+    return;
+  } catch {
+    // Keep local logging as a fallback when the backend is not reachable.
+  }
   _auditLogs.unshift({
     id: _auditLogs.length + 1,
     actorId: "current-user",
@@ -3556,24 +3582,56 @@ export async function apiLogAction(
 }
 
 export async function apiGetAuditLogs(): Promise<AuditLog[]> {
-  await delay(400);
+  try {
+    const payload = await getMailApiJson("/audit-logs");
+    const logs = Array.isArray(payload.logs)
+      ? (payload.logs as Record<string, unknown>[]).map(deserializeAuditLog)
+      : [];
+    _auditLogs.splice(0, _auditLogs.length, ...logs);
+  } catch {
+    await delay(400);
+  }
   return [..._auditLogs].sort(
     (a, b) => Number(b.timestamp) - Number(a.timestamp),
   );
 }
 
 export async function apiDeleteAuditLog(id: number): Promise<ApiResult<null>> {
-  await delay(200);
+  try {
+    await postMailApi(`/audit-logs/${id}/delete`, {});
+  } catch (error) {
+    await delay(200);
+    const idx = _auditLogs.findIndex((l) => l.id === id);
+    if (idx < 0) {
+      return err(error instanceof Error ? error.message : "Log entry not found");
+    }
+    _auditLogs.splice(idx, 1);
+    return ok(null);
+  }
   const idx = _auditLogs.findIndex((l) => l.id === id);
-  if (idx < 0) return err("Log entry not found");
-  _auditLogs.splice(idx, 1);
+  if (idx >= 0) _auditLogs.splice(idx, 1);
   return ok(null);
 }
 
 export async function apiDeleteAuditLogs(
   ids: number[],
 ): Promise<ApiResult<null>> {
-  await delay(300);
+  try {
+    await postMailApi("/audit-logs/delete", { ids });
+  } catch (error) {
+    await delay(300);
+    let removed = false;
+    for (const id of ids) {
+      const idx = _auditLogs.findIndex((l) => l.id === id);
+      if (idx >= 0) {
+        _auditLogs.splice(idx, 1);
+        removed = true;
+      }
+    }
+    return removed || ids.length === 0
+      ? ok(null)
+      : err(error instanceof Error ? error.message : "Log entry not found");
+  }
   for (const id of ids) {
     const idx = _auditLogs.findIndex((l) => l.id === id);
     if (idx >= 0) _auditLogs.splice(idx, 1);

@@ -31,6 +31,7 @@ NOTIFICATIONS_STORE_PATH = os.path.join(DATA_DIR, "notifications_store.json")
 TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(DATA_DIR, "training_video_progress_store.json")
 TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_opens_store.json")
 TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
+AUDIT_LOGS_STORE_PATH = os.path.join(DATA_DIR, "audit_logs_store.json")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
 PRESENCE_TTL_SECONDS = 5
 ONLINE_WINDOW_SECONDS = 5
@@ -197,6 +198,7 @@ STORE_DEFAULTS: dict[str, object] = {
     TRAINING_VIDEO_PROGRESS_STORE_PATH: [],
     TRAINING_DOCUMENT_OPENS_STORE_PATH: [],
     TRAINING_REMINDERS_STORE_PATH: [],
+    AUDIT_LOGS_STORE_PATH: [],
 }
 
 
@@ -914,6 +916,68 @@ def next_content_id(items: list[dict], floor: int = 1000) -> int:
         except Exception:
             continue
     return current + 1
+
+
+def request_ip_address() -> str:
+    forwarded_for = request.headers.get("X-Forwarded-For", "")
+    if forwarded_for:
+        return forwarded_for.split(",")[0].strip() or "unknown"
+    return str(request.remote_addr or "unknown")
+
+
+def load_audit_logs_store() -> list[dict]:
+    items = load_json_list_store(AUDIT_LOGS_STORE_PATH)
+    normalized = []
+    for item in items:
+        try:
+            normalized.append(
+                {
+                    "id": int(item.get("id", 0) or 0),
+                    "actorId": str(item.get("actorId", "") or "system"),
+                    "actorName": str(item.get("actorName", "") or "System"),
+                    "action": str(item.get("action", "")).strip(),
+                    "target": str(item.get("target", "")).strip(),
+                    "ipAddress": str(item.get("ipAddress", "") or "unknown"),
+                    "timestamp": int(item.get("timestamp", 0) or 0),
+                }
+            )
+        except Exception:
+            continue
+    return [
+        item
+        for item in normalized
+        if item["id"] > 0 and item["action"] and item["target"] and item["timestamp"] > 0
+    ]
+
+
+def save_audit_logs_store(items: list[dict]) -> None:
+    save_json_list_store(AUDIT_LOGS_STORE_PATH, items[:1000])
+
+
+def record_audit_log(
+    actor: dict | None,
+    action: str,
+    target: object,
+    ip_address: str | None = None,
+) -> dict:
+    logs = load_audit_logs_store()
+    target_text = (
+        target
+        if isinstance(target, str)
+        else json.dumps(target, ensure_ascii=True, sort_keys=True)
+    )
+    entry = {
+        "id": next_content_id(logs, floor=1),
+        "actorId": str(actor.get("id", "system") if actor else "system"),
+        "actorName": str(actor.get("fullname", "System") if actor else "System"),
+        "action": str(action or "").strip().upper(),
+        "target": str(target_text or "").strip(),
+        "ipAddress": ip_address or request_ip_address(),
+        "timestamp": now_ms(),
+    }
+    logs.insert(0, entry)
+    save_audit_logs_store(logs)
+    return entry
 
 
 def load_training_video_progress_store() -> list[dict]:
@@ -1924,6 +1988,80 @@ def delete_notification(item_id: int):
     return jsonify({"ok": True})
 
 
+@app.route("/api/audit-logs", methods=["GET"])
+def get_audit_logs():
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    logs = sorted(load_audit_logs_store(), key=lambda item: int(item["timestamp"]), reverse=True)
+    return jsonify({"logs": logs})
+
+
+@app.route("/api/audit-logs", methods=["POST", "OPTIONS"])
+def create_audit_log():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, auth_user, error = require_authenticated_user()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    action = str(data.get("action", "")).strip().upper()
+    target = str(data.get("target", "")).strip()
+    if not action or not target:
+        return jsonify({"error": "Action and target are required"}), 400
+    entry = record_audit_log(
+        auth_user,
+        action,
+        target,
+        str(data.get("ipAddress", "") or request_ip_address()),
+    )
+    return jsonify({"ok": True, "log": entry})
+
+
+@app.route("/api/audit-logs/<int:item_id>/delete", methods=["POST", "OPTIONS"])
+def delete_audit_log(item_id: int):
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    logs = load_audit_logs_store()
+    filtered = [item for item in logs if int(item.get("id", 0) or 0) != item_id]
+    if len(filtered) == len(logs):
+        return jsonify({"error": "Log entry not found"}), 404
+    save_audit_logs_store(filtered)
+    return jsonify({"ok": True})
+
+
+@app.route("/api/audit-logs/delete", methods=["POST", "OPTIONS"])
+def delete_audit_logs():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_staff_manager()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    ids = {
+        int(item)
+        for item in data.get("ids", [])
+        if isinstance(item, (int, float, str)) and str(item).strip().isdigit()
+    }
+    if not ids:
+        return jsonify({"ok": True})
+    logs = load_audit_logs_store()
+    save_audit_logs_store(
+        [item for item in logs if int(item.get("id", 0) or 0) not in ids]
+    )
+    return jsonify({"ok": True})
+
+
 @app.route("/api/users", methods=["GET"])
 def list_users():
     _, _, error = require_authenticated_user()
@@ -2065,6 +2203,14 @@ def update_staff(user_id: str):
     user = find_user_by_id(users, user_id)
     if not user:
         return jsonify({"error": "Staff member not found"}), 404
+    previous_supervisor_access = {
+        "role": str(user.get("role", "")),
+        "managedBranches": normalize_scope_list(user.get("managedBranches"), empty_default=[]),
+        "managedDepartmentsByBranch": normalize_managed_departments_by_branch(
+            user.get("managedDepartmentsByBranch")
+        ),
+        "permissions": normalize_user_permissions(user.get("permissions"), str(user.get("role", ""))),
+    }
 
     requested_department = str(data.get("department", user["department"])).strip().upper()
     if requested_department == "IT" and user["department"] != "IT":
@@ -2121,6 +2267,25 @@ def update_staff(user_id: str):
     if "isActive" in data:
         user["isActive"] = bool(data.get("isActive"))
     save_user_store(users)
+    current_supervisor_access = {
+        "role": str(user.get("role", "")),
+        "managedBranches": normalize_scope_list(user.get("managedBranches"), empty_default=[]),
+        "managedDepartmentsByBranch": normalize_managed_departments_by_branch(
+            user.get("managedDepartmentsByBranch")
+        ),
+        "permissions": normalize_user_permissions(user.get("permissions"), str(user.get("role", ""))),
+    }
+    if current_supervisor_access != previous_supervisor_access:
+        record_audit_log(
+            auth_user,
+            "SUPERVISOR_ACCESS_UPDATE",
+            {
+                "staffId": user["id"],
+                "staffName": user["fullname"],
+                "before": previous_supervisor_access,
+                "after": current_supervisor_access,
+            },
+        )
     return jsonify({"ok": True, "user": user})
 
 
