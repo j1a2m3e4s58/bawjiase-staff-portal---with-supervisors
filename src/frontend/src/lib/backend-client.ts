@@ -31,8 +31,8 @@ import type {
 } from "../types";
 
 const OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com";
-const IT_ACCESS_CODE = "BCB-IT-2026";
-const HR_ACCESS_CODE = "BCB-HR-2026";
+const IT_ACCESS_CODE = (import.meta.env.VITE_IT_ACCESS_CODE || "").trim();
+const HR_ACCESS_CODE = (import.meta.env.VITE_HR_ACCESS_CODE || "").trim();
 const MAIL_API_URL = (
   import.meta.env.VITE_MAIL_API_URL || `${window.location.origin}/mail-api/api`
 ).replace(/\/$/, "");
@@ -42,6 +42,8 @@ const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
 const OPTIONAL_API_TIMEOUT_MS = 8000;
 const SESSION_EXPIRED_EVENT = "bcb:session-expired";
+const ENABLE_SEEDED_FALLBACK =
+  import.meta.env.DEV || import.meta.env.VITE_ENABLE_SEEDED_FALLBACK === "true";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -746,7 +748,7 @@ function deserializeForm(raw: Record<string, unknown>): PortalForm {
     category: String(raw.category ?? ""),
     visibleTo: Array.isArray(raw.visibleTo)
       ? (raw.visibleTo as PortalForm["visibleTo"])
-      : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+      : [],
     visibility:
       raw.visibility === "Department" ? "Department" : "General",
     department: typeof raw.department === "string" ? raw.department : null,
@@ -773,7 +775,7 @@ function deserializeTrainingVideo(raw: Record<string, unknown>): TrainingVideo {
     category: String(raw.category ?? ""),
     visibleTo: Array.isArray(raw.visibleTo)
       ? (raw.visibleTo as TrainingVideo["visibleTo"])
-      : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+      : [],
     visibility: raw.visibility === "Department" ? "Department" : "General",
     department: typeof raw.department === "string" ? raw.department : null,
     branchScope: deserializeScopeList(raw.branchScope, ["ALL"]),
@@ -805,7 +807,7 @@ function deserializeTrainingDocument(raw: Record<string, unknown>): TrainingDocu
     category: String(raw.category ?? ""),
     visibleTo: Array.isArray(raw.visibleTo)
       ? (raw.visibleTo as TrainingDocument["visibleTo"])
-      : ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+      : [],
     visibility: raw.visibility === "Department" ? "Department" : "General",
     department: typeof raw.department === "string" ? raw.department : null,
     branchScope: deserializeScopeList(raw.branchScope, ["ALL"]),
@@ -1080,10 +1082,10 @@ export async function apiRegister(
   if (!email.endsWith(OFFICIAL_EMAIL_DOMAIN)) {
     return err("Please use your official Bawjiase email address.");
   }
-  if (req.department === "IT" && req.accessCode !== IT_ACCESS_CODE) {
+  if (req.department === "IT" && IT_ACCESS_CODE && req.accessCode !== IT_ACCESS_CODE) {
     return err("Incorrect IT access code. Registration blocked.");
   }
-  if (req.department === "HR" && req.accessCode !== HR_ACCESS_CODE) {
+  if (req.department === "HR" && HR_ACCESS_CODE && req.accessCode !== HR_ACCESS_CODE) {
     return err("Incorrect HR access code. Registration blocked.");
   }
 
@@ -1606,7 +1608,9 @@ export async function apiGetAnnouncements(
       : [];
     replaceSharedAnnouncements(sharedItems);
   } catch {
-    // Keep local seeded announcements if shared content is unavailable.
+    if (!ENABLE_SEEDED_FALLBACK) {
+      replaceSharedAnnouncements([]);
+    }
   }
   const authUser = getStoredAuthUser();
   const dismissedIds = getDismissedAnnouncementIds(userId);
@@ -1625,7 +1629,9 @@ export async function apiGetTrashedAnnouncements(): Promise<Announcement[]> {
       : [];
     replaceSharedAnnouncements(sharedItems);
   } catch {
-    // Ignore and fall back to in-memory seed content.
+    if (!ENABLE_SEEDED_FALLBACK) {
+      replaceSharedAnnouncements([]);
+    }
   }
   return _announcements
     .filter((a) => a.isTrashed)
@@ -1958,7 +1964,7 @@ let _forms: PortalForm[] = [
     description: "",
     fileUrl: "1Qlab6ipjgP2aw2wOYU1SO99cX8tsf1kj",
     category: "FINANCE",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1767176110787),
@@ -1970,7 +1976,7 @@ let _forms: PortalForm[] = [
     description: "",
     fileUrl: "1Fu97vLE4A_TAkiwLu__8vNRvsiCudjx7",
     category: "HR",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1767176110787),
@@ -1983,7 +1989,7 @@ let _forms: PortalForm[] = [
     fileUrl:
       "https://docs.google.com/spreadsheets/d/1eBukKjoMlfJijF-h9QBrnDkIyYAc7juZ/edit?usp=sharing&ouid=105604838323272569561&rtpof=true&sd=true",
     category: "HR",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1769219989122),
@@ -1995,7 +2001,7 @@ let _forms: PortalForm[] = [
     description: "",
     fileUrl: "10XyOJ1tgF0A2F8-ID7wwg6UYSinkWbOQ",
     category: "HR",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1767176116253),
@@ -2007,7 +2013,7 @@ let _forms: PortalForm[] = [
     description: "",
     fileUrl: "1iGpcNdrJbPQ0C3PRvs1AW3JXOLK4SRMH",
     category: "HR",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1767176110787),
@@ -2019,7 +2025,7 @@ let _forms: PortalForm[] = [
     description: "",
     fileUrl: "1x0qDGKMudExHenT46QqCMm8ln0J2RjTE",
     category: "OPERATIONS",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1767176110787),
@@ -2031,7 +2037,7 @@ let _forms: PortalForm[] = [
     description: "",
     fileUrl: "1LxW2ERPBr6N8qwb4yQ22jy8B-4OO2qZ5",
     category: "SUSU",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     createdAt: BigInt(1767176110787),
@@ -2100,7 +2106,9 @@ export async function apiGetForms(user?: User | null): Promise<PortalForm[]> {
       : [];
     replaceSharedForms(sharedItems);
   } catch {
-    // Fall back to local seed content.
+    if (!ENABLE_SEEDED_FALLBACK) {
+      replaceSharedForms([]);
+    }
   }
   return _forms
     .filter((form) => canUserSeeForm(form, user))
@@ -2120,7 +2128,7 @@ export async function apiCreateForm(
       description: req.description,
       fileUrl: apiExtractDriveFileId(req.fileUrl),
       category: req.category,
-      visibleTo: req.visibleTo,
+      visibleTo: [],
       visibility: req.visibility ?? "General",
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,
@@ -2444,7 +2452,7 @@ const _trainingVideos: TrainingVideo[] = [
     thumbnailUrl: null,
     duration: 1800,
     category: "IT Security",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -2466,7 +2474,7 @@ const _trainingVideos: TrainingVideo[] = [
     thumbnailUrl: null,
     duration: 2700,
     category: "Compliance",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -2488,7 +2496,7 @@ const _trainingVideos: TrainingVideo[] = [
     thumbnailUrl: null,
     duration: 3600,
     category: "Banking Operations",
-    visibleTo: ["HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "Department",
     department: "CREDIT",
     isMandatory: true,
@@ -2510,7 +2518,7 @@ const _trainingVideos: TrainingVideo[] = [
     thumbnailUrl: null,
     duration: 2100,
     category: "Customer Service",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     isMandatory: false,
@@ -2534,7 +2542,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileUrl: "DRIVE:1VwXyZaBcDeFgHiJkLmNoPqRsTuVwXyZaB",
     fileType: "application/pdf",
     category: "HR",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -2555,7 +2563,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileUrl: "DRIVE:1AbCdEfGhIjKlMnOpQrStUvWxYzAbCdEfG",
     fileType: "application/pdf",
     category: "Compliance",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -2577,7 +2585,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileType:
       "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     category: "Operations",
-    visibleTo: ["HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "Department",
     department: "BANKING OPERATIONS",
     isMandatory: true,
@@ -2598,7 +2606,7 @@ const _trainingDocuments: TrainingDocument[] = [
     fileUrl: "DRIVE:1OpQrStUvWxYzAbCdEfGhIjKlMnOpQrStU",
     fileType: "application/pdf",
     category: "IT Security",
-    visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+    visibleTo: [],
     visibility: "General",
     department: null,
     isMandatory: true,
@@ -2666,7 +2674,9 @@ export async function apiGetTrainingVideos(): Promise<TrainingVideo[]> {
       : [];
     replaceSharedTrainingVideos(sharedItems);
   } catch {
-    // Fall back to local seed content.
+    if (!ENABLE_SEEDED_FALLBACK) {
+      replaceSharedTrainingVideos([]);
+    }
   }
   const user = currentTrainingUser();
   return _trainingVideos
@@ -2702,10 +2712,7 @@ export async function apiUploadTrainingVideo(
         req.visibility === "Department"
           ? (req.department ?? "General")
           : "General",
-      visibleTo:
-        req.visibility === "General"
-          ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
-          : ["HRAdmin", "SuperAdmin"],
+      visibleTo: [],
       visibility: req.visibility,
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,
@@ -2840,7 +2847,9 @@ export async function apiGetTrainingDocuments(): Promise<TrainingDocument[]> {
       : [];
     replaceSharedTrainingDocuments(sharedItems);
   } catch {
-    // Fall back to local seed content.
+    if (!ENABLE_SEEDED_FALLBACK) {
+      replaceSharedTrainingDocuments([]);
+    }
   }
   const user = currentTrainingUser();
   return _trainingDocuments
@@ -2876,10 +2885,7 @@ export async function apiUploadTrainingDocument(
         req.visibility === "Department"
           ? (req.department ?? "General")
           : "General",
-      visibleTo:
-        req.visibility === "General"
-          ? ["GeneralStaff", "HRAdmin", "SuperAdmin"]
-          : ["HRAdmin", "SuperAdmin"],
+      visibleTo: [],
       visibility: req.visibility,
       department:
         req.visibility === "Department" ? (req.department ?? null) : null,

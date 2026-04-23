@@ -185,7 +185,7 @@ function FormDialog({
       description: "",
       fileUrl: apiExtractDriveFileId(fileUrl),
       category,
-      visibleTo: ["GeneralStaff", "HRAdmin", "SuperAdmin"] as Role[],
+      visibleTo: [] as Role[],
       visibility: departmentTarget === "ALL" ? "General" : "Department",
       department: departmentTarget === "ALL" ? null : departmentTarget,
       branchScope: branchTarget === "ALL" ? ["ALL"] : [branchTarget],

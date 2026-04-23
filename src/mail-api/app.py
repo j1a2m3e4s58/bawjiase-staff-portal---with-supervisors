@@ -39,9 +39,15 @@ RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
 TRAINING_REMINDER_COOLDOWN_SECONDS = 24 * 60 * 60
-DEFAULT_PASSWORD_HASH = "403784255"  # Bcb@2026
-IT_ACCESS_CODE = "BCB-IT-2026"
-HR_ACCESS_CODE = "BCB-HR-2026"
+
+
+def env_secret(name: str) -> str:
+    return str(os.getenv(name, "") or "").strip()
+
+
+DEFAULT_INITIAL_PASSWORD = env_secret("PORTAL_DEFAULT_INITIAL_PASSWORD")
+IT_ACCESS_CODE = env_secret("IT_ACCESS_CODE")
+HR_ACCESS_CODE = env_secret("HR_ACCESS_CODE")
 
 INITIAL_USERS = [
     {
@@ -173,11 +179,6 @@ INITIAL_USERS = [
         "isArchived": False,
     },
 ]
-DEFAULT_PASSWORD_HASHES = {
-    user["email"]: DEFAULT_PASSWORD_HASH
-    for user in INITIAL_USERS
-}
-
 app = Flask(__name__)
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
@@ -218,6 +219,19 @@ def initialize_data_directory() -> None:
 
 
 initialize_data_directory()
+
+
+def seed_password_store_if_needed() -> None:
+    existing = read_json_file(PASSWORD_STORE_PATH, {})
+    if not isinstance(existing, dict) or existing:
+        return
+    if not DEFAULT_INITIAL_PASSWORD:
+        return
+    seeded = {
+        user["email"]: hash_password_for_storage(DEFAULT_INITIAL_PASSWORD)
+        for user in INITIAL_USERS
+    }
+    save_password_store(seeded)
 
 
 def allowed_origins() -> set[str]:
@@ -492,7 +506,7 @@ def normalize_training_video_payload(data: dict, actor: dict) -> dict:
         "thumbnailUrl": data.get("thumbnailUrl"),
         "duration": max(0, int(data.get("duration", 0) or 0)),
         "category": str(data.get("category", "")).strip() or (department or "General"),
-        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibleTo": [],
         "visibility": visibility,
         "department": department,
         "branchScope": branch_scope,
@@ -541,7 +555,7 @@ def normalize_training_document_payload(data: dict, actor: dict) -> dict:
         "fileUrl": file_url,
         "fileType": str(data.get("fileType", "")).strip() or "application/octet-stream",
         "category": str(data.get("category", "")).strip() or (department or "General"),
-        "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+        "visibleTo": [],
         "visibility": visibility,
         "department": department,
         "branchScope": branch_scope,
@@ -818,12 +832,13 @@ def serialize_users_with_presence(users: list[dict]) -> list[dict]:
 
 def load_password_store() -> dict[str, str]:
     raw = read_json_file(PASSWORD_STORE_PATH, {})
-    merged = dict(DEFAULT_PASSWORD_HASHES)
-    if isinstance(raw, dict):
-        for email, password_hash in raw.items():
-            if isinstance(email, str) and isinstance(password_hash, str) and password_hash:
-                merged[email.strip().lower()] = password_hash
-    return merged
+    if not isinstance(raw, dict):
+        return {}
+    return {
+        email.strip().lower(): password_hash
+        for email, password_hash in raw.items()
+        if isinstance(email, str) and isinstance(password_hash, str) and password_hash
+    }
 
 
 def save_password_store(store: dict[str, str]) -> None:
@@ -833,6 +848,9 @@ def save_password_store(store: dict[str, str]) -> None:
         if str(email).strip() and str(password_hash).strip()
     }
     atomic_write_json(PASSWORD_STORE_PATH, normalized)
+
+
+seed_password_store_if_needed()
 
 
 def load_pending_verifications() -> dict[str, dict]:
@@ -2131,9 +2149,6 @@ def export_production_backup():
         },
         "stores": {
             "users": load_user_store(),
-            "passwords": load_password_store(),
-            "pendingVerifications": read_json_file(PENDING_VERIFICATIONS_PATH, {}),
-            "resetTokens": read_json_file(RESET_TOKENS_PATH, {}),
             "sessions": load_sessions(),
             "presence": load_presence_store(),
             "announcements": load_json_list_store(ANNOUNCEMENTS_STORE_PATH),
@@ -2333,6 +2348,8 @@ def update_staff(user_id: str):
 
     requested_department = str(data.get("department", user["department"])).strip().upper()
     if requested_department == "IT" and user["department"] != "IT":
+        if not IT_ACCESS_CODE:
+            return jsonify({"error": "IT security code is not configured on the server."}), 500
         if str(data.get("accessCode", "")).strip() != IT_ACCESS_CODE:
             return jsonify({"error": "Access denied: invalid IT security code."}), 400
 
@@ -2505,6 +2522,10 @@ def auth_register():
             return jsonify({"error": "Password must be at least 8 characters"}), 400
         if not department or not branch:
             return jsonify({"error": "Department and branch are required"}), 400
+        if department == "IT" and not IT_ACCESS_CODE:
+            return jsonify({"error": "IT access code is not configured on the server."}), 500
+        if department == "HR" and not HR_ACCESS_CODE:
+            return jsonify({"error": "HR access code is not configured on the server."}), 500
         if department == "IT" and str(data.get("accessCode", "")).strip() != IT_ACCESS_CODE:
             return jsonify({"error": "Incorrect IT access code. Registration blocked."}), 400
         if department == "HR" and str(data.get("accessCode", "")).strip() != HR_ACCESS_CODE:
@@ -3047,7 +3068,7 @@ def create_shared_form():
             "description": str(data.get("description", "")).strip(),
             "fileUrl": normalize_form_file_url(data.get("fileUrl")),
             "category": str(data.get("category", "")).strip() or actor["department"],
-            "visibleTo": data.get("visibleTo") if isinstance(data.get("visibleTo"), list) else ["GeneralStaff", "HRAdmin", "SuperAdmin"],
+            "visibleTo": [],
             "visibility": visibility,
             "department": department,
             "branchScope": branch_scope,
@@ -3112,8 +3133,6 @@ def update_shared_form(item_id: int):
             form["fileUrl"] = normalize_form_file_url(data.get("fileUrl"))
         if "category" in data:
             form["category"] = str(data.get("category", "")).strip() or form["category"]
-        if "visibleTo" in data and isinstance(data.get("visibleTo"), list):
-            form["visibleTo"] = data.get("visibleTo")
         if (
             "visibility" in data
             or "department" in data
