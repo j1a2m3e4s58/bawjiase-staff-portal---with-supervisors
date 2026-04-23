@@ -374,14 +374,20 @@ function AnnouncementModal({
     department: editing?.department ?? null,
   });
   const [submitting, setSubmitting] = useState(false);
-  const manageableBranches = getManageableBranches(currentUser);
+  const manageableBranches = useMemo(
+    () => getManageableBranches(currentUser),
+    [currentUser],
+  );
   const canTargetAllBranches =
     currentUser?.role === "SuperAdmin" || currentUser?.role === "HRAdmin";
   const branchTarget = form.branchScope[0] ?? "ALL";
-  const manageableDepartments =
-    branchTarget === "ALL"
-      ? [...DEPARTMENTS]
-      : getManageableDepartmentsForBranch(currentUser, branchTarget);
+  const manageableDepartments = useMemo(
+    () =>
+      branchTarget === "ALL"
+        ? [...DEPARTMENTS]
+        : getManageableDepartmentsForBranch(currentUser, branchTarget),
+    [branchTarget, currentUser],
+  );
 
   useEffect(() => {
     setForm({
