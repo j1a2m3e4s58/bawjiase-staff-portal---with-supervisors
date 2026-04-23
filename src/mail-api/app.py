@@ -718,10 +718,16 @@ def save_presence_store(store: dict[str, int]) -> None:
 
 def prune_presence(store: dict[str, int]) -> dict[str, int]:
     cutoff = int(time.time()) - PRESENCE_TTL_SECONDS
+    active_users = {
+        str(session.get("userId", "")).strip()
+        for session in load_sessions().values()
+        if str(session.get("userId", "")).strip()
+    }
     return {
         str(user_id): normalize_presence_timestamp(timestamp)
         for user_id, timestamp in store.items()
-        if normalize_presence_timestamp(timestamp) >= cutoff
+        if str(user_id).strip() in active_users
+        and normalize_presence_timestamp(timestamp) >= cutoff
     }
 
 
