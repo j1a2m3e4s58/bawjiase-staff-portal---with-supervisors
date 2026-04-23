@@ -221,7 +221,7 @@ function deserializeUser(user: WireUser): User {
           )
         : {},
     permissions: deserializePermissions(raw.permissions),
-    isOnlineNow: false,
+    isOnlineNow: !!raw.isOnlineNow,
     lastSeen: BigInt(user.lastSeen ?? 0),
     registrationTime: BigInt(user.registrationTime ?? 0),
   };
@@ -1168,11 +1168,6 @@ export async function apiConfirmPasswordReset(
 
 export async function apiGetMyProfile(userId: string): Promise<User | null> {
   await refreshUsersCache();
-  for (const user of _mockUsers) {
-    user.isOnlineNow = false;
-  }
-  const sharedPresence = await fetchSharedPresenceMap();
-  applyPresenceMap(_mockUsers, sharedPresence);
   const user = await fetchUserById(userId);
   persistUsersStore();
   return user ? { ...user } : null;
@@ -1203,11 +1198,6 @@ export async function apiUpdateMyProfile(
 
 export async function apiGetActiveStaff(): Promise<User[]> {
   await refreshUsersCache();
-  for (const user of _mockUsers) {
-    user.isOnlineNow = false;
-  }
-  const sharedPresence = await fetchSharedPresenceMap();
-  applyPresenceMap(_mockUsers, sharedPresence);
   persistUsersStore();
   return _mockUsers
     .filter((u) => isPortalStaff(u) && !u.isArchived && u.isActive)
