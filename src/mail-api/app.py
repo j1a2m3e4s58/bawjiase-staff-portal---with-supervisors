@@ -32,8 +32,8 @@ TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(DATA_DIR, "training_video_prog
 TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_opens_store.json")
 TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
-PRESENCE_TTL_SECONDS = 10 * 60
-ONLINE_WINDOW_SECONDS = 10 * 60
+PRESENCE_TTL_SECONDS = 45
+ONLINE_WINDOW_SECONDS = 45
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -720,13 +720,13 @@ def user_has_active_session(user_id: str) -> bool:
     return any(str(session.get("userId", "")).strip() == normalized_user_id for session in sessions.values())
 
 
-def user_is_online(last_seen_ms: object, user_id: str | None = None) -> bool:
-    value = normalize_last_seen_ms(last_seen_ms)
+def presence_is_online(presence_timestamp: object, user_id: str | None = None) -> bool:
+    value = normalize_presence_timestamp(int(presence_timestamp or 0))
     if value <= 0:
         return False
     if user_id and not user_has_active_session(user_id):
         return False
-    return value >= now_ms() - (ONLINE_WINDOW_SECONDS * 1000)
+    return value >= now_seconds() - ONLINE_WINDOW_SECONDS
 
 
 def set_user_last_seen(user_id: str, last_seen_ms: int | None) -> None:
@@ -772,15 +772,19 @@ def prune_presence(store: dict[str, int]) -> dict[str, int]:
 
 
 def serialize_user_with_presence(user: dict, presence: dict[str, int] | None = None) -> dict:
+    presence_map = presence if presence is not None else prune_presence(load_presence_store())
     serialized = dict(user)
+    user_id = str(serialized.get("id", "")).strip()
     last_seen = normalize_last_seen_ms(serialized.get("lastSeen", 0))
     serialized["lastSeen"] = last_seen
-    serialized["isOnlineNow"] = user_is_online(last_seen, str(serialized.get("id", "")).strip())
+    serialized["isOnlineNow"] = presence_is_online(presence_map.get(user_id, 0), user_id)
     return serialized
 
 
 def serialize_users_with_presence(users: list[dict]) -> list[dict]:
-    return [serialize_user_with_presence(user) for user in users]
+    presence = prune_presence(load_presence_store())
+    save_presence_store(presence)
+    return [serialize_user_with_presence(user, presence) for user in users]
 
 
 def load_password_store() -> dict[str, str]:
@@ -1765,11 +1769,12 @@ def ping_presence():
         return jsonify({"error": "userId is required"}), 400
     if auth_user["id"] != user_id:
         return jsonify({"error": "Cannot update another user's presence"}), 403
-    set_user_last_seen(user_id, now_ms())
+    current_ms = now_ms()
+    set_user_last_seen(user_id, current_ms)
     store = prune_presence(load_presence_store())
     store[user_id] = int(time.time())
     save_presence_store(store)
-    return jsonify({"ok": True, "lastSeen": store[user_id]})
+    return jsonify({"ok": True, "lastSeen": current_ms})
 
 
 @app.route("/api/presence/logout", methods=["POST", "OPTIONS"])
@@ -1788,7 +1793,7 @@ def logout_presence():
         return jsonify({"error": "userId is required"}), 400
     if auth_user["id"] != user_id:
         return jsonify({"error": "Cannot update another user's presence"}), 403
-    set_user_last_seen(user_id, 0)
+    set_user_last_seen(user_id, now_ms())
     store = prune_presence(load_presence_store())
     store.pop(user_id, None)
     save_presence_store(store)
@@ -2324,7 +2329,7 @@ def auth_logout():
     token, auth_user, error = require_authenticated_user()
     if error:
         return error
-    set_user_last_seen(auth_user["id"], 0)
+    set_user_last_seen(auth_user["id"], now_ms())
     store = prune_presence(load_presence_store())
     store.pop(auth_user["id"], None)
     save_presence_store(store)
