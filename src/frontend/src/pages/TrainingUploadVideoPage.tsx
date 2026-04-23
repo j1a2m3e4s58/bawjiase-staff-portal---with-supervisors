@@ -15,8 +15,11 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import {
+  canManageAllDepartmentsForBranch,
+  formatAudienceSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
+  getScopeCoverageWarning,
   apiUploadTrainingVideo,
   apiUploadTrainingVideoFile,
 } from "@/lib/backend-client";
@@ -84,6 +87,38 @@ export default function TrainingUploadVideoPage() {
       setBranchTarget((current) => (current === "ALL" ? manageableBranches[0] : current));
     }
   }, [canTargetAllBranches, manageableBranches]);
+
+  useEffect(() => {
+    if (
+      visibility === "Department" &&
+      branchTarget !== "ALL" &&
+      !department &&
+      manageableDepartments.length > 0
+    ) {
+      setDepartment(manageableDepartments[0]);
+      return;
+    }
+    if (
+      visibility === "General" &&
+      branchTarget !== "ALL" &&
+      !canManageAllDepartmentsForBranch(user, branchTarget)
+    ) {
+      setVisibility("Department");
+      if (manageableDepartments.length > 0) {
+        setDepartment(manageableDepartments[0]);
+      }
+    }
+  }, [branchTarget, department, manageableDepartments, user, visibility]);
+
+  const audienceSummary = formatAudienceSummary(
+    branchTarget === "ALL" ? ["ALL"] : [branchTarget],
+    visibility === "Department" && department ? [department] : ["ALL"],
+  );
+  const scopeWarning = getScopeCoverageWarning(
+    user,
+    branchTarget,
+    visibility === "Department" ? department : "ALL",
+  );
 
   const driveId = driveInput ? extractDriveId(driveInput) : "";
   const isValid =
@@ -366,6 +401,18 @@ export default function TrainingUploadVideoPage() {
                     </Select>
                   </div>
                 )}
+                <div className="rounded-lg border border-border/40 bg-background/40 px-4 py-3">
+                  <p className="text-sm font-medium text-foreground">
+                    {audienceSummary}
+                  </p>
+                  {scopeWarning ? (
+                    <p className="mt-1 text-xs text-amber-500">{scopeWarning}</p>
+                  ) : (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Eligible staff inside this scope will see this video and receive the normal in-app notice.
+                    </p>
+                  )}
+                </div>
 
                 <div className="flex items-center justify-between py-2 border-t border-border/30">
                   <div>

@@ -18,8 +18,11 @@ import {
   apiCreateAnnouncement,
   apiLogAction,
   apiUploadAnnouncementAssetFile,
+  canManageAllDepartmentsForBranch,
+  formatAudienceSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
+  getScopeCoverageWarning,
 } from "@/lib/backend-client";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
@@ -95,6 +98,27 @@ function NewsPortalForm() {
       setBranchTarget(manageableBranches[0]);
     }
   }, [branchTarget, canTargetAllBranches, manageableBranches]);
+
+  useEffect(() => {
+    if (
+      departmentTarget === "ALL" &&
+      branchTarget !== "ALL" &&
+      !canManageAllDepartmentsForBranch(user, branchTarget) &&
+      manageableDepartments.length > 0
+    ) {
+      setDepartmentTarget(manageableDepartments[0]);
+    }
+  }, [branchTarget, departmentTarget, manageableDepartments, user]);
+
+  const audienceSummary = formatAudienceSummary(
+    branchTarget === "ALL" ? ["ALL"] : [branchTarget],
+    departmentTarget === "ALL" ? ["ALL"] : [departmentTarget],
+  );
+  const scopeWarning = getScopeCoverageWarning(
+    user,
+    branchTarget,
+    departmentTarget,
+  );
 
   const stopCamera = useCallback(() => {
     const tracks = streamRef.current?.getTracks() ?? [];
@@ -369,6 +393,18 @@ function NewsPortalForm() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+            <div className="rounded-xl border border-border/30 bg-background/40 px-4 py-3">
+              <p className="text-sm font-medium text-foreground">
+                {audienceSummary}
+              </p>
+              {scopeWarning ? (
+                <p className="mt-1 text-xs text-amber-500">{scopeWarning}</p>
+              ) : (
+                <p className="mt-1 text-xs text-muted-foreground">
+                  This update will only appear for the branch and department audience shown above.
+                </p>
+              )}
             </div>
 
             <Tabs value={activeTab} onValueChange={setActiveTab}>

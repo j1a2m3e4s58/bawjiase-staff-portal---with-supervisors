@@ -29,10 +29,15 @@ import {
   apiTrashAnnouncement,
   apiUpdateAnnouncement,
   apiVoteAnnouncementPoll,
+  canManageAllDepartmentsForBranch,
+  formatAudienceSummary,
+  getManageableBranches,
+  getManageableDepartmentsForBranch,
+  getScopeCoverageWarning,
   userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
-import type { AnnouncementWithPoll, PollOption } from "@/types";
+import { DEPARTMENTS, type AnnouncementWithPoll, type PollOption, type User } from "@/types";
 import { Link } from "@tanstack/react-router";
 import {
   Download,
@@ -327,6 +332,10 @@ interface AnnouncementFormData {
   category: string;
   pollQuestion: string;
   pollOptions: string[];
+  branchScope: string[];
+  departmentScope: string[];
+  visibility: "General" | "Department";
+  department: string | null;
 }
 
 function AnnouncementModal({
@@ -334,11 +343,13 @@ function AnnouncementModal({
   onClose,
   onSave,
   editing,
+  currentUser,
 }: {
   open: boolean;
   onClose: () => void;
   onSave: (data: AnnouncementFormData) => Promise<void>;
   editing: AnnouncementWithPoll | null;
+  currentUser: User | null;
 }) {
   const [form, setForm] = useState<AnnouncementFormData>({
     title: editing?.title ?? "",
@@ -346,8 +357,24 @@ function AnnouncementModal({
     category: editing ? getAnnouncementCategory(editing) : "General",
     pollQuestion: editing?.poll?.question ?? "",
     pollOptions: editing?.poll?.options.map((o) => o.text) ?? ["", ""],
+    branchScope: editing?.branchScope ?? ["ALL"],
+    departmentScope:
+      editing?.departmentScope ??
+      (editing?.visibility === "Department" && editing.department
+        ? [editing.department]
+        : ["ALL"]),
+    visibility: editing?.visibility ?? "General",
+    department: editing?.department ?? null,
   });
   const [submitting, setSubmitting] = useState(false);
+  const manageableBranches = getManageableBranches(currentUser);
+  const canTargetAllBranches =
+    currentUser?.role === "SuperAdmin" || currentUser?.role === "HRAdmin";
+  const branchTarget = form.branchScope[0] ?? "ALL";
+  const manageableDepartments =
+    branchTarget === "ALL"
+      ? [...DEPARTMENTS]
+      : getManageableDepartmentsForBranch(currentUser, branchTarget);
 
   useEffect(() => {
     setForm({
@@ -356,8 +383,74 @@ function AnnouncementModal({
       category: editing ? getAnnouncementCategory(editing) : "General",
       pollQuestion: editing?.poll?.question ?? "",
       pollOptions: editing?.poll?.options.map((o) => o.text) ?? ["", ""],
+      branchScope:
+        editing?.branchScope ??
+        (canTargetAllBranches ? ["ALL"] : manageableBranches.slice(0, 1)),
+      departmentScope:
+        editing?.departmentScope ??
+        (editing?.visibility === "Department" && editing.department
+          ? [editing.department]
+          : ["ALL"]),
+      visibility: editing?.visibility ?? "General",
+      department: editing?.department ?? null,
     });
-  }, [editing]);
+  }, [canTargetAllBranches, editing, manageableBranches]);
+
+  useEffect(() => {
+    if (
+      !canTargetAllBranches &&
+      branchTarget === "ALL" &&
+      manageableBranches.length > 0
+    ) {
+      setForm((current) => ({
+        ...current,
+        branchScope: [manageableBranches[0]],
+      }));
+      return;
+    }
+    if (
+      form.visibility === "General" &&
+      branchTarget !== "ALL" &&
+      !canManageAllDepartmentsForBranch(currentUser, branchTarget)
+    ) {
+      setForm((current) => ({
+        ...current,
+        visibility: "Department",
+        department: manageableDepartments[0] ?? current.department,
+        departmentScope: manageableDepartments[0] ? [manageableDepartments[0]] : current.departmentScope,
+      }));
+      return;
+    }
+    if (
+      form.visibility === "Department" &&
+      !form.department &&
+      manageableDepartments.length > 0
+    ) {
+      setForm((current) => ({
+        ...current,
+        department: manageableDepartments[0],
+        departmentScope: [manageableDepartments[0]],
+      }));
+    }
+  }, [
+    branchTarget,
+    canTargetAllBranches,
+    currentUser,
+    form.department,
+    form.visibility,
+    manageableBranches,
+    manageableDepartments,
+  ]);
+
+  const audienceSummary = formatAudienceSummary(
+    form.branchScope,
+    form.departmentScope,
+  );
+  const scopeWarning = getScopeCoverageWarning(
+    currentUser,
+    branchTarget,
+    form.visibility === "Department" ? form.department ?? "" : "ALL",
+  );
 
   function addPollOption() {
     setForm((f) => ({ ...f, pollOptions: [...f.pollOptions, ""] }));
@@ -456,6 +549,75 @@ function AnnouncementModal({
                 className="opacity-50"
               />
             </div>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Branch Audience</Label>
+              <Select
+                value={branchTarget}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    branchScope: [value],
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {canTargetAllBranches ? (
+                    <SelectItem value="ALL">All branches</SelectItem>
+                  ) : null}
+                  {manageableBranches.map((branch) => (
+                    <SelectItem key={branch} value={branch}>
+                      {branch}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Department Audience</Label>
+              <Select
+                value={form.visibility === "Department" ? form.department ?? "" : "ALL"}
+                onValueChange={(value) =>
+                  setForm((current) => ({
+                    ...current,
+                    visibility: value === "ALL" ? "General" : "Department",
+                    department: value === "ALL" ? null : value,
+                    departmentScope: value === "ALL" ? ["ALL"] : [value],
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {canTargetAllBranches ||
+                  canManageAllDepartmentsForBranch(currentUser, branchTarget) ? (
+                    <SelectItem value="ALL">All departments</SelectItem>
+                  ) : null}
+                  {manageableDepartments.map((department) => (
+                    <SelectItem key={department} value={department}>
+                      {department}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+            <p className="text-sm font-medium text-foreground">
+              {audienceSummary}
+            </p>
+            {scopeWarning ? (
+              <p className="mt-1 text-xs text-amber-500">{scopeWarning}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                This announcement will only appear for the branch and department audience shown above.
+              </p>
+            )}
           </div>
 
           {/* Poll section */}
@@ -614,6 +776,10 @@ export default function AnnouncementsPage() {
         category: data.category,
         pollQuestion: data.pollQuestion,
         pollOptions: data.pollOptions,
+        branchScope: data.branchScope,
+        departmentScope: data.departmentScope,
+        visibility: data.visibility,
+        department: data.department,
       });
       if ("err" in result) {
         toast.error(result.err);
@@ -631,6 +797,10 @@ export default function AnnouncementsPage() {
           category: data.category,
           pollQuestion: data.pollQuestion,
           pollOptions: data.pollOptions,
+          branchScope: data.branchScope,
+          departmentScope: data.departmentScope,
+          visibility: data.visibility,
+          department: data.department,
         },
         {
           id: user.id,
@@ -815,15 +985,16 @@ export default function AnnouncementsPage() {
           </button>
         </RoleGuard>
 
-        <AnnouncementModal
-          open={modalOpen}
-          onClose={() => {
-            setModalOpen(false);
-            setEditing(null);
-          }}
-          onSave={handleSave}
-          editing={editing}
-        />
+      <AnnouncementModal
+        open={modalOpen}
+        onClose={() => {
+          setModalOpen(false);
+          setEditing(null);
+        }}
+        onSave={handleSave}
+        editing={editing}
+        currentUser={user ?? null}
+      />
       </div>
     </AppShell>
   );

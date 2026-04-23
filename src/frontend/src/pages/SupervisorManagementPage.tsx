@@ -9,7 +9,11 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { apiGetActiveStaff, apiUpdateStaff } from "@/lib/backend-client";
+import {
+  apiGetActiveStaff,
+  apiUpdateStaff,
+  formatAudienceSummary,
+} from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS, type User, type UserPermissions } from "@/types";
 import { useNavigate } from "@tanstack/react-router";
@@ -107,7 +111,7 @@ export default function SupervisorManagementPage() {
     } else {
       setManagedDepartmentsByBranch((current) => ({
         ...current,
-        [branchKey]: current[branchKey] ?? [],
+        [branchKey]: current[branchKey] ?? ["ALL"],
       }));
     }
   }
@@ -164,6 +168,37 @@ export default function SupervisorManagementPage() {
       setSaving(false);
     }
   }
+
+  const supervisorWarnings = useMemo(() => {
+    if (role !== "Supervisor") return [];
+    if (managedBranches.length === 0) {
+      return ["This supervisor has no assigned branch yet, so they cannot publish scoped content."];
+    }
+    return managedBranches.flatMap((branch) => {
+      const departments = managedDepartmentsByBranch[branch] ?? [];
+      if (departments.length === 0) {
+        return [`${branch} has no department access selected yet.`];
+      }
+      if (!departments.includes("ALL") && departments.length < DEPARTMENTS.length) {
+        return [
+          `${branch} is partially assigned: ${departments.join(", ")} only.`,
+        ];
+      }
+      return [];
+    });
+  }, [managedBranches, managedDepartmentsByBranch, role]);
+
+  const supervisorScopeSummary = useMemo(() => {
+    if (role !== "Supervisor" || managedBranches.length === 0) return [];
+    return managedBranches.map((branch) =>
+      formatAudienceSummary(
+        [branch],
+        managedDepartmentsByBranch[branch]?.length
+          ? managedDepartmentsByBranch[branch]
+          : ["ALL"],
+      ),
+    );
+  }, [managedBranches, managedDepartmentsByBranch, role]);
 
   return (
     <AppShell>
@@ -394,6 +429,38 @@ export default function SupervisorManagementPage() {
                             </div>
                           );
                         })}
+                      </div>
+                      <div className="rounded-xl border border-border/50 bg-background/40 p-4 space-y-3">
+                        <div>
+                          <h4 className="font-medium text-foreground">Supervisor scope summary</h4>
+                          <p className="text-xs text-muted-foreground">
+                            This is how the portal will treat this supervisor's branch and department reach.
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          {supervisorScopeSummary.map((summary) => (
+                            <div
+                              key={summary}
+                              className="rounded-lg border border-border/40 px-3 py-2 text-sm text-foreground"
+                            >
+                              {summary}
+                            </div>
+                          ))}
+                        </div>
+                        {supervisorWarnings.length > 0 ? (
+                          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-3">
+                            <div className="text-xs font-semibold uppercase tracking-wide text-amber-500">
+                              Warnings
+                            </div>
+                            <div className="mt-2 space-y-1">
+                              {supervisorWarnings.map((warning) => (
+                                <p key={warning} className="text-sm text-amber-500">
+                                  {warning}
+                                </p>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   ) : null}

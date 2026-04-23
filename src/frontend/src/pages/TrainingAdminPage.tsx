@@ -8,8 +8,16 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   apiGetAdminTrainingOverview,
   apiSendVideoTrainingReminder,
+  formatAudienceSummary,
 } from "@/lib/backend-client";
 import { useNavigate } from "@tanstack/react-router";
 import {
@@ -34,6 +42,8 @@ interface VideoStat {
   isMandatory: boolean;
   incompleteCount: number;
   incompleteUsers: string[];
+  branchScope?: string[];
+  departmentScope?: string[];
 }
 
 interface DocStat {
@@ -45,6 +55,8 @@ interface DocStat {
   isMandatory: boolean;
   incompleteCount: number;
   incompleteUsers: string[];
+  branchScope?: string[];
+  departmentScope?: string[];
 }
 
 interface AdminOverview {
@@ -89,6 +101,8 @@ export default function TrainingAdminPage() {
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingReminder, setSendingReminder] = useState<number | null>(null);
+  const [branchFilter, setBranchFilter] = useState("ALL");
+  const [departmentFilter, setDepartmentFilter] = useState("ALL");
 
   useEffect(() => {
     let cancelled = false;
@@ -147,6 +161,77 @@ export default function TrainingAdminPage() {
         overview.docStats.length,
     );
   }, [overview]);
+
+  const availableBranches = useMemo(() => {
+    if (!overview) return [];
+    const set = new Set<string>();
+    [...overview.videoStats, ...overview.docStats].forEach((item) => {
+      (item.branchScope ?? ["ALL"]).forEach((branch) => {
+        if (branch !== "ALL") set.add(branch);
+      });
+    });
+    return Array.from(set).sort();
+  }, [overview]);
+
+  const availableDepartments = useMemo(() => {
+    if (!overview) return [];
+    const set = new Set<string>();
+    [...overview.videoStats, ...overview.docStats]
+      .filter((item) => {
+        if (branchFilter === "ALL") return true;
+        const branches = item.branchScope ?? ["ALL"];
+        return branches.includes("ALL") || branches.includes(branchFilter);
+      })
+      .forEach((item) => {
+        (item.departmentScope ?? ["ALL"]).forEach((department) => {
+          if (department !== "ALL") set.add(department);
+        });
+      });
+    return Array.from(set).sort();
+  }, [branchFilter, overview]);
+
+  useEffect(() => {
+    if (
+      departmentFilter !== "ALL" &&
+      availableDepartments.length > 0 &&
+      !availableDepartments.includes(departmentFilter)
+    ) {
+      setDepartmentFilter("ALL");
+    }
+  }, [availableDepartments, departmentFilter]);
+
+  function matchesScope(
+    branchScope: string[] | undefined,
+    departmentScope: string[] | undefined,
+  ) {
+    const branches = branchScope ?? ["ALL"];
+    const departments = departmentScope ?? ["ALL"];
+    const branchMatches =
+      branchFilter === "ALL" ||
+      branches.includes("ALL") ||
+      branches.includes(branchFilter);
+    const departmentMatches =
+      departmentFilter === "ALL" ||
+      departments.includes("ALL") ||
+      departments.includes(departmentFilter);
+    return branchMatches && departmentMatches;
+  }
+
+  const filteredVideoStats = useMemo(
+    () =>
+      (overview?.videoStats ?? []).filter((item) =>
+        matchesScope(item.branchScope, item.departmentScope),
+      ),
+    [branchFilter, departmentFilter, overview],
+  );
+
+  const filteredDocStats = useMemo(
+    () =>
+      (overview?.docStats ?? []).filter((item) =>
+        matchesScope(item.branchScope, item.departmentScope),
+      ),
+    [branchFilter, departmentFilter, overview],
+  );
 
   async function sendReminder(videoId: number, title: string) {
     setSendingReminder(videoId);
@@ -241,6 +326,40 @@ export default function TrainingAdminPage() {
               </div>
 
               <Tabs defaultValue="videos">
+                <div className="mb-4 grid gap-3 md:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <div className="text-sm font-medium text-foreground">Branch filter</div>
+                    <Select value={branchFilter} onValueChange={setBranchFilter}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All manageable branches</SelectItem>
+                        {availableBranches.map((branch) => (
+                          <SelectItem key={branch} value={branch}>
+                            {branch}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <div className="text-sm font-medium text-foreground">Department filter</div>
+                    <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All manageable departments</SelectItem>
+                        {availableDepartments.map((department) => (
+                          <SelectItem key={department} value={department}>
+                            {department}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
                 <TabsList>
                   <TabsTrigger value="videos">
                     <Video className="mr-1.5 h-4 w-4" />
@@ -291,7 +410,7 @@ export default function TrainingAdminPage() {
                     subtitle="Mirrors the original training dashboard structure."
                   >
                     <div className="space-y-4">
-                      {overview.videoStats.map((video) => (
+                      {filteredVideoStats.map((video) => (
                         <div
                           key={video.id}
                           className="rounded-lg border border-border/40 bg-background/40 p-4"
@@ -311,6 +430,12 @@ export default function TrainingAdminPage() {
                               <div className="mt-1 text-sm text-muted-foreground">
                                 {video.watchedCount} of {video.eligibleCount}{" "}
                                 eligible staff completed this video.
+                              </div>
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                {formatAudienceSummary(
+                                  video.branchScope,
+                                  video.departmentScope,
+                                )}
                               </div>
                               {video.incompleteCount > 0 ? (
                                 <div className="mt-3 space-y-2">
@@ -385,7 +510,7 @@ export default function TrainingAdminPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {overview.videoStats
+                        {filteredVideoStats
                           .filter(
                             (video) =>
                               video.isMandatory &&
@@ -455,7 +580,7 @@ export default function TrainingAdminPage() {
                     subtitle="Built from the original documents dashboard flow."
                   >
                     <div className="space-y-4">
-                      {overview.docStats.map((doc) => (
+                      {filteredDocStats.map((doc) => (
                         <div
                           key={doc.id}
                           className="rounded-lg border border-border/40 bg-background/40 p-4"
@@ -475,6 +600,12 @@ export default function TrainingAdminPage() {
                               <div className="mt-1 text-sm text-muted-foreground">
                                 {doc.openedCount} of {doc.eligibleCount}{" "}
                                 eligible staff opened this document.
+                              </div>
+                              <div className="mt-2 text-xs text-muted-foreground">
+                                {formatAudienceSummary(
+                                  doc.branchScope,
+                                  doc.departmentScope,
+                                )}
                               </div>
                               {doc.incompleteCount > 0 ? (
                                 <div className="mt-3 space-y-2">
@@ -532,7 +663,7 @@ export default function TrainingAdminPage() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {overview.docStats
+                        {filteredDocStats
                           .filter(
                             (doc) =>
                               doc.isMandatory && doc.incompleteUsers.length > 0,

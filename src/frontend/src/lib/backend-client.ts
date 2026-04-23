@@ -543,6 +543,15 @@ async function logoutSharedPresence(userId: string) {
   await postOptionalApi("/presence/logout", { userId });
 }
 
+export async function apiSetPresenceOffline(userId: string): Promise<void> {
+  await logoutSharedPresence(userId);
+  const user = _mockUsers.find((item) => item.id === userId);
+  if (user) {
+    user.isOnlineNow = false;
+    persistUsersStore();
+  }
+}
+
 let _mockUsers: User[] = loadUsersStore();
 
 function persistUsersStore() {
@@ -883,6 +892,54 @@ export function getManageableDepartmentsForBranch(
   return scope.includes("ALL")
     ? [...DEPARTMENTS]
     : DEPARTMENTS.filter((department) => scope.includes(department.toUpperCase()));
+}
+
+export function canManageAllDepartmentsForBranch(
+  user: User | null | undefined,
+  branch: string,
+): boolean {
+  if (!user) return false;
+  if (user.role === "SuperAdmin" || user.role === "HRAdmin") return true;
+  if (branch.trim().toUpperCase() === "ALL") return false;
+  return getManageableDepartmentsForBranch(user, branch).length === DEPARTMENTS.length;
+}
+
+export function formatAudienceSummary(
+  branchScope: string[] | null | undefined,
+  departmentScope: string[] | null | undefined,
+): string {
+  const branches = normalizedScope(branchScope, ["ALL"]);
+  const departments = normalizedScope(departmentScope, ["ALL"]);
+  const branchLabel = branches.includes("ALL") ? "All branches" : branches.join(", ");
+  let departmentLabel = "All departments";
+  if (!departments.includes("ALL")) {
+    departmentLabel =
+      departments.length === 1
+        ? `${departments[0]} only`
+        : `${departments.join(", ")} only`;
+  }
+  return `Visible to: ${branchLabel} > ${departmentLabel}`;
+}
+
+export function getScopeCoverageWarning(
+  user: User | null | undefined,
+  branch: string,
+  department: string,
+): string | null {
+  if (!user || user.role === "SuperAdmin" || user.role === "HRAdmin") {
+    return null;
+  }
+  if (!branch || branch.trim().toUpperCase() === "ALL") {
+    return "This supervisor cannot post to all branches. Choose one assigned branch.";
+  }
+  const manageableDepartments = getManageableDepartmentsForBranch(user, branch);
+  if (manageableDepartments.length === 0) {
+    return `No departments are assigned for ${branch} yet. Add department access before posting there.`;
+  }
+  if (department.trim().toUpperCase() === "ALL" && manageableDepartments.length < DEPARTMENTS.length) {
+    return `This supervisor has partial department access in ${branch}: ${manageableDepartments.join(", ")}.`;
+  }
+  return null;
 }
 
 function userMatchesScopedItem(
@@ -2096,6 +2153,8 @@ export interface AdminTrainingOverview {
     watchedCount: number;
     completionPct: number;
     isMandatory: boolean;
+    branchScope?: string[];
+    departmentScope?: string[];
     incompleteUsers: string[];
   }[];
   docStats: {
@@ -2105,6 +2164,8 @@ export interface AdminTrainingOverview {
     openedCount: number;
     openedPct: number;
     isMandatory: boolean;
+    branchScope?: string[];
+    departmentScope?: string[];
     incompleteUsers: string[];
   }[];
 }
@@ -2847,6 +2908,8 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
               watchedCount: Number(item.watchedCount ?? 0),
               completionPct: Number(item.completionPct ?? 0),
               isMandatory: !!item.isMandatory,
+              branchScope: deserializeScopeList(item.branchScope, ["ALL"]),
+              departmentScope: deserializeScopeList(item.departmentScope, ["ALL"]),
               incompleteCount: Number(
                 item.incompleteCount ??
                   (Array.isArray(item.incompleteUsers)
@@ -2866,6 +2929,8 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
               openedCount: Number(item.openedCount ?? 0),
               openedPct: Number(item.openedPct ?? 0),
               isMandatory: !!item.isMandatory,
+              branchScope: deserializeScopeList(item.branchScope, ["ALL"]),
+              departmentScope: deserializeScopeList(item.departmentScope, ["ALL"]),
               incompleteCount: Number(
                 item.incompleteCount ??
                   (Array.isArray(item.incompleteUsers)
@@ -2917,6 +2982,8 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
             ? Math.round((completedUserIds.size / eligibleUsers.length) * 100)
             : 0,
           isMandatory: !!v.isMandatory,
+          branchScope: v.branchScope ?? ["ALL"],
+          departmentScope: v.departmentScope ?? ["ALL"],
           incompleteCount: eligibleUsers.filter(
             (user) => !completedUserIds.has(user.id),
           ).length,
@@ -2944,6 +3011,8 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
             ? Math.round((openedUserIds.size / eligibleUsers.length) * 100)
             : 0,
           isMandatory: !!d.isMandatory,
+          branchScope: d.branchScope ?? ["ALL"],
+          departmentScope: d.departmentScope ?? ["ALL"],
           incompleteCount: eligibleUsers.filter(
             (user) => !openedUserIds.has(user.id),
           ).length,

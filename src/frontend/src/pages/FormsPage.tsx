@@ -30,8 +30,11 @@ import {
   apiGetForms,
   apiOpenFormUrl,
   apiUpdateForm,
+  canManageAllDepartmentsForBranch,
+  formatAudienceSummary,
   getManageableBranches,
   getManageableDepartmentsForBranch,
+  getScopeCoverageWarning,
   userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
@@ -136,6 +139,38 @@ function FormDialog({
           : "ALL"),
     );
   }, [initial, canTargetAllBranches, manageableBranches]);
+
+  useEffect(() => {
+    if (!canTargetAllBranches && branchTarget === "ALL" && manageableBranches.length > 0) {
+      setBranchTarget(manageableBranches[0]);
+      return;
+    }
+    if (
+      departmentTarget === "ALL" &&
+      branchTarget !== "ALL" &&
+      !canManageAllDepartmentsForBranch(currentUser, branchTarget) &&
+      manageableDepartments.length > 0
+    ) {
+      setDepartmentTarget(manageableDepartments[0]);
+    }
+  }, [
+    branchTarget,
+    canTargetAllBranches,
+    currentUser,
+    departmentTarget,
+    manageableBranches,
+    manageableDepartments,
+  ]);
+
+  const audienceSummary = formatAudienceSummary(
+    branchTarget === "ALL" ? ["ALL"] : [branchTarget],
+    departmentTarget === "ALL" ? ["ALL"] : [departmentTarget],
+  );
+  const scopeWarning = getScopeCoverageWarning(
+    currentUser,
+    branchTarget,
+    departmentTarget,
+  );
 
   async function handleSubmit() {
     if (!title.trim() || !category.trim() || !fileUrl.trim()) {
@@ -252,6 +287,18 @@ function FormDialog({
                 </SelectContent>
               </Select>
             </div>
+          </div>
+          <div className="rounded-lg border border-border/50 bg-muted/20 p-3">
+            <p className="text-sm font-medium text-foreground">
+              {audienceSummary}
+            </p>
+            {scopeWarning ? (
+              <p className="mt-1 text-xs text-amber-500">{scopeWarning}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Only staff inside this branch and department scope will see this form.
+              </p>
+            )}
           </div>
           {!initial ? (
             <div className="rounded-lg border border-border/50 bg-muted/20 p-3">

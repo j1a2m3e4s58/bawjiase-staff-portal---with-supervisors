@@ -3173,6 +3173,8 @@ def get_admin_training_overview():
                 "watchedCount": len(watched_user_ids),
                 "completionPct": round((len(completed_user_ids) / eligible_count) * 100) if eligible_count else 0,
                 "isMandatory": bool(video.get("isMandatory", False)),
+                "branchScope": item_branch_scope(video),
+                "departmentScope": item_department_scope(video),
                 "incompleteCount": len(incomplete_users),
                 "incompleteUsers": incomplete_users[:100],
             }
@@ -3202,6 +3204,8 @@ def get_admin_training_overview():
                 "openedCount": len(opened_user_ids),
                 "openedPct": round((len(opened_user_ids) / eligible_count) * 100) if eligible_count else 0,
                 "isMandatory": bool(document.get("isMandatory", False)),
+                "branchScope": item_branch_scope(document),
+                "departmentScope": item_department_scope(document),
                 "incompleteCount": len(incomplete_users),
                 "incompleteUsers": incomplete_users[:100],
             }

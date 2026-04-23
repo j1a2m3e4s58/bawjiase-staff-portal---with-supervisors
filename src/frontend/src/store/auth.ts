@@ -7,7 +7,11 @@ import React, {
   useCallback,
 } from "react";
 import type { ReactNode } from "react";
-import { apiLogout, apiUpdateLastSeen } from "@/lib/backend-client";
+import {
+  apiLogout,
+  apiSetPresenceOffline,
+  apiUpdateLastSeen,
+} from "@/lib/backend-client";
 import type { User } from "../types";
 
 // ── Theme ─────────────────────────────────────────────────────────────────────
@@ -33,6 +37,8 @@ const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 const REMEMBER_DAYS = 30;
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 const PRESENCE_PING_MS = 60 * 1000;
+const PRESENCE_IDLE_MS = 30 * 1000;
+const PRESENCE_CHECK_MS = 5 * 1000;
 
 function markActivity(timestamp = Date.now()) {
   localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
@@ -137,6 +143,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let cancelled = false;
     let timeoutId: number | undefined;
     let lastPing = 0;
+    let lastActivityAt = Date.now();
+    let presenceOnline = false;
+    let presenceOfflinePending = false;
 
     const persistUser = (updatedUser: User) => {
       if (cancelled || authSessionRef.current !== sessionId) return;
@@ -149,11 +158,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       saveStoredUser(mergedUser, remember, false);
     };
 
-    const pingPresence = async () => {
+    const pingPresence = async (force = false) => {
+      const now = Date.now();
+      if (!force && now - lastPing < PRESENCE_PING_MS) return;
+      lastPing = now;
       const result = await apiUpdateLastSeen(user.id);
       if (cancelled || authSessionRef.current !== sessionId) return;
       if ("ok" in result) {
+        presenceOnline = true;
         persistUser(result.ok);
+      }
+    };
+
+    const setPresenceOffline = async () => {
+      if (presenceOfflinePending || !presenceOnline) return;
+      presenceOfflinePending = true;
+      try {
+        await apiSetPresenceOffline(user.id);
+      } finally {
+        if (!cancelled && authSessionRef.current === sessionId) {
+          presenceOnline = false;
+        }
+        presenceOfflinePending = false;
       }
     };
 
@@ -161,6 +187,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (timeoutId) window.clearTimeout(timeoutId);
       timeoutId = window.setTimeout(() => {
         if (cancelled || authSessionRef.current !== sessionId) return;
+        void setPresenceOffline();
         setUser(null);
         clearStoredUser();
       }, INACTIVITY_LIMIT_MS);
@@ -168,11 +195,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const handleActivity = () => {
       const now = Date.now();
+      lastActivityAt = now;
       markActivity(now);
       scheduleTimeout();
-      if (document.visibilityState === "visible" && now - lastPing >= PRESENCE_PING_MS) {
-        lastPing = now;
-        void pingPresence();
+      if (document.visibilityState === "visible") {
+        void pingPresence(!presenceOnline || presenceOfflinePending);
       }
     };
 
@@ -182,24 +209,41 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (cancelled || authSessionRef.current !== sessionId) return;
       const lastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
       if (!lastActivity || Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
+        void setPresenceOffline();
         setUser(null);
         clearStoredUser();
         return;
       }
-      if (document.visibilityState === "visible") {
-        void pingPresence();
+      if (document.visibilityState !== "visible") {
+        void setPresenceOffline();
+        return;
       }
-    }, PRESENCE_PING_MS);
+      if (Date.now() - lastActivityAt > PRESENCE_IDLE_MS) {
+        void setPresenceOffline();
+        return;
+      }
+      void pingPresence(!presenceOnline || presenceOfflinePending);
+    }, PRESENCE_CHECK_MS);
 
     const onVisibility = () => {
-      if (document.visibilityState === "visible") handleActivity();
+      if (document.visibilityState === "visible") {
+        handleActivity();
+      } else {
+        void setPresenceOffline();
+      }
+    };
+
+    const onBlur = () => {
+      void setPresenceOffline();
     };
 
     window.addEventListener("mousemove", handleActivity);
     window.addEventListener("mousedown", handleActivity);
     window.addEventListener("keydown", handleActivity);
     window.addEventListener("touchstart", handleActivity);
+    window.addEventListener("scroll", handleActivity, { passive: true });
     window.addEventListener("focus", handleActivity);
+    window.addEventListener("blur", onBlur);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
@@ -210,7 +254,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener("mousedown", handleActivity);
       window.removeEventListener("keydown", handleActivity);
       window.removeEventListener("touchstart", handleActivity);
+      window.removeEventListener("scroll", handleActivity);
       window.removeEventListener("focus", handleActivity);
+      window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [user]);
