@@ -711,6 +711,22 @@ def prune_presence(store: dict[str, int]) -> dict[str, int]:
     }
 
 
+def serialize_user_with_presence(user: dict, presence: dict[str, int]) -> dict:
+    serialized = dict(user)
+    user_id = str(user.get("id", "")).strip()
+    timestamp = int(presence.get(user_id, 0) or 0)
+    serialized["isOnlineNow"] = bool(timestamp)
+    if timestamp > 0:
+      serialized["lastSeen"] = max(int(serialized.get("lastSeen", 0) or 0), timestamp * 1000)
+    return serialized
+
+
+def serialize_users_with_presence(users: list[dict]) -> list[dict]:
+    presence = prune_presence(load_presence_store())
+    save_presence_store(presence)
+    return [serialize_user_with_presence(user, presence) for user in users]
+
+
 def load_password_store() -> dict[str, str]:
     raw = read_json_file(PASSWORD_STORE_PATH, {})
     merged = dict(DEFAULT_PASSWORD_HASHES)
@@ -1818,7 +1834,7 @@ def list_users():
     _, _, error = require_authenticated_user()
     if error:
         return error
-    return jsonify({"users": load_user_store()})
+    return jsonify({"users": serialize_users_with_presence(load_user_store())})
 
 
 @app.route("/api/users/<user_id>", methods=["GET"])
@@ -1832,7 +1848,9 @@ def get_user(user_id: str):
     user = find_user_by_id(users, user_id)
     if not user:
         return jsonify({"error": "User not found"}), 404
-    return jsonify({"user": user})
+    presence = prune_presence(load_presence_store())
+    save_presence_store(presence)
+    return jsonify({"user": serialize_user_with_presence(user, presence)})
 
 
 @app.route("/api/users/<user_id>/profile", methods=["POST", "OPTIONS"])
@@ -1889,7 +1907,7 @@ def get_active_staff():
         user for user in users
         if user["isActive"] and not user["isArchived"] and user["fullname"] not in {"MASTER ADMIN", "System Admin"}
     ]
-    return jsonify({"users": active_users})
+    return jsonify({"users": serialize_users_with_presence(active_users)})
 
 
 @app.route("/api/staff/archived", methods=["GET"])

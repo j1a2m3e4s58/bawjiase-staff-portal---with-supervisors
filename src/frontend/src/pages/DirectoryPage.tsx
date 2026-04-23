@@ -65,10 +65,7 @@ const ROLE_VARIANT: Record<User["role"], "default" | "secondary" | "outline"> =
   };
 
 function isOnline(staff: User): boolean {
-  return (
-    staff.isOnlineNow ??
-    (staff.lastSeen > BigInt(Date.now() - 15 * 60 * 1000))
-  );
+  return !!staff.isOnlineNow;
 }
 
 function getInitials(fullname: string): string {
