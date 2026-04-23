@@ -945,6 +945,11 @@ def save_sessions(store: dict[str, dict]) -> None:
 
 def issue_session(user_id: str) -> str:
     sessions = load_sessions()
+    sessions = {
+        token: session
+        for token, session in sessions.items()
+        if session.get("userId") != user_id
+    }
     token = secrets.token_urlsafe(32)
     sessions[token] = {
         "userId": user_id,
@@ -2284,7 +2289,7 @@ def auth_logout():
     store = prune_presence(load_presence_store())
     store.pop(auth_user["id"], None)
     save_presence_store(store)
-    revoke_session(token)
+    revoke_user_sessions(auth_user["id"])
     return jsonify({"ok": True})
 
 
