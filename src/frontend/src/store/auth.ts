@@ -36,9 +36,9 @@ const AUTH_ACTIVITY_KEY = "bcb_last_activity";
 const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 const REMEMBER_DAYS = 30;
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
-const PRESENCE_PING_MS = 5 * 1000;
-const PRESENCE_IDLE_MS = 5 * 1000;
-const PRESENCE_CHECK_MS = 2 * 1000;
+const PRESENCE_PING_MS = 60 * 1000;
+const PRESENCE_IDLE_MS = 10 * 60 * 1000;
+const PRESENCE_CHECK_MS = 15 * 1000;
 
 function markActivity(timestamp = Date.now()) {
   localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
@@ -224,7 +224,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         void setPresenceOffline();
         return;
       }
-      void pingPresence(!presenceOnline || presenceOfflinePending);
+      void pingPresence(false);
     }, PRESENCE_CHECK_MS);
 
     const onVisibility = () => {

@@ -32,8 +32,8 @@ TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(DATA_DIR, "training_video_prog
 TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_opens_store.json")
 TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
-PRESENCE_TTL_SECONDS = 12
-ONLINE_WINDOW_SECONDS = 10
+PRESENCE_TTL_SECONDS = 10 * 60
+ONLINE_WINDOW_SECONDS = 10 * 60
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -1015,8 +1015,6 @@ def require_authenticated_user():
     if not user or user["isArchived"] or not user["isActive"] or not user["isVerified"]:
         revoke_session(token)
         return None, None, (jsonify({"error": "Invalid or expired session"}), 401)
-    set_user_last_seen(user["id"], now_ms())
-    user["lastSeen"] = now_ms()
     return token, user, None
 
 
