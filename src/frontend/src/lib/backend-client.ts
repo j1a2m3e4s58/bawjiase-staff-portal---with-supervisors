@@ -221,6 +221,7 @@ function deserializeUser(user: WireUser): User {
           )
         : {},
     permissions: deserializePermissions(raw.permissions),
+    isOnlineNow: false,
     lastSeen: BigInt(user.lastSeen ?? 0),
     registrationTime: BigInt(user.registrationTime ?? 0),
   };
@@ -599,7 +600,10 @@ async function refreshUsersCache(): Promise<User[]> {
     }
     persistUsersStore();
   } catch {
-    _mockUsers = loadUsersStore();
+    _mockUsers = loadUsersStore().map((user) => ({
+      ...user,
+      isOnlineNow: false,
+    }));
   }
   return _mockUsers;
 }
@@ -1164,6 +1168,9 @@ export async function apiConfirmPasswordReset(
 
 export async function apiGetMyProfile(userId: string): Promise<User | null> {
   await refreshUsersCache();
+  for (const user of _mockUsers) {
+    user.isOnlineNow = false;
+  }
   const sharedPresence = await fetchSharedPresenceMap();
   applyPresenceMap(_mockUsers, sharedPresence);
   const user = await fetchUserById(userId);
@@ -1196,6 +1203,9 @@ export async function apiUpdateMyProfile(
 
 export async function apiGetActiveStaff(): Promise<User[]> {
   await refreshUsersCache();
+  for (const user of _mockUsers) {
+    user.isOnlineNow = false;
+  }
   const sharedPresence = await fetchSharedPresenceMap();
   applyPresenceMap(_mockUsers, sharedPresence);
   persistUsersStore();
