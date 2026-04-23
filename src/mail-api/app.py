@@ -996,6 +996,20 @@ def record_content_audit(actor: dict, action: str, module: str, item: dict | Non
     )
 
 
+def staff_audit_target(user: dict, extra: dict | None = None) -> dict:
+    target = {
+        "staffId": str(user.get("id", "")),
+        "staffName": str(user.get("fullname", "")),
+        "email": str(user.get("email", "")),
+        "role": str(user.get("role", "")),
+        "department": str(user.get("department", "")),
+        "branch": str(user.get("branch", "")),
+    }
+    if extra:
+        target.update(extra)
+    return target
+
+
 def load_training_video_progress_store() -> list[dict]:
     items = load_json_list_store(TRAINING_VIDEO_PROGRESS_STORE_PATH)
     normalized = []
@@ -2121,6 +2135,7 @@ def update_profile(user_id: str):
         return jsonify({"error": "User not found"}), 404
 
     can_manage_org_fields = auth_user["role"] in {"SuperAdmin", "HRAdmin"}
+    previous_image = str(user.get("imageFile") or "").strip()
     if "fullname" in data:
         user["fullname"] = str(data.get("fullname", "")).strip() or user["fullname"]
     if "phone" in data:
@@ -2137,12 +2152,27 @@ def update_profile(user_id: str):
         if branch:
             user["branch"] = branch
     if "imageFile" in data:
-        previous_image = str(user.get("imageFile") or "").strip()
         image_file = data.get("imageFile")
         user["imageFile"] = str(image_file) if image_file else None
         if previous_image.startswith("LOCAL:") and previous_image != user["imageFile"]:
             remove_uploaded_file_if_unused(previous_image.replace("LOCAL:", "", 1).strip())
     save_user_store(users)
+    current_image = str(user.get("imageFile") or "").strip()
+    if "imageFile" in data and current_image != previous_image:
+        if previous_image and current_image:
+            action = "CHANGE_PROFILE_PHOTO"
+        elif current_image:
+            action = "ADD_PROFILE_PHOTO"
+        else:
+            action = "REMOVE_PROFILE_PHOTO"
+        record_audit_log(
+            auth_user,
+            action,
+            staff_audit_target(
+                user,
+                {"changedBySelf": auth_user["id"] == user["id"]},
+            ),
+        )
     return jsonify({"ok": True, "user": user})
 
 
@@ -2219,6 +2249,7 @@ def update_staff(user_id: str):
     user = find_user_by_id(users, user_id)
     if not user:
         return jsonify({"error": "Staff member not found"}), 404
+    previous_active = bool(user.get("isActive", False))
     previous_supervisor_access = {
         "role": str(user.get("role", "")),
         "managedBranches": normalize_scope_list(user.get("managedBranches"), empty_default=[]),
@@ -2283,6 +2314,18 @@ def update_staff(user_id: str):
     if "isActive" in data:
         user["isActive"] = bool(data.get("isActive"))
     save_user_store(users)
+    if "isActive" in data and bool(user.get("isActive", False)) != previous_active:
+        record_audit_log(
+            auth_user,
+            "ACTIVATE_STAFF" if bool(user.get("isActive", False)) else "DEACTIVATE_STAFF",
+            staff_audit_target(
+                user,
+                {
+                    "before": {"isActive": previous_active},
+                    "after": {"isActive": bool(user.get("isActive", False))},
+                },
+            ),
+        )
     current_supervisor_access = {
         "role": str(user.get("role", "")),
         "managedBranches": normalize_scope_list(user.get("managedBranches"), empty_default=[]),
@@ -2310,7 +2353,7 @@ def archive_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_staff_manager()
     if error:
         return error
     users = load_user_store()
@@ -2323,6 +2366,7 @@ def archive_staff(user_id: str):
     user["isActive"] = False
     save_user_store(users)
     revoke_user_sessions(user_id)
+    record_audit_log(auth_user, "ARCHIVE_STAFF", staff_audit_target(user))
     return jsonify({"ok": True})
 
 
@@ -2331,7 +2375,7 @@ def restore_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_staff_manager()
     if error:
         return error
     users = load_user_store()
@@ -2341,6 +2385,7 @@ def restore_staff(user_id: str):
     user["isArchived"] = False
     user["isActive"] = True
     save_user_store(users)
+    record_audit_log(auth_user, "RESTORE_STAFF", staff_audit_target(user))
     return jsonify({"ok": True})
 
 
@@ -2349,7 +2394,7 @@ def delete_staff(user_id: str):
     preflight = handle_options()
     if preflight:
         return preflight
-    _, _, error = require_staff_manager()
+    _, auth_user, error = require_staff_manager()
     if error:
         return error
     users = load_user_store()
@@ -2365,6 +2410,7 @@ def delete_staff(user_id: str):
     save_password_store(passwords)
     save_pending_verifications(pending)
     revoke_user_sessions(user_id)
+    record_audit_log(auth_user, "DELETE_STAFF", staff_audit_target(user))
     return jsonify({"ok": True})
 
 
@@ -2581,6 +2627,7 @@ def auth_request_password_reset():
         }
         save_reset_tokens(tokens)
         send_password_reset_link_email(email, reset_url)
+        record_audit_log(None, "REQUEST_PASSWORD_RESET", staff_audit_target(user))
         return jsonify({"ok": True})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -2624,6 +2671,7 @@ def auth_password_reset():
     user = find_user_by_email(users, email)
     if user:
         revoke_user_sessions(user["id"])
+        record_audit_log(None, "COMPLETE_PASSWORD_RESET", staff_audit_target(user))
     return jsonify({"ok": True})
 
 
