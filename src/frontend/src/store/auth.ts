@@ -96,7 +96,7 @@ interface AuthContextValue {
   isLoggedIn: boolean;
   isLoading: boolean;
   login: (user: User, remember?: boolean) => void;
-  logout: () => void;
+  logout: () => Promise<void>;
   updateUser: (user: User) => void;
   themeMode: ThemeMode;
   toggleTheme: () => void;
@@ -269,11 +269,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
     saveStoredUser(newUser, remember);
   }, []);
 
-  const logout = useCallback(() => {
+  const logout = useCallback(async () => {
     const currentUserId = user?.id;
     const currentSessionToken = user?.sessionToken ?? null;
     if (currentUserId) {
-      void apiLogout(currentUserId, currentSessionToken);
+      try {
+        await Promise.race([
+          apiLogout(currentUserId, currentSessionToken),
+          new Promise((resolve) => window.setTimeout(resolve, 1500)),
+        ]);
+      } catch {
+        // Ignore logout API failures so the local session can still clear.
+      }
     }
     authSessionRef.current += 1;
     setUser(null);
