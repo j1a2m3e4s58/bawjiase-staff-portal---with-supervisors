@@ -95,6 +95,17 @@ export default function SupervisorManagementPage() {
     setPermissions(normalizedUserPermissions(selectedUser));
   }, [selectedUser]);
 
+  useEffect(() => {
+    if (!selectedUser || role !== "Supervisor") return;
+    if (managedBranches.length > 0) return;
+    const fallbackBranch = selectedUser.branch.trim().toUpperCase();
+    const fallbackDepartment = selectedUser.department.trim().toUpperCase();
+    setManagedBranches([fallbackBranch]);
+    setManagedDepartmentsByBranch({
+      [fallbackBranch]: [fallbackDepartment || "ALL"],
+    });
+  }, [managedBranches.length, role, selectedUser]);
+
   function toggleBranch(branch: string, checked: boolean) {
     const branchKey = branch.toUpperCase();
     setManagedBranches((current) =>
@@ -141,6 +152,31 @@ export default function SupervisorManagementPage() {
 
   async function handleSave() {
     if (!selectedUser) return;
+    if (role === "Supervisor") {
+      const enabledModules = [
+        permissions.announcements,
+        permissions.forms,
+        permissions.trainingVideos,
+        permissions.trainingDocuments,
+        permissions.support,
+      ].filter(Boolean).length;
+      if (enabledModules === 0) {
+        toast.error("Choose at least one module permission for this supervisor.");
+        return;
+      }
+      if (managedBranches.length === 0) {
+        toast.error("Assign at least one branch before saving a supervisor.");
+        return;
+      }
+      const invalidBranch = managedBranches.find((branch) => {
+        const departments = managedDepartmentsByBranch[branch] ?? [];
+        return departments.length === 0;
+      });
+      if (invalidBranch) {
+        toast.error(`${invalidBranch} needs at least one department assignment.`);
+        return;
+      }
+    }
     setSaving(true);
     try {
       const nextRole =
@@ -327,6 +363,7 @@ export default function SupervisorManagementPage() {
                             ["forms", "Forms Centre"],
                             ["trainingVideos", "Training Videos"],
                             ["trainingDocuments", "Training Documents"],
+                            ["support", "Support Admin"],
                           ] as const
                         ).map(([key, label]) => (
                           <div
@@ -347,6 +384,9 @@ export default function SupervisorManagementPage() {
                           </div>
                         ))}
                       </div>
+                      <p className="text-xs text-muted-foreground">
+                        User management remains reserved for global IT and HR admins.
+                      </p>
                     </div>
 
                     <div className="space-y-4 rounded-xl border border-border/50 bg-background/40 p-4">

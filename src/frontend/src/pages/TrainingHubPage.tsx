@@ -704,16 +704,18 @@ export default function TrainingHubPage() {
                 percentages, and staff still missing mandatory training.
               </div>
             </div>
-            <RoleGuard roles={["SuperAdmin", "HRAdmin"]}>
-              <Button
-                type="button"
-                className="gap-1.5"
-                onClick={() => navigate({ to: "/training/admin" })}
-              >
-                Open Dashboard
-                <ArrowRight className="h-4 w-4" />
-              </Button>
+            {canOpenTrainingAdmin ? (
+            <RoleGuard roles={["SuperAdmin", "HRAdmin", "Supervisor"]} permission={canManageVideoModule ? "trainingVideos" : "trainingDocuments"}>
+                <Button
+                  type="button"
+                  className="gap-1.5"
+                  onClick={() => navigate({ to: "/training/admin" })}
+                >
+                  Open Dashboard
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
             </RoleGuard>
+            ) : null}
           </div>
         </PortalCard>
       </div>

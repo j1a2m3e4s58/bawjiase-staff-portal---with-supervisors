@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
+import { RoleGuard } from "@/components/RoleGuard";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   apiGetProfileAmendments,
   apiResolveIncidentReport,
   apiResolveProfileAmendment,
+  userHasPermission,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import type { IncidentReport, ProfileAmendment } from "@/types";
@@ -684,7 +686,7 @@ function AmendmentsSection() {
 export default function SupportAdminPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const canAccess = user?.department?.toUpperCase() === "IT";
+  const canAccess = userHasPermission(user, "support");
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [amendments, setAmendments] = useState<ProfileAmendment[]>([]);
 
@@ -716,6 +718,15 @@ export default function SupportAdminPage() {
 
   return (
     <AppShell>
+      <RoleGuard
+        roles={["SuperAdmin", "HRAdmin", "Supervisor"]}
+        permission="support"
+        fallback={
+          <div className="py-16 text-center text-muted-foreground">
+            You do not have permission to view this page.
+          </div>
+        }
+      >
       <div
         className="max-w-6xl mx-auto space-y-6"
         data-ocid="support_admin.page"
@@ -741,6 +752,7 @@ export default function SupportAdminPage() {
           <AmendmentsSection />
         </div>
       </div>
+      </RoleGuard>
     </AppShell>
   );
 }

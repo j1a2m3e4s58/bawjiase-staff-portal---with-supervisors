@@ -18,7 +18,9 @@ import {
   apiGetAdminTrainingOverview,
   apiSendVideoTrainingReminder,
   formatAudienceSummary,
+  userHasPermission,
 } from "@/lib/backend-client";
+import { useAuth } from "@/store/auth";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ArrowLeft,
@@ -98,6 +100,9 @@ function StatCard({
 
 export default function TrainingAdminPage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  const canManageVideoModule = userHasPermission(user, "trainingVideos");
+  const canManageDocumentModule = userHasPermission(user, "trainingDocuments");
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [sendingReminder, setSendingReminder] = useState<number | null>(null);
@@ -246,7 +251,8 @@ export default function TrainingAdminPage() {
   return (
     <AppShell>
       <RoleGuard
-        roles={["SuperAdmin", "HRAdmin"]}
+        roles={["SuperAdmin", "HRAdmin", "Supervisor"]}
+        permission={userHasPermission(user, "trainingVideos") ? "trainingVideos" : "trainingDocuments"}
         fallback={
           <div className="py-16 text-center text-muted-foreground">
             You do not have permission to view this page.
@@ -325,7 +331,7 @@ export default function TrainingAdminPage() {
                 />
               </div>
 
-              <Tabs defaultValue="videos">
+              <Tabs defaultValue={canManageVideoModule ? "videos" : "documents"}>
                 <div className="mb-4 grid gap-3 md:grid-cols-2">
                   <div className="space-y-1.5">
                     <div className="text-sm font-medium text-foreground">Branch filter</div>
@@ -361,17 +367,21 @@ export default function TrainingAdminPage() {
                   </div>
                 </div>
                 <TabsList>
-                  <TabsTrigger value="videos">
-                    <Video className="mr-1.5 h-4 w-4" />
-                    Video Dashboard
-                  </TabsTrigger>
-                  <TabsTrigger value="documents">
-                    <BookOpen className="mr-1.5 h-4 w-4" />
-                    Documents Dashboard
-                  </TabsTrigger>
+                  {canManageVideoModule ? (
+                    <TabsTrigger value="videos">
+                      <Video className="mr-1.5 h-4 w-4" />
+                      Video Dashboard
+                    </TabsTrigger>
+                  ) : null}
+                  {canManageDocumentModule ? (
+                    <TabsTrigger value="documents">
+                      <BookOpen className="mr-1.5 h-4 w-4" />
+                      Documents Dashboard
+                    </TabsTrigger>
+                  ) : null}
                 </TabsList>
 
-                <TabsContent value="videos" className="space-y-5">
+                {canManageVideoModule ? <TabsContent value="videos" className="space-y-5">
                   <div className="grid gap-4 lg:grid-cols-4">
                     <StatCard
                       icon={<Video className="h-5 w-5" />}
@@ -539,9 +549,9 @@ export default function TrainingAdminPage() {
                       </div>
                     )}
                   </PortalCard>
-                </TabsContent>
+                </TabsContent> : null}
 
-                <TabsContent value="documents" className="space-y-5">
+                {canManageDocumentModule ? <TabsContent value="documents" className="space-y-5">
                   <div className="grid gap-4 lg:grid-cols-4">
                     <StatCard
                       icon={<FileText className="h-5 w-5" />}
@@ -691,7 +701,7 @@ export default function TrainingAdminPage() {
                       </div>
                     )}
                   </PortalCard>
-                </TabsContent>
+                </TabsContent> : null}
               </Tabs>
             </>
           )}

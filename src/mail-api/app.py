@@ -335,6 +335,33 @@ def normalize_managed_departments_by_branch(value: object) -> dict[str, list[str
     return normalized
 
 
+def validate_supervisor_configuration(user: dict) -> None:
+    if str(user.get("role", "")).strip() != "Supervisor":
+        return
+    managed_branches = normalize_scope_list(user.get("managedBranches"), empty_default=[])
+    permissions = normalize_user_permissions(user.get("permissions"), "Supervisor")
+    managed_departments = normalize_managed_departments_by_branch(
+        user.get("managedDepartmentsByBranch")
+    )
+    assignable_permissions = [
+        "announcements",
+        "forms",
+        "trainingVideos",
+        "trainingDocuments",
+        "support",
+    ]
+    if not managed_branches:
+        raise ValueError("Supervisors must be assigned at least one branch.")
+    if not any(bool(permissions.get(key, False)) for key in assignable_permissions):
+        raise ValueError("Supervisors must have at least one module permission enabled.")
+    for branch in managed_branches:
+        if branch == "ALL":
+            raise ValueError("Supervisors cannot be assigned to all branches.")
+        branch_departments = managed_departments.get(branch, [])
+        if not branch_departments:
+            raise ValueError(f"{branch} needs at least one department assignment.")
+
+
 def derive_content_scope(
     data: dict,
     *,
@@ -2071,10 +2098,20 @@ def update_staff(user_id: str):
         user["managedDepartmentsByBranch"] = normalize_managed_departments_by_branch(
             data.get("managedDepartmentsByBranch")
         )
+    if user["role"] != "Supervisor":
+        user["managedBranches"] = normalize_scope_list(
+            user.get("managedBranches"),
+            empty_default=["ALL"] if user["role"] in {"SuperAdmin", "HRAdmin"} else [],
+        )
+        user["managedDepartmentsByBranch"] = {}
     if "permissions" in data:
         user["permissions"] = normalize_user_permissions(data.get("permissions"), user["role"])
     else:
         user["permissions"] = normalize_user_permissions(user.get("permissions"), user["role"])
+    try:
+        validate_supervisor_configuration(user)
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
     if "imageFile" in data:
         previous_image = str(user.get("imageFile") or "").strip()
         image_file = data.get("imageFile")
