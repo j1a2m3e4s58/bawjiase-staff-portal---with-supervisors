@@ -3641,6 +3641,46 @@ export async function apiDeleteAuditLogs(
 
 // ── Util ──────────────────────────────────────────────────────────────────────
 
+export async function apiDownloadProductionBackup(): Promise<ApiResult<string>> {
+  try {
+    const token = getStoredSessionToken();
+    const response = await fetch(`${MAIL_API_URL}/backup/export`, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
+    if (!response.ok) {
+      if (response.status === 401) {
+        handleSessionExpired();
+        return err("Session expired. Please log in again.");
+      }
+      const data = (await response.json().catch(() => ({}))) as {
+        error?: string;
+      };
+      return err(data.error || "Backup could not be downloaded");
+    }
+    const blob = await response.blob();
+    const headerName =
+      response.headers.get("X-Backup-Filename") ||
+      response.headers
+        .get("Content-Disposition")
+        ?.match(/filename="?(.*?)"?$/)?.[1];
+    const filename = headerName || `bawjiase-portal-backup-${Date.now()}.json`;
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = filename;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+    return ok(filename);
+  } catch (error) {
+    return err(
+      error instanceof Error ? error.message : "Backup could not be downloaded",
+    );
+  }
+}
+
 function delay(ms: number) {
   void ms;
   return Promise.resolve();

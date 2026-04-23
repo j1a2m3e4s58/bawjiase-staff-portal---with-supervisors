@@ -2092,6 +2092,59 @@ def delete_audit_logs():
     return jsonify({"ok": True})
 
 
+@app.route("/api/backup/export", methods=["GET"])
+def export_production_backup():
+    _, auth_user, error = require_staff_manager()
+    if error:
+        return error
+    backup = {
+        "metadata": {
+            "app": "bawjiase-staff-portal",
+            "generatedAt": now_ms(),
+            "generatedBy": {
+                "id": auth_user["id"],
+                "fullname": auth_user["fullname"],
+                "email": auth_user["email"],
+                "role": auth_user["role"],
+            },
+            "dataDir": DATA_DIR,
+            "schemaVersion": 1,
+        },
+        "stores": {
+            "users": load_user_store(),
+            "passwords": load_password_store(),
+            "pendingVerifications": read_json_file(PENDING_VERIFICATIONS_PATH, {}),
+            "resetTokens": read_json_file(RESET_TOKENS_PATH, {}),
+            "sessions": load_sessions(),
+            "presence": load_presence_store(),
+            "announcements": load_json_list_store(ANNOUNCEMENTS_STORE_PATH),
+            "forms": load_json_list_store(FORMS_STORE_PATH),
+            "trainingVideos": load_json_list_store(TRAINING_VIDEOS_STORE_PATH),
+            "trainingDocuments": load_json_list_store(TRAINING_DOCUMENTS_STORE_PATH),
+            "notifications": load_json_list_store(NOTIFICATIONS_STORE_PATH),
+            "trainingVideoProgress": load_training_video_progress_store(),
+            "trainingDocumentOpens": load_training_document_opens_store(),
+            "trainingReminders": load_training_reminders_store(),
+            "auditLogs": load_audit_logs_store(),
+        },
+    }
+    response = jsonify(backup)
+    stamp = time.strftime("%Y%m%d-%H%M%S", time.gmtime())
+    response.headers["Content-Disposition"] = (
+        f'attachment; filename="bawjiase-portal-backup-{stamp}.json"'
+    )
+    response.headers["X-Backup-Filename"] = f"bawjiase-portal-backup-{stamp}.json"
+    record_audit_log(
+        auth_user,
+        "EXPORT_PRODUCTION_BACKUP",
+        {
+            "stores": list(backup["stores"].keys()),
+            "generatedAt": backup["metadata"]["generatedAt"],
+        },
+    )
+    return response
+
+
 @app.route("/api/users", methods=["GET"])
 def list_users():
     _, _, error = require_authenticated_user()
@@ -2469,6 +2522,7 @@ def auth_register():
         }
         save_pending_verifications(pending)
         send_verification_code_email(email, code)
+        record_audit_log(None, "REGISTRATION_STARTED", staff_audit_target(new_user))
         return jsonify({"ok": True, "user": new_user})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -2494,8 +2548,18 @@ def auth_verify_email():
         pending = load_pending_verifications()
         entry = pending.get(email)
         if not entry:
+            record_audit_log(
+                None,
+                "VERIFY_EMAIL_FAILED",
+                {"email": email, "reason": "no_pending_verification"},
+            )
             return jsonify({"error": "No pending verification for this email"}), 404
         if entry["code"] != code:
+            record_audit_log(
+                None,
+                "VERIFY_EMAIL_FAILED",
+                {"email": email, "reason": "incorrect_code"},
+            )
             return jsonify({"error": "Incorrect verification code"}), 400
 
         user = entry["user"]
@@ -2515,6 +2579,7 @@ def auth_verify_email():
         save_user_store(users)
         save_password_store(passwords)
         save_pending_verifications(pending)
+        record_audit_log(user, "REGISTRATION_VERIFIED", staff_audit_target(user))
         return jsonify({"ok": True, "user": user})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -2564,13 +2629,28 @@ def auth_login():
         passwords = load_password_store()
         stored_password = passwords.get(email)
         if not stored_password or not verify_password(stored_password, password):
+            record_audit_log(
+                None,
+                "LOGIN_FAILED",
+                {"email": email, "reason": "invalid_credentials"},
+            )
             return jsonify({"error": "Invalid email or password"}), 401
 
         users = load_user_store()
         user = find_user_by_email(users, email)
         if not user or user["isArchived"] or not user["isActive"]:
+            record_audit_log(
+                None,
+                "LOGIN_FAILED",
+                {"email": email, "reason": "inactive_or_missing_account"},
+            )
             return jsonify({"error": "Invalid email or password"}), 401
         if not user["isVerified"]:
+            record_audit_log(
+                None,
+                "LOGIN_FAILED",
+                {"email": email, "reason": "email_not_verified"},
+            )
             return jsonify({"error": "Email not verified"}), 403
 
         if not is_secure_password_hash(stored_password):
@@ -2580,6 +2660,7 @@ def auth_login():
         user["lastSeen"] = now_ms()
         save_user_store(users)
         session_token = issue_session(user["id"])
+        record_audit_log(user, "LOGIN", staff_audit_target(user))
         return jsonify({"ok": True, "user": user, "sessionToken": session_token})
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
@@ -2598,6 +2679,7 @@ def auth_logout():
     store.pop(auth_user["id"], None)
     save_presence_store(store)
     revoke_user_sessions(auth_user["id"])
+    record_audit_log(auth_user, "LOGOUT", staff_audit_target(auth_user))
     return jsonify({"ok": True})
 
 

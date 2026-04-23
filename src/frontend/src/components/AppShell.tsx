@@ -22,6 +22,7 @@ import {
   BookOpen,
   ChevronRight,
   ClipboardList,
+  Download,
   FileText,
   GraduationCap,
   HeadphonesIcon,
@@ -95,6 +96,12 @@ const NAV_ITEMS: NavItem[] = [
     label: "Audit Logs",
     icon: <ClipboardList className="h-5 w-5" />,
     departments: ["IT"],
+  },
+  {
+    to: "/backup",
+    label: "Backup Center",
+    icon: <Download className="h-5 w-5" />,
+    roles: ["SuperAdmin", "HRAdmin"],
   },
   {
     to: "/profile",

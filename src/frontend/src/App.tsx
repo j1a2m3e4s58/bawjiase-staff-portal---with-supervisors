@@ -45,6 +45,7 @@ const TrainingAdminPage = lazy(() => import("@/pages/TrainingAdminPage"));
 const SupportPage = lazy(() => import("@/pages/SupportPage"));
 const SupportAdminPage = lazy(() => import("@/pages/SupportAdminPage"));
 const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
+const BackupCenterPage = lazy(() => import("@/pages/BackupCenterPage"));
 
 // ── Loading Fallback ───────────────────────────────────────────────────────────
 
@@ -310,6 +311,12 @@ const auditRoute = createRoute({
   component: AuditLogsPage,
 });
 
+const backupRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/backup",
+  component: BackupCenterPage,
+});
+
 const profileRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/profile",
@@ -347,6 +354,7 @@ const routeTree = rootRoute.addChildren([
     supportAmendmentRoute,
     supportAdminRoute,
     auditRoute,
+    backupRoute,
     profileRoute,
   ]),
 ]);
