@@ -448,10 +448,11 @@ function loadUsersStore(): User[] {
 async function postOptionalApi(
   path: string,
   payload: Record<string, unknown>,
+  sessionTokenOverride?: string | null,
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
-  const token = getStoredSessionToken();
+  const token = sessionTokenOverride ?? getStoredSessionToken();
   try {
     const response = await fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
@@ -471,10 +472,13 @@ async function postOptionalApi(
   }
 }
 
-async function getOptionalApi(path: string): Promise<Record<string, unknown> | null> {
+async function getOptionalApi(
+  path: string,
+  sessionTokenOverride?: string | null,
+): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
-  const token = getStoredSessionToken();
+  const token = sessionTokenOverride ?? getStoredSessionToken();
   try {
     const response = await fetch(`${MAIL_API_URL}${path}`, {
       method: "GET",
@@ -504,8 +508,10 @@ function applyPresenceMap(users: User[], presence: Record<string, bigint>) {
   }
 }
 
-async function fetchSharedPresenceMap(): Promise<Record<string, bigint>> {
-  const payload = await getOptionalApi("/presence");
+async function fetchSharedPresenceMap(
+  sessionTokenOverride?: string | null,
+): Promise<Record<string, bigint>> {
+  const payload = await getOptionalApi("/presence", sessionTokenOverride);
   const rawPresence = payload?.presence;
   if (!rawPresence || typeof rawPresence !== "object") {
     return {};
@@ -527,8 +533,8 @@ async function fetchSharedPresenceMap(): Promise<Record<string, bigint>> {
   );
 }
 
-async function pingSharedPresence(userId: string) {
-  const payload = await postOptionalApi("/presence/ping", { userId });
+async function pingSharedPresence(userId: string, sessionTokenOverride?: string | null) {
+  const payload = await postOptionalApi("/presence/ping", { userId }, sessionTokenOverride);
   const lastSeen = payload?.lastSeen;
   if (typeof lastSeen === "number" && Number.isFinite(lastSeen)) {
     return BigInt(Math.trunc(lastSeen * 1000));
@@ -539,12 +545,15 @@ async function pingSharedPresence(userId: string) {
   return null;
 }
 
-async function logoutSharedPresence(userId: string) {
-  await postOptionalApi("/presence/logout", { userId });
+async function logoutSharedPresence(userId: string, sessionTokenOverride?: string | null) {
+  await postOptionalApi("/presence/logout", { userId }, sessionTokenOverride);
 }
 
-export async function apiSetPresenceOffline(userId: string): Promise<void> {
-  await logoutSharedPresence(userId);
+export async function apiSetPresenceOffline(
+  userId: string,
+  sessionTokenOverride?: string | null,
+): Promise<void> {
+  await logoutSharedPresence(userId, sessionTokenOverride);
   const user = _mockUsers.find((item) => item.id === userId);
   if (user) {
     user.isOnlineNow = false;
@@ -1097,7 +1106,10 @@ export async function apiUpdateLastSeen(
   return ok({ ...user });
 }
 
-export async function apiLogout(userId?: string): Promise<void> {
+export async function apiLogout(
+  userId?: string,
+  sessionTokenOverride?: string | null,
+): Promise<void> {
   if (userId) {
     await refreshUsersCache();
     const user = _mockUsers.find((item) => item.id === userId);
@@ -1105,7 +1117,7 @@ export async function apiLogout(userId?: string): Promise<void> {
       user.isOnlineNow = false;
       persistUsersStore();
     }
-    await logoutSharedPresence(userId);
+    await logoutSharedPresence(userId, sessionTokenOverride);
   }
   try {
     await postMailApi("/auth/logout", {});

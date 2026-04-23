@@ -46,7 +46,7 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
 const IT_ACCESS_CODE = "BCB-IT-2026";
-const DIRECTORY_REFRESH_MS = 5000;
+const DIRECTORY_REFRESH_MS = 2000;
 const DIRECTORY_PAGE_SIZE = 24;
 
 const ROLE_LABELS: Record<User["role"], string> = {

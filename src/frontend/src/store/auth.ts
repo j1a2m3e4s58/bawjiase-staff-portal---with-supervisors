@@ -158,6 +158,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       saveStoredUser(mergedUser, remember, false);
     };
 
+    const sessionToken = user.sessionToken ?? null;
+
     const pingPresence = async (force = false) => {
       const now = Date.now();
       if (!force && now - lastPing < PRESENCE_PING_MS) return;
@@ -174,7 +176,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (presenceOfflinePending || !presenceOnline) return;
       presenceOfflinePending = true;
       try {
-        await apiSetPresenceOffline(user.id);
+        await apiSetPresenceOffline(user.id, sessionToken);
       } finally {
         if (!cancelled && authSessionRef.current === sessionId) {
           presenceOnline = false;
@@ -269,8 +271,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const logout = useCallback(() => {
     const currentUserId = user?.id;
+    const currentSessionToken = user?.sessionToken ?? null;
     if (currentUserId) {
-      void apiLogout(currentUserId);
+      void apiLogout(currentUserId, currentSessionToken);
     }
     authSessionRef.current += 1;
     setUser(null);
