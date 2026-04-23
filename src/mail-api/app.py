@@ -32,7 +32,7 @@ TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(DATA_DIR, "training_video_prog
 TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_opens_store.json")
 TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
-PRESENCE_TTL_SECONDS = 15 * 60
+PRESENCE_TTL_SECONDS = 12
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -2240,9 +2240,12 @@ def auth_logout():
     preflight = handle_options()
     if preflight:
         return preflight
-    token, _, error = require_authenticated_user()
+    token, auth_user, error = require_authenticated_user()
     if error:
         return error
+    store = prune_presence(load_presence_store())
+    store.pop(auth_user["id"], None)
+    save_presence_store(store)
     revoke_session(token)
     return jsonify({"ok": True})
 
