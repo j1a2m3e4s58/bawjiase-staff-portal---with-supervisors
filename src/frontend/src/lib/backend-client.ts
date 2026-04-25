@@ -2512,7 +2512,9 @@ function isGoogleDocUrl(input: string) {
 
 function localAssetUrl(ref: string) {
   const filename = ref.replace(/^LOCAL:/, "").trim();
-  return filename ? withSessionToken(`${MAIL_API_ROOT}/uploads/${filename}`) : "";
+  return filename
+    ? `${withSessionToken(`${MAIL_API_ROOT}/uploads/${filename}`)}&_v=${encodeURIComponent(ref)}`
+    : "";
 }
 
 export async function apiUploadTrainingVideoFile(

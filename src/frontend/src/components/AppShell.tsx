@@ -259,10 +259,10 @@ function Sidebar({ collapsed = false }: SidebarProps) {
               )}
               data-ocid="appshell.user_menu.button"
             >
-              <Avatar className="h-8 w-8 flex-shrink-0">
-                {userImage ? (
-                  <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
-                ) : null}
+                <Avatar className="h-8 w-8 flex-shrink-0">
+                  {userImage ? (
+                    <AvatarImage key={userImage} src={userImage} alt={user?.fullname ?? "User"} />
+                  ) : null}
                 <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
                   {initials}
                 </AvatarFallback>
@@ -500,10 +500,10 @@ function TopBar({ onMenuClick }: { onMenuClick: () => void }) {
               className="flex items-center gap-2 pl-2 rounded-lg hover:bg-muted/60 transition-smooth"
               data-ocid="appshell.topbar.user_menu.button"
             >
-              <Avatar className="h-7 w-7">
-                {userImage ? (
-                  <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
-                ) : null}
+                <Avatar className="h-7 w-7">
+                  {userImage ? (
+                    <AvatarImage key={userImage} src={userImage} alt={user?.fullname ?? "User"} />
+                  ) : null}
                 <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
                   {initials}
                 </AvatarFallback>
@@ -640,10 +640,10 @@ function DesktopTopNav() {
                 className="flex items-center gap-2 rounded-full border border-border/40 bg-muted/30 py-1.5 pl-1.5 pr-3 hover:bg-muted/60 transition-smooth"
                 data-ocid="appshell.desktop_user_menu.button"
               >
-                <Avatar className="h-9 w-9">
-                  {userImage ? (
-                    <AvatarImage src={userImage} alt={user?.fullname ?? "User"} />
-                  ) : null}
+                  <Avatar className="h-9 w-9">
+                    {userImage ? (
+                      <AvatarImage key={userImage} src={userImage} alt={user?.fullname ?? "User"} />
+                    ) : null}
                   <AvatarFallback className="bg-primary/20 text-primary text-xs font-bold">
                     {initials}
                   </AvatarFallback>

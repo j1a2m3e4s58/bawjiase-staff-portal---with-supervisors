@@ -63,6 +63,7 @@ import {
   Bar,
   BarChart,
   CartesianGrid,
+  Cell,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -71,6 +72,14 @@ import {
 import { toast } from "sonner";
 
 const USERS_UPDATED_EVENT = "bcb:users-updated";
+const BRANCH_BAR_COLORS: Record<string, string> = {
+  "HEAD OFFICE": "#4F8EF7",
+  BAWJIASE: "#2FBF71",
+  ADEISO: "#F59E0B",
+  OFAAKOR: "#EF4444",
+  "KASOA NEW MARKET": "#8B5CF6",
+  "KASOA MAIN": "#06B6D4",
+};
 
 function StatTile({
   label,
@@ -926,15 +935,21 @@ function StaffDistribution({ overview }: { overview: DashboardOverview }) {
               color: "oklch(var(--foreground))",
             }}
           />
-          <Bar
-            dataKey="value"
-            fill="oklch(var(--primary))"
-            radius={[6, 6, 0, 0]}
-            name="Staff"
-          />
-        </BarChart>
-      </ResponsiveContainer>
-    </section>
+            <Bar
+              dataKey="value"
+              radius={[6, 6, 0, 0]}
+              name="Staff"
+            >
+              {overview.branchDistribution.map((entry) => (
+                <Cell
+                  key={`branch-bar-${entry.name}`}
+                  fill={BRANCH_BAR_COLORS[entry.name] ?? "oklch(var(--primary))"}
+                />
+              ))}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      </section>
   );
 }
 
