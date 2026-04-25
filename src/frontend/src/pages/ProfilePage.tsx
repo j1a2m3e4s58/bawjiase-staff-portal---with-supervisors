@@ -1,5 +1,4 @@
 import { AppShell } from "@/components/AppShell";
-import { BrandLoader } from "@/components/BrandLoader";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { PortalCard } from "@/components/PortalCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -14,17 +13,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Separator } from "@/components/ui/separator";
 import {
   type UpdateProfileRequest,
   apiGetMyProfile,
-  apiUploadProfilePhotoFile,
   apiUpdateMyProfile,
+  apiUploadProfilePhotoFile,
   resolveStoredAssetUrl,
 } from "@/lib/backend-client";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS } from "@/types";
-import type { Role } from "@/types";
+import type { Role, User } from "@/types";
 import { useRouter } from "@tanstack/react-router";
 import {
   Building2,
@@ -39,74 +37,107 @@ import {
   Phone,
   Save,
   Shield,
-  User,
+  User as UserIcon,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
-// ── IT Access Code for privilege escalation ────────────────────────────────────
-const IT_ACCESS_CODE = "IT-2026";
-
-// ── Helpers ────────────────────────────────────────────────────────────────────
-
-function roleBadgeVariant(role: Role): "default" | "secondary" | "outline" {
-  if (role === "SuperAdmin") return "default";
-  if (role === "HRAdmin") return "secondary";
-  return "outline";
-}
-
-function roleLabel(role: Role): string {
-  if (role === "SuperAdmin") return "Super Admin";
-  if (role === "HRAdmin") return "HR Admin";
-  return "General Staff";
-}
-
-function formatDate(ts: bigint): string {
-  return new Date(Number(ts)).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function formatLastSeen(ts: bigint): string {
-  const diff = Date.now() - Number(ts);
-  if (diff < 60000) return "Just now";
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
-  return formatDate(ts);
-}
-
-function getInitials(name: string): string {
-  return name
+function getInitials(fullname: string): string {
+  return fullname
     .split(" ")
-    .map((n) => n[0])
+    .map((part) => part[0] ?? "")
     .join("")
     .slice(0, 2)
     .toUpperCase();
 }
 
-// ── Profile Skeleton ───────────────────────────────────────────────────────────
+function cleanDisplayText(value: string | null | undefined): string {
+  const text = (value ?? "").trim();
+  if (!text) return "";
+  return text
+    .replace(/ÃƒÆ’Ã¢â‚¬Å¡Ãƒâ€šÃ‚Â/g, "")
+    .replace(/Ã[^\s-]*/g, "")
+    .replace(/â€”|â€“/g, "-")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+function formatLastSeen(value: bigint): string {
+  if (Number(value) <= 0) return "Never";
+  return new Date(Number(value)).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function roleLabel(role: Role): string {
+  switch (role) {
+    case "SuperAdmin":
+      return "Super Admin";
+    case "HRAdmin":
+      return "HR Admin";
+    case "Supervisor":
+      return "Supervisor";
+    default:
+      return "Staff";
+  }
+}
+
+function roleBadgeVariant(role: Role): "default" | "secondary" | "outline" {
+  switch (role) {
+    case "SuperAdmin":
+      return "default";
+    case "HRAdmin":
+    case "Supervisor":
+      return "secondary";
+    default:
+      return "outline";
+  }
+}
 
 function ProfileSkeleton() {
   return (
-    <BrandLoader label="Loading profile..." compact />
+    <div className="max-w-2xl mx-auto space-y-6 pb-8">
+      <div className="h-44 rounded-2xl bg-card/70 animate-pulse" />
+      <div className="h-96 rounded-2xl bg-card/70 animate-pulse" />
+      <div className="h-40 rounded-2xl bg-card/70 animate-pulse" />
+    </div>
   );
 }
 
-// ── Main Page ──────────────────────────────────────────────────────────────────
+function InfoRow({
+  icon,
+  label,
+  value,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  value: React.ReactNode;
+}) {
+  return (
+    <div className="flex items-center gap-3 py-0.5">
+      <span className="text-muted-foreground flex-shrink-0">{icon}</span>
+      <span className="text-xs text-muted-foreground w-24 flex-shrink-0">
+        {label}
+      </span>
+      <span className="text-sm text-foreground min-w-0 truncate">{value}</span>
+    </div>
+  );
+}
 
 export default function ProfilePage() {
   const { user, updateUser, logout } = useAuth();
   const router = useRouter();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [isLoading, setIsLoading] = useState(!user);
   const [isSaving, setIsSaving] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [showLogoutConfirm, setShowLogoutConfirm] = useState(false);
 
-  // Form state
   const [fullname, setFullname] = useState(() => user?.fullname ?? "");
   const [phone, setPhone] = useState(() => user?.phone ?? "");
   const [department, setDepartment] = useState(() => user?.department ?? "");
@@ -114,17 +145,17 @@ export default function ProfilePage() {
   const [itCode, setItCode] = useState("");
   const [itCodeError, setItCodeError] = useState("");
 
-  // Photo state
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
   const [removePhoto, setRemovePhoto] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const isPrivileged = user?.role === "SuperAdmin" || user?.role === "HRAdmin";
   const isChangingToIT =
-    isPrivileged && department === "IT" && user?.department !== "IT";
+    !!user &&
+    isPrivileged &&
+    department === "IT" &&
+    user.department !== "IT";
 
-  // Load profile on mount
   useEffect(() => {
     if (!user) {
       setIsLoading(false);
@@ -136,31 +167,32 @@ export default function ProfilePage() {
     setDepartment(user.department);
     setBranch(user.branch);
     setIsLoading(false);
+  }, [user]);
 
+  useEffect(() => {
+    if (!user) return;
     let mounted = true;
-    async function load() {
-      if (!user) return;
+    const userId = user.id;
+
+    async function loadProfile() {
       try {
-        const profile = await apiGetMyProfile(user.id);
-        if (!mounted) return;
-        const resolvedProfile = profile ?? user;
-        setFullname(resolvedProfile.fullname);
-        setPhone(resolvedProfile.phone);
-        setDepartment(resolvedProfile.department);
-        setBranch(resolvedProfile.branch);
+        const profile = await apiGetMyProfile(userId);
+        if (!mounted || !profile) return;
+        updateUser(profile);
+        setFullname(profile.fullname);
+        setPhone(profile.phone);
+        setDepartment(profile.department);
+        setBranch(profile.branch);
       } catch {
-        if (!mounted) return;
-        setFullname(user.fullname);
-        setPhone(user.phone);
-        setDepartment(user.department);
-        setBranch(user.branch);
+        // keep current local state
       }
     }
-    void load();
+
+    void loadProfile();
     return () => {
       mounted = false;
     };
-  }, [user]);
+  }, [user?.id]);
 
   useEffect(() => {
     return () => {
@@ -171,11 +203,13 @@ export default function ProfilePage() {
   }, [photoPreview]);
 
   function handleAvatarClick() {
-    if (isEditing) fileInputRef.current?.click();
+    if (isEditing) {
+      fileInputRef.current?.click();
+    }
   }
 
-  function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
+  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
     if (!file) return;
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
@@ -193,12 +227,11 @@ export default function ProfilePage() {
     setRemovePhoto(false);
   }
 
-  function handleCancelEdit() {
-    if (!user) return;
-    setFullname(user.fullname);
-    setPhone(user.phone);
-    setDepartment(user.department);
-    setBranch(user.branch);
+  function resetEditorState(target: User) {
+    setFullname(target.fullname);
+    setPhone(target.phone);
+    setDepartment(target.department);
+    setBranch(target.branch);
     setItCode("");
     setItCodeError("");
     if (photoPreview?.startsWith("blob:")) {
@@ -207,6 +240,11 @@ export default function ProfilePage() {
     setPhotoPreview(null);
     setPhotoFile(null);
     setRemovePhoto(false);
+  }
+
+  function handleCancelEdit() {
+    if (!user) return;
+    resetEditorState(user);
     setIsEditing(false);
   }
 
@@ -222,16 +260,9 @@ export default function ProfilePage() {
   async function handleSave() {
     if (!user) return;
 
-    // IT access code validation
-    if (isChangingToIT) {
-      if (!itCode.trim()) {
-        setItCodeError("IT access code is required");
-        return;
-      }
-      if (itCode.trim() !== IT_ACCESS_CODE) {
-        setItCodeError("Invalid IT access code");
-        return;
-      }
+    if (isChangingToIT && !itCode.trim()) {
+      setItCodeError("IT access code is required");
+      return;
     }
 
     setIsSaving(true);
@@ -246,12 +277,10 @@ export default function ProfilePage() {
         req.branch = branch;
       }
 
-      // If changing to IT dept with valid code → SuperAdmin
-      if (isChangingToIT && itCode.trim() === IT_ACCESS_CODE) {
-        req.department = "IT";
+      if (isChangingToIT) {
+        req.accessCode = itCode.trim();
       }
 
-      // Photo upload (placeholder — attach to imageFile field)
       if (photoFile) {
         const uploaded = await apiUploadProfilePhotoFile(photoFile);
         req.imageFile = `LOCAL:${uploaded.filename}`;
@@ -261,18 +290,15 @@ export default function ProfilePage() {
 
       const result = await apiUpdateMyProfile(user.id, req);
       if ("ok" in result) {
-        updateUser(result.ok);
-        toast.success("Profile updated successfully");
+        const updated = result.ok;
+        updateUser(updated);
+        resetEditorState(updated);
         setIsEditing(false);
-        setItCode("");
-        setItCodeError("");
-        setPhotoFile(null);
-        if (photoPreview?.startsWith("blob:")) {
-          URL.revokeObjectURL(photoPreview);
-        }
-        setPhotoPreview(null);
-        setRemovePhoto(false);
+        toast.success("Profile updated successfully");
       } else {
+        if ((result.err ?? "").toLowerCase().includes("access code")) {
+          setItCodeError(result.err ?? "Invalid IT access code");
+        }
         toast.error(result.err ?? "Failed to update profile");
       }
     } catch (error) {
@@ -285,8 +311,9 @@ export default function ProfilePage() {
   }
 
   function handleLogout() {
-    logout();
-    void router.navigate({ to: "/login", replace: true });
+    void logout().finally(() => {
+      void router.navigate({ to: "/login", replace: true });
+    });
   }
 
   if (isLoading) {
@@ -304,17 +331,13 @@ export default function ProfilePage() {
     : photoPreview ?? resolveStoredAssetUrl(user.imageFile);
   const hasExistingProfilePhoto = !!resolveStoredAssetUrl(user.imageFile);
   const initials = getInitials(user.fullname);
+  const cleanPosition = cleanDisplayText(user.position);
 
   return (
     <AppShell>
-      <div
-        className="max-w-2xl mx-auto space-y-6 pb-8"
-        data-ocid="profile.page"
-      >
-        {/* ── Header Card: Avatar + Identity ── */}
+      <div className="max-w-2xl mx-auto space-y-6 pb-8" data-ocid="profile.page">
         <PortalCard elevated data-ocid="profile.header.card">
           <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5">
-            {/* Avatar */}
             <div className="relative flex-shrink-0">
               <button
                 type="button"
@@ -327,10 +350,7 @@ export default function ProfilePage() {
                 }`}
                 data-ocid="profile.avatar.upload_button"
               >
-                <Avatar
-                  key={displayPhoto ?? "fallback"}
-                  className="h-24 w-24"
-                >
+                <Avatar key={displayPhoto ?? "fallback"} className="h-24 w-24">
                   {displayPhoto && (
                     <AvatarImage src={displayPhoto} alt={user.fullname} />
                   )}
@@ -354,7 +374,6 @@ export default function ProfilePage() {
               />
             </div>
 
-            {/* Info */}
             <div className="flex-1 min-w-0 text-center sm:text-left">
               <h1 className="font-display font-bold text-xl text-foreground truncate">
                 {user.fullname}
@@ -363,7 +382,7 @@ export default function ProfilePage() {
                 {user.email}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {user.position} · {user.department}
+                {(cleanPosition || "Staff") + " - " + user.department}
               </p>
               <div className="flex flex-wrap gap-2 mt-3 justify-center sm:justify-start">
                 <Badge variant={roleBadgeVariant(user.role)}>
@@ -396,7 +415,6 @@ export default function ProfilePage() {
               </p>
             </div>
 
-            {/* Edit toggle */}
             {!isEditing ? (
               <Button
                 type="button"
@@ -425,177 +443,136 @@ export default function ProfilePage() {
           </div>
         </PortalCard>
 
-        {/* ── Edit Form ── */}
         <PortalCard
           title={isEditing ? "Edit Profile" : "Profile Details"}
           subtitle={isEditing ? "Update your personal information" : undefined}
-          data-ocid="profile.edit.card"
+          data-ocid="profile.details.card"
         >
           <div className="space-y-4">
-            {/* Full Name */}
             <div className="space-y-1.5">
-              <Label htmlFor="fullname" className="text-xs font-medium">
-                Full Name
-              </Label>
+              <Label htmlFor="profile-fullname">Full Name</Label>
               {isEditing ? (
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="fullname"
-                    value={fullname}
-                    onChange={(e) => setFullname(e.target.value)}
-                    className="pl-9 glass-input"
-                    placeholder="Your full name"
-                    data-ocid="profile.fullname.input"
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 text-sm">
-                  <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <span className="text-foreground">{user.fullname}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Phone */}
-            <div className="space-y-1.5">
-              <Label htmlFor="phone" className="text-xs font-medium">
-                Phone Number
-              </Label>
-              {isEditing ? (
-                <div className="relative">
-                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="phone"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                    className="pl-9 glass-input"
-                    placeholder="e.g. 0244123456"
-                    data-ocid="profile.phone.input"
-                  />
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 text-sm">
-                  <Phone className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                  <span className="text-foreground">{user.phone || "—"}</span>
-                </div>
-              )}
-            </div>
-
-            {/* Department (privileged only) */}
-            {isPrivileged && (
-              <div className="space-y-1.5">
-                <Label htmlFor="department" className="text-xs font-medium">
-                  Department
-                </Label>
-                {isEditing ? (
-                  <Select
-                    value={department}
-                    onValueChange={(val) => {
-                      setDepartment(val);
-                      setItCode("");
-                      setItCodeError("");
-                    }}
-                  >
-                    <SelectTrigger
-                      id="department"
-                      className="glass-input"
-                      data-ocid="profile.department.select"
-                    >
-                      <SelectValue placeholder="Select department" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {DEPARTMENTS.map((d) => (
-                        <SelectItem key={d} value={d}>
-                          {d}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 text-sm">
-                    <Building2 className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">{user.department}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* IT Access Code (conditional) */}
-            {isEditing && isChangingToIT && (
-              <div className="space-y-1.5 p-3 rounded-lg border border-primary/30 bg-primary/5">
-                <p className="text-xs text-primary font-medium">
-                  You are changing to the IT department. An IT access code is
-                  required — your role will be updated to Super Admin.
-                </p>
-                <Label htmlFor="itCode" className="text-xs font-medium">
-                  IT Access Code
-                </Label>
                 <Input
-                  id="itCode"
-                  type="password"
-                  value={itCode}
-                  onChange={(e) => {
-                    setItCode(e.target.value);
+                  id="profile-fullname"
+                  value={fullname}
+                  onChange={(event) => setFullname(event.target.value)}
+                />
+              ) : (
+                <InfoRow
+                  icon={<UserIcon className="h-4 w-4" />}
+                  label="Full Name"
+                  value={user.fullname}
+                />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-phone">Phone Number</Label>
+              {isEditing ? (
+                <Input
+                  id="profile-phone"
+                  value={phone}
+                  onChange={(event) => setPhone(event.target.value)}
+                />
+              ) : (
+                <InfoRow
+                  icon={<Phone className="h-4 w-4" />}
+                  label="Phone"
+                  value={user.phone || "Not provided"}
+                />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-department">Department</Label>
+              {isEditing && isPrivileged ? (
+                <Select
+                  value={department}
+                  onValueChange={(value) => {
+                    setDepartment(value);
+                    setItCode("");
                     setItCodeError("");
                   }}
-                  className="glass-input"
+                >
+                  <SelectTrigger id="profile-department">
+                    <SelectValue placeholder="Select department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DEPARTMENTS.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <InfoRow
+                  icon={<Building2 className="h-4 w-4" />}
+                  label="Department"
+                  value={user.department}
+                />
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="profile-branch">Branch</Label>
+              {isEditing && isPrivileged ? (
+                <Select value={branch} onValueChange={setBranch}>
+                  <SelectTrigger id="profile-branch">
+                    <SelectValue placeholder="Select branch" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {BRANCHES.map((item) => (
+                      <SelectItem key={item} value={item}>
+                        {item}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              ) : (
+                <InfoRow
+                  icon={<MapPin className="h-4 w-4" />}
+                  label="Branch"
+                  value={user.branch}
+                />
+              )}
+            </div>
+
+            {isChangingToIT && (
+              <div className="space-y-2 rounded-xl border border-primary/20 bg-primary/5 p-4">
+                <Label htmlFor="profile-it-code">
+                  IT Access Code <span className="text-destructive">*</span>
+                </Label>
+                <Input
+                  id="profile-it-code"
+                  type="password"
+                  value={itCode}
+                  onChange={(event) => {
+                    setItCode(event.target.value);
+                    setItCodeError("");
+                  }}
                   placeholder="Enter IT access code"
                   data-ocid="profile.it_code.input"
                 />
                 {itCodeError && (
-                  <p
-                    className="text-xs text-destructive"
-                    data-ocid="profile.it_code.error_state"
-                  >
+                  <p className="text-xs text-destructive" data-ocid="profile.it_code.error_state">
                     {itCodeError}
                   </p>
                 )}
+                <p className="text-xs text-muted-foreground">
+                  Switching into IT will update your role to Super Admin immediately after save.
+                </p>
               </div>
             )}
 
-            {/* Branch (privileged only) */}
-            {isPrivileged && (
-              <div className="space-y-1.5">
-                <Label htmlFor="branch" className="text-xs font-medium">
-                  Branch
-                </Label>
-                {isEditing ? (
-                  <Select value={branch} onValueChange={setBranch}>
-                    <SelectTrigger
-                      id="branch"
-                      className="glass-input"
-                      data-ocid="profile.branch.select"
-                    >
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {BRANCHES.map((b) => (
-                        <SelectItem key={b} value={b}>
-                          {b}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-muted/40 text-sm">
-                    <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-                    <span className="text-foreground">{user.branch}</span>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Save / remove buttons */}
             {isEditing && (
-              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                {(hasExistingProfilePhoto || removePhoto) && (
+              <div className="flex flex-wrap gap-3 pt-2">
+                {hasExistingProfilePhoto && !removePhoto && (
                   <Button
                     type="button"
                     variant="outline"
-                    className="min-w-0 gap-2 border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
                     onClick={handleRemovePhoto}
-                    data-ocid="profile.photo.remove_button"
+                    className="gap-2"
                   >
                     <ImageOff className="h-4 w-4" />
                     Remove Photo
@@ -611,7 +588,7 @@ export default function ProfilePage() {
                   {isSaving ? (
                     <>
                       <span className="h-4 w-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
-                      Saving�
+                      Saving...
                     </>
                   ) : (
                     <>
@@ -625,107 +602,55 @@ export default function ProfilePage() {
           </div>
         </PortalCard>
 
-        {/* ── Account Info (read-only) ── */}
         <PortalCard
           title="Account Information"
           subtitle="Read-only account details"
           data-ocid="profile.account.card"
         >
           <div className="space-y-3">
-            <InfoRow
-              icon={<Mail className="h-4 w-4" />}
-              label="Email"
-              value={user.email}
-            />
-            <Separator className="opacity-30" />
+            <InfoRow icon={<Mail className="h-4 w-4" />} label="Email" value={user.email} />
             <InfoRow
               icon={<Calendar className="h-4 w-4" />}
               label="Registered"
-              value={formatDate(user.registrationTime)}
+              value={formatLastSeen(user.registrationTime)}
             />
-            <Separator className="opacity-30" />
             <InfoRow
               icon={<Shield className="h-4 w-4" />}
               label="Role"
               value={roleLabel(user.role)}
             />
-            <Separator className="opacity-30" />
-            <InfoRow
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              label="Account Status"
-              value={
-                user.isActive ? (
-                  <span className="text-secondary font-medium">Active</span>
-                ) : (
-                  <span className="text-destructive font-medium">Inactive</span>
-                )
-              }
-            />
-            <Separator className="opacity-30" />
-            <InfoRow
-              icon={<CheckCircle2 className="h-4 w-4" />}
-              label="Verified"
-              value={user.isVerified ? "Yes" : "No"}
-            />
           </div>
         </PortalCard>
 
-        {/* ── Danger Zone: Logout ── */}
         <PortalCard data-ocid="profile.logout.card">
-          <div className="flex items-center justify-between">
+          <div className="flex items-center justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-foreground">Sign Out</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                You will be redirected to the login page
+              <h3 className="font-semibold text-foreground">Sign out</h3>
+              <p className="text-sm text-muted-foreground">
+                End your current portal session on this device.
               </p>
             </div>
             <Button
               type="button"
               variant="outline"
-              className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive transition-smooth"
+              className="gap-2"
               onClick={() => setShowLogoutConfirm(true)}
-              data-ocid="profile.logout_button"
             >
               <LogOut className="h-4 w-4" />
-              Sign Out
+              Logout
             </Button>
           </div>
         </PortalCard>
       </div>
 
-      {/* Logout confirmation dialog */}
       <ConfirmDialog
         open={showLogoutConfirm}
         onOpenChange={setShowLogoutConfirm}
-        title="Sign out of BCB Staff Portal?"
-        description="You will need to sign in again to access the portal."
-        confirmLabel="Sign Out"
-        cancelLabel="Stay Signed In"
-        variant="destructive"
+        title="Log out?"
+        description="You will need to sign in again to continue."
+        confirmLabel="Log out"
         onConfirm={handleLogout}
       />
     </AppShell>
-  );
-}
-
-// ── InfoRow helper ─────────────────────────────────────────────────────────────
-
-function InfoRow({
-  icon,
-  label,
-  value,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center gap-3 py-0.5">
-      <span className="text-muted-foreground flex-shrink-0">{icon}</span>
-      <span className="text-xs text-muted-foreground w-24 flex-shrink-0">
-        {label}
-      </span>
-      <span className="text-sm text-foreground min-w-0 truncate">{value}</span>
-    </div>
   );
 }

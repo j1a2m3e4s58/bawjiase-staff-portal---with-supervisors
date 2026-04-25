@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import secrets
@@ -8,13 +10,14 @@ from email.message import EmailMessage
 from urllib.parse import urlencode, urlparse, urlunparse, parse_qsl
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, redirect, request, send_from_directory
 from werkzeug.security import check_password_hash, generate_password_hash
 from werkzeug.utils import secure_filename
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(BASE_DIR, ".env"))
 DATA_DIR = os.getenv("PORTAL_DATA_DIR", BASE_DIR).strip() or BASE_DIR
+FRONTEND_PUBLIC_DIR = os.getenv("PORTAL_FRONTEND_DIR", os.path.join(BASE_DIR, "public")).strip() or os.path.join(BASE_DIR, "public")
 
 OFFICIAL_EMAIL_DOMAIN = "@bawjiasearearuralbank.com"
 PRESENCE_STORE_PATH = os.path.join(DATA_DIR, "presence_store.json")
@@ -33,8 +36,8 @@ TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_o
 TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
 AUDIT_LOGS_STORE_PATH = os.path.join(DATA_DIR, "audit_logs_store.json")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
-PRESENCE_TTL_SECONDS = 5
-ONLINE_WINDOW_SECONDS = 5
+PRESENCE_TTL_SECONDS = 20
+ONLINE_WINDOW_SECONDS = 20
 RESET_TOKEN_TTL_SECONDS = 30 * 60
 VERIFICATION_TTL_SECONDS = 15 * 60
 SESSION_TTL_SECONDS = 30 * 24 * 60 * 60
@@ -179,7 +182,7 @@ INITIAL_USERS = [
         "isArchived": False,
     },
 ]
-app = Flask(__name__)
+app = Flask(__name__, static_folder=None)
 os.makedirs(DATA_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
@@ -767,8 +770,6 @@ def presence_is_online(presence_timestamp: object, user_id: str | None = None) -
     value = normalize_presence_timestamp(int(presence_timestamp or 0))
     if value <= 0:
         return False
-    if user_id and not user_has_active_session(user_id):
-        return False
     return value >= now_seconds() - ONLINE_WINDOW_SECONDS
 
 
@@ -801,15 +802,10 @@ def save_presence_store(store: dict[str, int]) -> None:
 
 def prune_presence(store: dict[str, int]) -> dict[str, int]:
     cutoff = int(time.time()) - PRESENCE_TTL_SECONDS
-    active_users = {
-        str(session.get("userId", "")).strip()
-        for session in load_sessions().values()
-        if str(session.get("userId", "")).strip()
-    }
     return {
         str(user_id): normalize_presence_timestamp(timestamp)
         for user_id, timestamp in store.items()
-        if str(user_id).strip() in active_users
+        if str(user_id).strip()
         and normalize_presence_timestamp(timestamp) >= cutoff
     }
 
@@ -1124,11 +1120,6 @@ def save_sessions(store: dict[str, dict]) -> None:
 
 def issue_session(user_id: str) -> str:
     sessions = load_sessions()
-    sessions = {
-        token: session
-        for token, session in sessions.items()
-        if session.get("userId") != user_id
-    }
     token = secrets.token_urlsafe(32)
     sessions[token] = {
         "userId": user_id,
@@ -1901,6 +1892,20 @@ def get_uploaded_media(filename: str):
     return jsonify({"error": "File not found"}), 404
 
 
+@app.route("/mail-api/uploads/<path:filename>", methods=["GET"])
+def get_uploaded_media_legacy(filename: str):
+    return get_uploaded_media(filename)
+
+
+@app.route("/mail-api/api/<path:path>", methods=["GET", "POST", "OPTIONS"])
+def legacy_mail_api(path: str):
+    destination = f"/api/{path}"
+    query = request.query_string.decode("utf-8", errors="ignore").strip()
+    if query:
+        destination = f"{destination}?{query}"
+    return redirect(destination, code=307)
+
+
 @app.route("/api/presence", methods=["GET"])
 def get_presence():
     _, _, error = require_authenticated_user()
@@ -2223,17 +2228,29 @@ def update_profile(user_id: str):
 
     can_manage_org_fields = auth_user["role"] in {"SuperAdmin", "HRAdmin"}
     previous_image = str(user.get("imageFile") or "").strip()
+    requested_department = str(data.get("department", user["department"])).strip().upper()
+    if requested_department == "IT" and user["department"] != "IT":
+        if not IT_ACCESS_CODE:
+            return jsonify({"error": "IT security code is not configured on the server."}), 500
+        if str(data.get("accessCode", "")).strip() != IT_ACCESS_CODE:
+            return jsonify({"error": "Access denied: invalid IT security code."}), 400
     if "fullname" in data:
         user["fullname"] = str(data.get("fullname", "")).strip() or user["fullname"]
     if "phone" in data:
         user["phone"] = str(data.get("phone", "")).strip() or user["phone"]
     if "position" in data:
         user["position"] = str(data.get("position", "")).strip() or user["position"]
-    if "department" in data and can_manage_org_fields:
-        department = str(data.get("department", "")).strip().upper()
-        if department:
-            user["department"] = department
-            user["role"] = role_from_department(department)
+    if "department" in data and can_manage_org_fields and requested_department:
+        user["department"] = requested_department
+        if user.get("role") != "Supervisor":
+            user["role"] = role_from_department(requested_department)
+        user["permissions"] = normalize_user_permissions(user.get("permissions"), user["role"])
+        user["managedBranches"] = normalize_scope_list(
+            user.get("managedBranches"),
+            empty_default=["ALL"] if user["role"] in {"SuperAdmin", "HRAdmin"} else [],
+        )
+        if user["role"] != "Supervisor":
+            user["managedDepartmentsByBranch"] = {}
     if "branch" in data and can_manage_org_fields:
         branch = str(data.get("branch", "")).strip().upper()
         if branch:
@@ -2718,7 +2735,7 @@ def auth_logout():
     store = prune_presence(load_presence_store())
     store.pop(auth_user["id"], None)
     save_presence_store(store)
-    revoke_user_sessions(auth_user["id"])
+    revoke_session(token)
     record_audit_log(auth_user, "LOGOUT", staff_audit_target(auth_user))
     return jsonify({"ok": True})
 
@@ -3756,6 +3773,25 @@ def send_document_training_reminder(item_id: int):
     except ValueError:
         return jsonify({"error": "Document not found"}), 404
     return jsonify({"ok": True, "delivery": delivery})
+
+
+@app.route("/", defaults={"path": ""}, methods=["GET"])
+@app.route("/<path:path>", methods=["GET"])
+def serve_frontend(path: str):
+    requested = str(path or "").strip().lstrip("/")
+    if not os.path.isdir(FRONTEND_PUBLIC_DIR):
+        return jsonify({"error": "Frontend build is not installed on this server."}), 404
+
+    if requested:
+        candidate = os.path.join(FRONTEND_PUBLIC_DIR, requested)
+        if os.path.isfile(candidate):
+            return send_from_directory(FRONTEND_PUBLIC_DIR, requested, conditional=True)
+
+    index_path = os.path.join(FRONTEND_PUBLIC_DIR, "index.html")
+    if os.path.isfile(index_path):
+        return send_from_directory(FRONTEND_PUBLIC_DIR, "index.html", conditional=True)
+
+    return jsonify({"error": "Frontend entry point not found."}), 404
 
 
 if __name__ == "__main__":

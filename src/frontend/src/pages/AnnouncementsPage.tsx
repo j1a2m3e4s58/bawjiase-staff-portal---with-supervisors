@@ -695,7 +695,7 @@ function AnnouncementModal({
               disabled={submitting}
               data-ocid="announcements.submit.submit_button"
             >
-              {submitting ? "Saving…" : editing ? "Save Changes" : "Publish"}
+              {submitting ? "Saving..." : editing ? "Save Changes" : "Publish"}
             </Button>
           </div>
         </form>
@@ -963,7 +963,7 @@ export default function AnnouncementsPage() {
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search announcements…"
+              placeholder="Search announcements..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-9"

@@ -18,6 +18,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   apiArchiveTrainingDocument,
   apiArchiveTrainingVideo,
+  apiGetCachedTrainingDocuments,
+  apiGetCachedTrainingVideos,
   apiDeleteTrainingDocument,
   apiDeleteTrainingVideo,
   apiGetMyDocumentOpenState,
@@ -61,7 +63,7 @@ function formatDate(ts: bigint): string {
 }
 
 function DocIcon({ fileType }: { fileType: string }) {
-  const type = fileType.toLowerCase();
+  const type = String(fileType ?? "").toLowerCase();
   if (type.includes("pdf")) {
     return <FileText className="h-7 w-7 text-destructive/80" />;
   }
@@ -90,16 +92,16 @@ export default function TrainingHubPage() {
   const canManageDocumentModule = userHasPermission(user, "trainingDocuments");
   const canOpenTrainingAdmin = canManageVideoModule || canManageDocumentModule;
   const [tab, setTab] = useState("videos");
-  const [videos, setVideos] = useState<TrainingVideo[]>([]);
-  const [documents, setDocuments] = useState<TrainingDocument[]>([]);
+  const [videos, setVideos] = useState<TrainingVideo[]>(() => apiGetCachedTrainingVideos());
+  const [documents, setDocuments] = useState<TrainingDocument[]>(() => apiGetCachedTrainingDocuments());
   const [videoProgress, setVideoProgress] = useState<Record<number, number>>(
     {},
   );
   const [documentOpened, setDocumentOpened] = useState<Record<number, boolean>>(
     {},
   );
-  const [loadingVideos, setLoadingVideos] = useState(true);
-  const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [loadingVideos, setLoadingVideos] = useState(() => apiGetCachedTrainingVideos().length === 0);
+  const [loadingDocuments, setLoadingDocuments] = useState(() => apiGetCachedTrainingDocuments().length === 0);
   const [query, setQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [mandatoryFilter, setMandatoryFilter] = useState("all");
@@ -194,36 +196,40 @@ export default function TrainingHubPage() {
     return [...values].sort();
   }, [videos, documents]);
 
-  function matchesCommonFilters(item: {
-    title: string;
-    description: string;
-    visibility?: "General" | "Department";
-    department?: string | null;
-    isMandatory?: boolean;
-    category: string;
-  }) {
-    const term = query.trim().toLowerCase();
-    const matchesQuery =
-      !term ||
-      item.title.toLowerCase().includes(term) ||
-      item.description.toLowerCase().includes(term) ||
-      item.category.toLowerCase().includes(term) ||
-      (item.department ?? "").toLowerCase().includes(term);
-    const matchesVisibility =
-      visibilityFilter === "all" ||
-      item.visibility?.toLowerCase() === visibilityFilter;
+    function matchesCommonFilters(item: {
+      title: string;
+      description: string;
+      visibility?: "General" | "Department";
+      department?: string | null;
+      isMandatory?: boolean;
+      category: string;
+    }) {
+      const term = query.trim().toLowerCase();
+      const title = String(item.title ?? "");
+      const description = String(item.description ?? "");
+      const category = String(item.category ?? "");
+      const department = String(item.department ?? "");
+      const matchesQuery =
+        !term ||
+        title.toLowerCase().includes(term) ||
+        description.toLowerCase().includes(term) ||
+        category.toLowerCase().includes(term) ||
+        department.toLowerCase().includes(term);
+      const matchesVisibility =
+        visibilityFilter === "all" ||
+        item.visibility?.toLowerCase() === visibilityFilter;
     const matchesMandatory =
       mandatoryFilter === "all" ||
       (mandatoryFilter === "mandatory"
         ? !!item.isMandatory
         : !item.isMandatory);
-    const matchesDepartment =
-      departmentFilter === "all" ||
-      (item.department ?? "").toUpperCase() === departmentFilter;
-    return (
-      matchesQuery && matchesVisibility && matchesMandatory && matchesDepartment
-    );
-  }
+      const matchesDepartment =
+        departmentFilter === "all" ||
+        department.toUpperCase() === departmentFilter;
+      return (
+        matchesQuery && matchesVisibility && matchesMandatory && matchesDepartment
+      );
+    }
 
   const filteredVideos = videos.filter(matchesCommonFilters);
   const filteredDocuments = documents.filter(matchesCommonFilters);

@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  apiGetCachedDashboardOverview,
   apiDismissAnnouncement,
   apiGetAnnouncements,
   apiGetDashboardOverview,
@@ -68,6 +69,8 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
+
+const USERS_UPDATED_EVENT = "bcb:users-updated";
 
 function StatTile({
   label,
@@ -296,7 +299,7 @@ function PollWidget({
         })}
       </div>
       <p className="text-xs text-muted-foreground">
-        {total} {total === 1 ? "vote" : "votes"} .{" "}
+        {total} {total === 1 ? "vote" : "votes"} ·{" "}
         {poll.isActive ? "Poll open" : "Poll closed"}
       </p>
     </div>
@@ -937,11 +940,11 @@ function StaffDistribution({ overview }: { overview: DashboardOverview }) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
-  const [overview, setOverview] = useState<DashboardOverview | null>(null);
-  const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>(
-    [],
+  const [overview, setOverview] = useState<DashboardOverview | null>(() =>
+    apiGetCachedDashboardOverview(),
   );
-  const [loading, setLoading] = useState(true);
+  const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>([]);
+  const [loading, setLoading] = useState(false);
   const canAccessITArea = user?.department?.toUpperCase() === "IT";
 
   useEffect(() => {
@@ -966,11 +969,17 @@ export default function DashboardPage() {
       }
     }
 
+    setOverview(apiGetCachedDashboardOverview());
     void loadDashboard();
+    const handleUsersUpdated = () => {
+      setOverview(apiGetCachedDashboardOverview());
+    };
+    window.addEventListener(USERS_UPDATED_EVENT, handleUsersUpdated);
     return () => {
       cancelled = true;
+      window.removeEventListener(USERS_UPDATED_EVENT, handleUsersUpdated);
     };
-  }, [user?.id]);
+  }, [user?.id, user?.branch, user?.department, user?.role]);
 
   return (
     <AppShell>

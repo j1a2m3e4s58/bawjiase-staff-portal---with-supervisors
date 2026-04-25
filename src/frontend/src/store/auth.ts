@@ -8,8 +8,10 @@ import React, {
 } from "react";
 import type { ReactNode } from "react";
 import {
+  apiGetMyProfile,
   apiLogout,
   apiSetPresenceOffline,
+  apiSyncCachedUser,
   apiUpdateLastSeen,
 } from "@/lib/backend-client";
 import type { User } from "../types";
@@ -34,11 +36,13 @@ const THEME_KEY = "bcb_theme";
 const AUTH_EXPIRY_KEY = "bcb_auth_expiry";
 const AUTH_ACTIVITY_KEY = "bcb_last_activity";
 const SESSION_EXPIRED_EVENT = "bcb:session-expired";
+const USERS_UPDATED_EVENT = "bcb:users-updated";
 const REMEMBER_DAYS = 30;
 const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
-const PRESENCE_PING_MS = 15 * 1000;
+const PRESENCE_PING_MS = 4 * 1000;
 const PRESENCE_IDLE_MS = 10 * 60 * 1000;
 const PRESENCE_CHECK_MS = 5 * 1000;
+const PROFILE_SYNC_MS = 5 * 1000;
 
 function markActivity(timestamp = Date.now()) {
   localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
@@ -89,6 +93,26 @@ function clearStoredUser() {
   localStorage.removeItem(AUTH_ACTIVITY_KEY);
 }
 
+function liveSyncSignature(user: User | null): string {
+  if (!user) return "";
+  return JSON.stringify({
+    id: user.id,
+    fullname: user.fullname,
+    phone: user.phone,
+    email: user.email,
+    branch: user.branch,
+    department: user.department,
+    role: user.role,
+    position: user.position,
+    isActive: user.isActive,
+    isArchived: user.isArchived,
+    imageFile: user.imageFile ?? null,
+    managedBranches: user.managedBranches ?? [],
+    managedDepartmentsByBranch: user.managedDepartmentsByBranch ?? {},
+    permissions: user.permissions,
+  });
+}
+
 // ── Context ───────────────────────────────────────────────────────────────────
 
 interface AuthContextValue {
@@ -114,10 +138,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(() => loadStoredUser());
   const [isLoading] = useState(false);
   const authSessionRef = useRef(0);
+  const userRef = useRef<User | null>(user);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
     return stored ?? "dark";
   });
+
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
 
   useEffect(() => {
     applyTheme(themeMode);
@@ -147,11 +176,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
     let presenceOnline = false;
     let presenceOfflinePending = false;
 
-    const persistUser = (updatedUser: User) => {
+    const persistPresenceState = (updatedUser: User) => {
       if (cancelled || authSessionRef.current !== sessionId) return;
+      const latestUser = userRef.current ?? user;
       const mergedUser = {
-        ...updatedUser,
-        sessionToken: updatedUser.sessionToken ?? user.sessionToken,
+        ...latestUser,
+        isOnlineNow: updatedUser.isOnlineNow,
+        lastSeen: updatedUser.lastSeen,
+        sessionToken:
+          updatedUser.sessionToken ??
+          latestUser?.sessionToken ??
+          user.sessionToken,
       };
       setUser(mergedUser);
       const remember = !!localStorage.getItem(AUTH_EXPIRY_KEY);
@@ -168,7 +203,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       if (cancelled || authSessionRef.current !== sessionId) return;
       if ("ok" in result) {
         presenceOnline = true;
-        persistUser(result.ok);
+        persistPresenceState(result.ok);
       }
     };
 
@@ -235,17 +270,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
-    const onBlur = () => {
-      void setPresenceOffline();
-    };
-
     window.addEventListener("mousemove", handleActivity);
     window.addEventListener("mousedown", handleActivity);
     window.addEventListener("keydown", handleActivity);
     window.addEventListener("touchstart", handleActivity);
     window.addEventListener("scroll", handleActivity, { passive: true });
     window.addEventListener("focus", handleActivity);
-    window.addEventListener("blur", onBlur);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
@@ -258,15 +288,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener("touchstart", handleActivity);
       window.removeEventListener("scroll", handleActivity);
       window.removeEventListener("focus", handleActivity);
-      window.removeEventListener("blur", onBlur);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [user]);
 
   const login = useCallback((newUser: User, remember = true) => {
     authSessionRef.current += 1;
+    userRef.current = newUser;
+    apiSyncCachedUser(newUser);
     setUser(newUser);
     saveStoredUser(newUser, remember);
+    window.dispatchEvent(new CustomEvent(USERS_UPDATED_EVENT));
   }, []);
 
   const logout = useCallback(async () => {
@@ -283,19 +315,70 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     }
     authSessionRef.current += 1;
+    userRef.current = null;
     setUser(null);
     clearStoredUser();
+    window.dispatchEvent(new CustomEvent(USERS_UPDATED_EVENT));
   }, [user]);
 
   const updateUser = useCallback((updatedUser: User) => {
+    const latestUser = userRef.current;
     const mergedUser = {
       ...updatedUser,
-      sessionToken: updatedUser.sessionToken ?? user?.sessionToken,
+      sessionToken: updatedUser.sessionToken ?? latestUser?.sessionToken,
     };
+    userRef.current = mergedUser;
+    apiSyncCachedUser(mergedUser);
     setUser(mergedUser);
     const expiry = localStorage.getItem(AUTH_EXPIRY_KEY);
     saveStoredUser(mergedUser, !!expiry);
-  }, [user?.sessionToken]);
+    window.dispatchEvent(new CustomEvent(USERS_UPDATED_EVENT));
+  }, []);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    let cancelled = false;
+
+    const syncProfile = async () => {
+      if (document.visibilityState !== "visible") return;
+      try {
+        const profile = await apiGetMyProfile(user.id);
+        if (cancelled || !profile) return;
+        const current = userRef.current;
+        if (liveSyncSignature(profile) !== liveSyncSignature(current)) {
+          updateUser(profile);
+        }
+      } catch {
+        // Keep current local auth state when sync is temporarily unavailable.
+      }
+    };
+
+    void syncProfile();
+    const intervalId = window.setInterval(() => {
+      void syncProfile();
+    }, PROFILE_SYNC_MS);
+
+    const handleFocus = () => {
+      void syncProfile();
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void syncProfile();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    document.addEventListener("visibilitychange", handleVisibility);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener("focus", handleFocus);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, [user?.id, updateUser]);
 
   const toggleTheme = useCallback(() => {
     setThemeMode((prev) => {

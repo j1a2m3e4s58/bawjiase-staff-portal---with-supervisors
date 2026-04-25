@@ -197,7 +197,7 @@ function FormDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="glass-card-elevated sm:max-w-md"
+        className="glass-card-elevated w-[min(92vw,44rem)] max-w-[44rem] max-h-[85vh] overflow-y-auto p-6 sm:max-w-[44rem]"
         data-ocid="forms.dialog"
       >
         <DialogHeader>

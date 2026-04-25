@@ -40,10 +40,12 @@ const MAIL_API_ROOT = MAIL_API_URL.replace(/\/api$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
+const USERS_UPDATED_EVENT = "bcb:users-updated";
 const OPTIONAL_API_TIMEOUT_MS = 8000;
 const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 const ENABLE_SEEDED_FALLBACK =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_SEEDED_FALLBACK === "true";
+const RECENT_USER_OVERRIDE_MS = 30 * 1000;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -76,6 +78,11 @@ function withSessionToken(url: string): string {
   return `${url}${separator}sessionToken=${encodeURIComponent(token)}`;
 }
 
+function withCacheBuster(url: string): string {
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}_ts=${Date.now()}`;
+}
+
 function handleSessionExpired() {
   if (typeof window === "undefined") return;
   try {
@@ -88,7 +95,7 @@ function handleSessionExpired() {
 
 async function postMailApi(path: string, payload: Record<string, unknown>) {
   const token = getStoredSessionToken();
-  const response = await fetch(`${MAIL_API_URL}${path}`, {
+  const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -113,7 +120,7 @@ async function postMailApiJson(
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const token = getStoredSessionToken();
-  const response = await fetch(`${MAIL_API_URL}${path}`, {
+  const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -136,8 +143,9 @@ async function postMailApiJson(
 
 async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
   const token = getStoredSessionToken();
-  const response = await fetch(`${MAIL_API_URL}${path}`, {
+  const response = await fetch(withCacheBuster(withSessionToken(`${MAIL_API_URL}${path}`)), {
     method: "GET",
+    cache: "no-store",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
@@ -160,7 +168,7 @@ async function uploadMailApiFile(
   const token = getStoredSessionToken();
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(`${MAIL_API_URL}${path}`, {
+  const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
     method: "POST",
     headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     body: formData,
@@ -271,6 +279,7 @@ export interface UpdateProfileRequest {
   department?: string;
   branch?: string;
   imageFile?: string | null;
+  accessCode?: string;
 }
 
 export interface UpdateStaffRequest extends UpdateProfileRequest {
@@ -457,7 +466,10 @@ async function postOptionalApi(
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
   const token = sessionTokenOverride ?? getStoredSessionToken();
   try {
-    const response = await fetch(`${MAIL_API_URL}${path}`, {
+    const url = token
+      ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
+      : `${MAIL_API_URL}${path}`;
+    const response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -483,7 +495,10 @@ async function getOptionalApi(
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
   const token = sessionTokenOverride ?? getStoredSessionToken();
   try {
-    const response = await fetch(`${MAIL_API_URL}${path}`, {
+    const url = token
+      ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
+      : `${MAIL_API_URL}${path}`;
+    const response = await fetch(url, {
       method: "GET",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       signal: controller.signal,
@@ -595,14 +610,73 @@ export async function apiSetPresenceOffline(
 }
 
 let _mockUsers: User[] = loadUsersStore();
+const _recentUserOverrides = new Map<
+  string,
+  { user: User; expiresAt: number; signature: string }
+>();
 
-function persistUsersStore() {
+function persistUsersStore(notify = true) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(USERS_STORE_KEY, serializeUsers(_mockUsers));
+  if (notify) {
+    window.dispatchEvent(new CustomEvent(USERS_UPDATED_EVENT));
+  }
 }
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
+}
+
+function userSyncSignature(user: User): string {
+  return JSON.stringify({
+    id: user.id,
+    fullname: user.fullname,
+    phone: user.phone,
+    email: user.email,
+    branch: user.branch,
+    department: user.department,
+    role: user.role,
+    position: user.position,
+    isActive: user.isActive,
+    isArchived: user.isArchived,
+    imageFile: user.imageFile ?? null,
+    managedBranches: user.managedBranches ?? [],
+    managedDepartmentsByBranch: user.managedDepartmentsByBranch ?? {},
+    permissions: user.permissions,
+  });
+}
+
+function rememberRecentUserOverride(user: User) {
+  _recentUserOverrides.set(user.id, {
+    user,
+    expiresAt: Date.now() + RECENT_USER_OVERRIDE_MS,
+    signature: userSyncSignature(user),
+  });
+}
+
+function resolveRecentUserOverride(user: User): User {
+  const override = _recentUserOverrides.get(user.id);
+  if (!override) return user;
+  if (override.expiresAt <= Date.now()) {
+    _recentUserOverrides.delete(user.id);
+    return user;
+  }
+  if (override.signature === userSyncSignature(user)) {
+    _recentUserOverrides.delete(user.id);
+    return user;
+  }
+  return {
+    ...user,
+    ...override.user,
+    sessionToken: override.user.sessionToken ?? user.sessionToken,
+    isOnlineNow: override.user.isOnlineNow ?? user.isOnlineNow,
+    lastSeen:
+      override.user.lastSeen > user.lastSeen ? override.user.lastSeen : user.lastSeen,
+  };
+}
+
+function applyRecentUserOverrides(users: User[]): User[] {
+  return users.map((user) => resolveRecentUserOverride(user));
 }
 
 async function refreshUsersCache(): Promise<User[]> {
@@ -620,17 +694,21 @@ async function refreshUsersCache(): Promise<User[]> {
       user.sessionToken = knownTokens.get(user.id) ?? user.sessionToken;
       return user;
     });
+    _mockUsers = applyRecentUserOverrides(_mockUsers);
     if (currentToken) {
       const currentAuthRaw = window.localStorage.getItem(AUTH_STORAGE_KEY);
       if (currentAuthRaw) {
         const currentAuth = deserializeUser(JSON.parse(currentAuthRaw) as WireUser);
         const idx = _mockUsers.findIndex((user) => user.id === currentAuth.id);
         if (idx >= 0) {
-          _mockUsers[idx].sessionToken = currentToken;
+          _mockUsers[idx] = {
+            ..._mockUsers[idx],
+            sessionToken: currentToken,
+          };
         }
       }
     }
-    persistUsersStore();
+    persistUsersStore(false);
   } catch {
     _mockUsers = loadUsersStore().map((user) => ({
       ...user,
@@ -645,22 +723,23 @@ async function fetchUserById(userId: string): Promise<User | null> {
     const payload = await getMailApiJson(`/users/${encodeURIComponent(userId)}`);
     const rawUser = payload.user as WireUser | undefined;
     if (!rawUser) return null;
-    const user = deserializeUser(rawUser);
-    user.sessionToken =
-      _mockUsers.find((item) => item.id === user.id)?.sessionToken ??
-      getStoredSessionToken() ??
-      undefined;
-    const idx = _mockUsers.findIndex((item) => item.id === user.id);
-    if (idx >= 0) {
-      _mockUsers[idx] = user;
-    } else {
-      _mockUsers.push(user);
-    }
-    persistUsersStore();
-    return user;
-  } catch {
-    return _mockUsers.find((user) => user.id === userId) ?? null;
+  const user = deserializeUser(rawUser);
+  user.sessionToken =
+    _mockUsers.find((item) => item.id === user.id)?.sessionToken ??
+    getStoredSessionToken() ??
+    undefined;
+  const resolvedUser = resolveRecentUserOverride(user);
+  const idx = _mockUsers.findIndex((item) => item.id === user.id);
+  if (idx >= 0) {
+    _mockUsers[idx] = resolvedUser;
+  } else {
+    _mockUsers.push(resolvedUser);
   }
+  persistUsersStore(false);
+  return resolvedUser;
+} catch {
+  return _mockUsers.find((user) => user.id === userId) ?? null;
+}
 }
 
 function upsertCachedUser(user: User) {
@@ -671,6 +750,10 @@ function upsertCachedUser(user: User) {
     _mockUsers.push(user);
   }
   persistUsersStore();
+}
+
+export function apiSyncCachedUser(user: User) {
+  upsertCachedUser(user);
 }
 
 function contentId(value: unknown): number {
@@ -1197,7 +1280,7 @@ export async function apiUpdateLastSeen(
   if (sharedLastSeen) {
     user.lastSeen = sharedLastSeen;
   }
-  persistUsersStore();
+  persistUsersStore(false);
   return ok({ ...user });
 }
 
@@ -1210,7 +1293,7 @@ export async function apiLogout(
     const user = _mockUsers.find((item) => item.id === userId);
     if (user) {
       user.isOnlineNow = false;
-      persistUsersStore();
+      persistUsersStore(false);
     }
     await logoutSharedPresence(userId, sessionTokenOverride);
   }
@@ -1258,7 +1341,6 @@ export async function apiConfirmPasswordReset(
 // ── Profile ───────────────────────────────────────────────────────────────────
 
 export async function apiGetMyProfile(userId: string): Promise<User | null> {
-  await refreshUsersCache();
   const user = await fetchUserById(userId);
   persistUsersStore();
   return user ? { ...user } : null;
@@ -1274,12 +1356,13 @@ export async function apiUpdateMyProfile(
       { ...req },
     );
     const rawUser = payload.user as WireUser | undefined;
-    if (!rawUser) {
-      return err("User not found");
-    }
-    const user = deserializeUser(rawUser);
-    upsertCachedUser(user);
-    return ok(user);
+  if (!rawUser) {
+    return err("User not found");
+  }
+  const user = deserializeUser(rawUser);
+  rememberRecentUserOverride(user);
+  upsertCachedUser(user);
+  return ok(user);
   } catch (error) {
     return err(error instanceof Error ? error.message : "User not found");
   }
@@ -1290,6 +1373,16 @@ export async function apiUpdateMyProfile(
 export async function apiGetActiveStaff(): Promise<User[]> {
   await refreshUsersCache();
   persistUsersStore();
+  return _mockUsers
+    .filter((u) => isPortalStaff(u) && !u.isArchived && u.isActive)
+    .sort(
+      (a, b) =>
+        a.department.localeCompare(b.department) ||
+        a.fullname.localeCompare(b.fullname),
+    );
+}
+
+export function apiGetCachedActiveStaff(): User[] {
   return _mockUsers
     .filter((u) => isPortalStaff(u) && !u.isArchived && u.isActive)
     .sort(
@@ -1333,12 +1426,13 @@ export async function apiUpdateStaff(
       { ...req },
     );
     const rawUser = payload.user as WireUser | undefined;
-    if (!rawUser) {
-      return err("Staff member not found");
-    }
-    const user = deserializeUser(rawUser);
-    upsertCachedUser(user);
-    return ok(user);
+  if (!rawUser) {
+    return err("Staff member not found");
+  }
+  const user = deserializeUser(rawUser);
+  rememberRecentUserOverride(user);
+  upsertCachedUser(user);
+  return ok(user);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Staff member not found");
   }
@@ -1502,6 +1596,84 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   };
 }
 
+export function apiGetCachedDashboardOverview(): DashboardOverview {
+  const activeStaff = _mockUsers.filter(
+    (u) =>
+      u.isActive &&
+      !u.isArchived &&
+      !["MASTER ADMIN", "System Admin"].includes(u.fullname),
+  );
+  const branchOrder = [
+    "HEAD OFFICE",
+    "BAWJIASE",
+    "ADEISO",
+    "OFAAKOR",
+    "KASOA NEW MARKET",
+    "KASOA MAIN",
+  ];
+  const branchCounts = new Map<string, number>(
+    branchOrder.map((branch) => [branch, 0]),
+  );
+  const departmentCounts = new Map<string, number>();
+
+  for (const user of activeStaff) {
+    const branch = user.branch.trim().toUpperCase();
+    branchCounts.set(branch, (branchCounts.get(branch) ?? 0) + 1);
+    if (user.role !== "SuperAdmin") {
+      const department = user.department.trim().toUpperCase() || "OTHER";
+      departmentCounts.set(
+        department,
+        (departmentCounts.get(department) ?? 0) + 1,
+      );
+    }
+  }
+
+  const branchDistribution = branchOrder.map((name) => ({
+    name,
+    value: branchCounts.get(name) ?? 0,
+  }));
+  const departmentDistribution = [...departmentCounts.entries()]
+    .sort(([, a], [, b]) => b - a)
+    .map(([name, value]) => ({ name, value }));
+  const supportPending =
+    _incidents.filter((i) => i.status !== "resolved").length +
+    _amendments.filter((a) => a.status === "pending").length;
+  const supportResolved =
+    _incidents.filter((i) => i.status === "resolved").length +
+    _amendments.filter((a) => a.status !== "pending").length;
+  const ticketFlow = supportPending + supportResolved;
+  const topBranch = branchDistribution.reduce(
+    (best, item) => (item.value > best.value ? item : best),
+    { name: "No Active Branch", value: 0 },
+  );
+  const topDepartment = departmentDistribution.reduce(
+    (best, item) => (item.value > best.value ? item : best),
+    { name: "No Active Department", value: 0 },
+  );
+
+  return {
+    totalStaff: activeStaff.length,
+    activeBranches: branchDistribution.filter((item) => item.value > 0).length,
+    openOperations: supportPending,
+    resolutionRate: ticketFlow
+      ? Math.round((supportResolved / ticketFlow) * 100)
+      : 0,
+    resolvedCount: supportResolved,
+    newsTotal: _announcements.filter((a) => !a.isTrashed).length,
+    topBranch: topBranch.name,
+    topBranchCount: topBranch.value,
+    topDepartment: topDepartment.name,
+    topDepartmentCount: topDepartment.value,
+    branchDistribution,
+    departmentDistribution:
+      departmentDistribution.length > 0
+        ? departmentDistribution
+        : [{ name: "No Data", value: 0 }],
+    supportPending,
+    supportResolved,
+  };
+}
+
 // ── Announcements ─────────────────────────────────────────────────────────────
 
 const _announcements: AnnouncementWithPoll[] = [
@@ -1555,7 +1727,7 @@ const _announcements: AnnouncementWithPoll[] = [
   },
   {
     id: 3,
-    title: "Mandatory IT Security Training — All Staff",
+    title: "Mandatory IT Security Training - All Staff",
     content:
       "The IT Department has scheduled a mandatory cybersecurity awareness training for all staff. Sessions will run from Monday to Wednesday next week. Please confirm your preferred session slot.",
     category: "IT",
@@ -1612,6 +1784,17 @@ export async function apiGetAnnouncements(
       replaceSharedAnnouncements([]);
     }
   }
+  const authUser = getStoredAuthUser();
+  const dismissedIds = getDismissedAnnouncementIds(userId);
+  return _announcements
+    .filter((a) => !a.isTrashed && !dismissedIds.has(a.id))
+    .filter((a) => userMatchesScopedItem(authUser, a))
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+}
+
+export function apiGetCachedAnnouncements(
+  userId?: string,
+): AnnouncementWithPoll[] {
   const authUser = getStoredAuthUser();
   const dismissedIds = getDismissedAnnouncementIds(userId);
   return _announcements
@@ -2110,6 +2293,15 @@ export async function apiGetForms(user?: User | null): Promise<PortalForm[]> {
       replaceSharedForms([]);
     }
   }
+  return _forms
+    .filter((form) => canUserSeeForm(form, user))
+    .sort(
+      (a, b) =>
+        a.category.localeCompare(b.category) || a.title.localeCompare(b.title),
+    );
+}
+
+export function apiGetCachedForms(user?: User | null): PortalForm[] {
   return _forms
     .filter((form) => canUserSeeForm(form, user))
     .sort(
@@ -2685,6 +2877,14 @@ export async function apiGetTrainingVideos(): Promise<TrainingVideo[]> {
     .sort((a, b) => Number(b.uploadedAt) - Number(a.uploadedAt));
 }
 
+export function apiGetCachedTrainingVideos(): TrainingVideo[] {
+  const user = currentTrainingUser();
+  return _trainingVideos
+    .filter((video) => !video.isArchived)
+    .filter((video) => canUserAccessVideo(video, user))
+    .sort((a, b) => Number(b.uploadedAt) - Number(a.uploadedAt));
+}
+
 export async function apiGetTrainingVideo(
   id: number,
 ): Promise<TrainingVideo | null> {
@@ -2851,6 +3051,14 @@ export async function apiGetTrainingDocuments(): Promise<TrainingDocument[]> {
       replaceSharedTrainingDocuments([]);
     }
   }
+  const user = currentTrainingUser();
+  return _trainingDocuments
+    .filter((doc) => !doc.isArchived)
+    .filter((doc) => canUserAccessDocument(doc, user))
+    .sort((a, b) => Number(b.uploadedAt) - Number(a.uploadedAt));
+}
+
+export function apiGetCachedTrainingDocuments(): TrainingDocument[] {
   const user = currentTrainingUser();
   return _trainingDocuments
     .filter((doc) => !doc.isArchived)

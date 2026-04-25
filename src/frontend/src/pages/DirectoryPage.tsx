@@ -24,6 +24,7 @@ import {
 import {
   type UpdateStaffRequest,
   apiArchiveStaff,
+  apiGetCachedActiveStaff,
   apiGetActiveStaff,
   resolveStoredAssetUrl,
   apiUpdateStaff,
@@ -45,9 +46,9 @@ import {
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const IT_ACCESS_CODE = "BCB-IT-2026";
 const DIRECTORY_REFRESH_MS = 2000;
 const DIRECTORY_PAGE_SIZE = 24;
+const USERS_UPDATED_EVENT = "bcb:users-updated";
 
 const ROLE_LABELS: Record<User["role"], string> = {
   SuperAdmin: "Super Admin",
@@ -90,6 +91,22 @@ function formatLastSeen(ts: bigint): string {
     hour: "2-digit",
     minute: "2-digit",
   });
+}
+
+function mergeCurrentUserView(member: User, currentUser: User | null, pageVisible: boolean): User {
+  if (!currentUser || member.id !== currentUser.id) return member;
+  const now = BigInt(Date.now());
+  return {
+    ...member,
+    ...currentUser,
+    isOnlineNow: pageVisible ? true : (currentUser.isOnlineNow ?? member.isOnlineNow),
+    lastSeen:
+      currentUser.lastSeen > member.lastSeen
+        ? currentUser.lastSeen
+        : pageVisible && now > member.lastSeen
+          ? now
+          : member.lastSeen,
+  };
 }
 
 function canManageDirectory(user: User | null) {
@@ -309,8 +326,8 @@ function EditStaffModal({
 
   async function handleSave() {
     if (!staff) return;
-    if (needsItCode && itCode !== IT_ACCESS_CODE) {
-      toast.error("Invalid IT access code");
+    if (needsItCode && !itCode.trim()) {
+      toast.error("IT access code is required");
       return;
     }
 
@@ -441,18 +458,21 @@ function EditStaffModal({
 }
 
 export default function DirectoryPage() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, updateUser } = useAuth();
   const navigate = useNavigate();
   const canEdit = canManageDirectory(currentUser);
 
-  const [staff, setStaff] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<User[]>(() => apiGetCachedActiveStaff());
+  const [loading, setLoading] = useState(() => apiGetCachedActiveStaff().length === 0);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [editTarget, setEditTarget] = useState<User | null>(null);
   const [archiveTarget, setArchiveTarget] = useState<User | null>(null);
   const [archiving, setArchiving] = useState(false);
   const [visibleCount, setVisibleCount] = useState(DIRECTORY_PAGE_SIZE);
+  const [pageVisible, setPageVisible] = useState(
+    typeof document === "undefined" ? true : document.visibilityState === "visible",
+  );
 
   useEffect(() => {
     let mounted = true;
@@ -477,6 +497,7 @@ export default function DirectoryPage() {
     };
 
     const handleVisibility = () => {
+      setPageVisible(document.visibilityState === "visible");
       if (document.visibilityState === "visible") {
         void loadStaff();
       }
@@ -488,8 +509,13 @@ export default function DirectoryPage() {
       }
     };
 
+      const handleUsersUpdated = () => {
+        setStaff(apiGetCachedActiveStaff());
+      };
+
     window.addEventListener("focus", handleFocus);
     window.addEventListener("storage", handleStorage);
+    window.addEventListener(USERS_UPDATED_EVENT, handleUsersUpdated);
     document.addEventListener("visibilitychange", handleVisibility);
 
     return () => {
@@ -497,6 +523,7 @@ export default function DirectoryPage() {
       window.clearInterval(intervalId);
       window.removeEventListener("focus", handleFocus);
       window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(USERS_UPDATED_EVENT, handleUsersUpdated);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
   }, []);
@@ -505,10 +532,14 @@ export default function DirectoryPage() {
     setVisibleCount(DIRECTORY_PAGE_SIZE);
   }, [deferredSearch]);
 
+  const presenceAdjustedStaff = useMemo(() => {
+    return staff.map((member) => mergeCurrentUserView(member, currentUser, pageVisible));
+  }, [staff, currentUser, pageVisible]);
+
   const filtered = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
-    if (!q) return staff;
-    return staff.filter(
+    if (!q) return presenceAdjustedStaff;
+    return presenceAdjustedStaff.filter(
       (user) =>
         user.fullname.toLowerCase().includes(q) ||
         user.department.toLowerCase().includes(q) ||
@@ -517,7 +548,7 @@ export default function DirectoryPage() {
         user.email.toLowerCase().includes(q) ||
         user.phone.toLowerCase().includes(q),
     );
-  }, [staff, deferredSearch]);
+  }, [presenceAdjustedStaff, deferredSearch]);
 
   const grouped = useMemo(() => {
     const map = new Map<string, User[]>();
@@ -533,6 +564,9 @@ export default function DirectoryPage() {
     setStaff((prev) =>
       prev.map((member) => (member.id === updated.id ? updated : member)),
     );
+    if (currentUser?.id === updated.id) {
+      updateUser(updated);
+    }
   }
 
   async function handleArchiveConfirm() {
@@ -607,7 +641,7 @@ export default function DirectoryPage() {
           </div>
         ) : (
           <>
-            {staff.length > 0 && <OnlineSummary staff={staff} />}
+            {presenceAdjustedStaff.length > 0 && <OnlineSummary staff={presenceAdjustedStaff} />}
 
             <div className="relative max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
