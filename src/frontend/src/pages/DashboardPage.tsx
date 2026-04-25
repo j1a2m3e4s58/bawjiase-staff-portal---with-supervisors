@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
+import { LiveSyncBadge } from "@/components/LiveSyncBadge";
 import { RoleGuard } from "@/components/RoleGuard";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
@@ -1009,6 +1010,9 @@ export default function DashboardPage() {
           </>
         ) : (
           <>
+            <div className="flex justify-end">
+              <LiveSyncBadge />
+            </div>
             <section className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
               <div className="space-y-6">
                 <WelcomePanel fullname={user?.fullname ?? "Staff"} />

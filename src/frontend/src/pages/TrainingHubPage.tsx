@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
+import { LiveSyncBadge } from "@/components/LiveSyncBadge";
 import { PortalCard } from "@/components/PortalCard";
 import { RoleGuard } from "@/components/RoleGuard";
 import { SkeletonCard } from "@/components/SkeletonCard";
@@ -277,6 +278,9 @@ export default function TrainingHubPage() {
   return (
     <AppShell>
       <div className="space-y-6">
+        <div className="flex justify-end">
+          <LiveSyncBadge eventNames={[]} />
+        </div>
         <PortalCard
           className="overflow-hidden"
           action={

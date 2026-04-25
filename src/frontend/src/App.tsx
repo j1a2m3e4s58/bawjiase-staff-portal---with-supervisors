@@ -11,6 +11,41 @@ import {
 } from "@tanstack/react-router";
 import { Suspense, lazy, useEffect } from "react";
 
+const FRONTEND_ERROR_KEY = "bcb_last_frontend_error";
+
+interface FrontendErrorSnapshot {
+  id: string;
+  message: string;
+  path: string;
+  timestamp: number;
+}
+
+function readLastFrontendError(): FrontendErrorSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(FRONTEND_ERROR_KEY);
+    if (!raw) return null;
+    return JSON.parse(raw) as FrontendErrorSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function writeFrontendError(message: string) {
+  if (typeof window === "undefined") return;
+  const snapshot: FrontendErrorSnapshot = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`,
+    message,
+    path: window.location.pathname,
+    timestamp: Date.now(),
+  };
+  try {
+    window.localStorage.setItem(FRONTEND_ERROR_KEY, JSON.stringify(snapshot));
+  } catch {
+    // Ignore storage issues and keep the app usable.
+  }
+}
+
 // ── Lazy Pages ─────────────────────────────────────────────────────────────────
 
 const LoginPage = lazy(() => import("@/pages/LoginPage"));
@@ -60,6 +95,7 @@ function AppErrorScreen({
   title: string;
   description: string;
 }) {
+  const recentError = readLastFrontendError();
   return (
     <div className="min-h-screen bg-background px-6 py-10 flex items-center justify-center">
       <div className="glass-card-elevated max-w-lg w-full rounded-2xl p-8 text-center space-y-4">
@@ -75,6 +111,19 @@ function AppErrorScreen({
           <p className="text-sm text-muted-foreground leading-6">
             {description}
           </p>
+          {recentError ? (
+            <div className="rounded-xl border border-border/50 bg-muted/30 px-4 py-3 text-left text-xs text-muted-foreground">
+              <div className="font-semibold text-foreground">
+                Crash reference: {recentError.id}
+              </div>
+              <div className="mt-1">Path: {recentError.path}</div>
+              <div className="mt-1">
+                Logged:{" "}
+                {new Date(recentError.timestamp).toLocaleString("en-GB")}
+              </div>
+              <div className="mt-2 line-clamp-3">{recentError.message}</div>
+            </div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -88,6 +137,34 @@ function RouteErrorComponent() {
       description="The portal could not render this page properly. Please refresh once. If it keeps happening, the deploy configuration or a runtime page error still needs attention."
     />
   );
+}
+
+function FrontendCrashMonitor() {
+  useEffect(() => {
+    const handleError = (event: ErrorEvent) => {
+      writeFrontendError(
+        event.error?.stack || event.message || "Unknown frontend error",
+      );
+    };
+    const handleRejection = (event: PromiseRejectionEvent) => {
+      const reason =
+        event.reason instanceof Error
+          ? event.reason.stack || event.reason.message
+          : typeof event.reason === "string"
+            ? event.reason
+            : JSON.stringify(event.reason);
+      writeFrontendError(reason || "Unhandled promise rejection");
+    };
+
+    window.addEventListener("error", handleError);
+    window.addEventListener("unhandledrejection", handleRejection);
+    return () => {
+      window.removeEventListener("error", handleError);
+      window.removeEventListener("unhandledrejection", handleRejection);
+    };
+  }, []);
+
+  return null;
 }
 
 function RouteNotFoundComponent() {
@@ -376,6 +453,7 @@ declare module "@tanstack/react-router" {
 export default function App() {
   return (
     <AuthProvider>
+      <FrontendCrashMonitor />
       <RouterProvider router={router} />
     </AuthProvider>
   );

@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
+import { LiveSyncBadge } from "@/components/LiveSyncBadge";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -624,6 +625,9 @@ export default function FormsPage() {
             {actingScope}
           </div>
         ) : null}
+        <div className="flex justify-end">
+          <LiveSyncBadge eventNames={[]} />
+        </div>
         <div className="glass-card rounded-xl p-5 space-y-5">
           <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
             <div>

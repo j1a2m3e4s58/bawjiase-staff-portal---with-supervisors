@@ -1,5 +1,6 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { LiveSyncBadge } from "@/components/LiveSyncBadge";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -629,6 +630,9 @@ export default function DirectoryPage() {
               </Button>
             </div>
           )}
+        </div>
+        <div className="flex justify-end">
+          <LiveSyncBadge />
         </div>
 
         {loading ? (
