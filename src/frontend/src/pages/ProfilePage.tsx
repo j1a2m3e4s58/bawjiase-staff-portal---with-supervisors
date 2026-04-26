@@ -64,10 +64,37 @@ function cleanDisplayText(value: string | null | undefined): string {
 }
 
 function formatLastSeen(value: bigint): string {
-  if (Number(value) <= 0) return "Never";
-  return new Date(Number(value)).toLocaleString("en-GB", {
+  const timestamp = Number(value);
+  if (timestamp <= 0) return "Never";
+
+  const now = Date.now();
+  const diffMs = Math.max(0, now - timestamp);
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMinutes / 60);
+
+  if (diffMinutes < 1) return "Just now";
+  if (diffMinutes < 60) return `${diffMinutes} min ago`;
+  if (diffHours < 24) return `${diffHours} hr ago`;
+
+  const date = new Date(timestamp);
+  const sameYear = date.getFullYear() === new Date(now).getFullYear();
+  return date.toLocaleString("en-GB", {
     day: "2-digit",
     month: "short",
+    ...(sameYear ? {} : { year: "numeric" as const }),
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatRegisteredAt(value: bigint): string {
+  const timestamp = Number(value);
+  if (timestamp <= 0) return "Unknown";
+
+  return new Date(timestamp).toLocaleString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -612,7 +639,7 @@ export default function ProfilePage() {
             <InfoRow
               icon={<Calendar className="h-4 w-4" />}
               label="Registered"
-              value={formatLastSeen(user.registrationTime)}
+                value={formatRegisteredAt(user.registrationTime)}
             />
             <InfoRow
               icon={<Shield className="h-4 w-4" />}

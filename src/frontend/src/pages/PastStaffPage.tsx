@@ -135,7 +135,7 @@ function PastStaffRow({
           data-ocid={`past_staff.delete_button.${index}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Delete</span>
+            <span>Delete</span>
         </Button>
       </div>
     </div>

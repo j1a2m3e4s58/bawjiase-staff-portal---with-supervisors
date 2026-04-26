@@ -208,14 +208,15 @@ function FormDialog({
         </DialogHeader>
         <div className="space-y-4 py-2">
           <div className="space-y-1.5">
-            <Label htmlFor="form-title">Form Title</Label>
-            <Input
-              id="form-title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
-              placeholder="e.g. 2025 Leave Request"
-              data-ocid="forms.title.input"
-            />
+              <Label htmlFor="form-title">Form Title</Label>
+              <Input
+                id="form-title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+                placeholder="e.g. 2025 Leave Request"
+                className="text-foreground caret-primary"
+                data-ocid="forms.title.input"
+              />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="form-category">Category</Label>
@@ -242,14 +243,15 @@ function FormDialog({
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="form-url">Google Drive Link</Label>
-            <Input
-              id="form-url"
-              value={fileUrl}
-              onChange={(event) => setFileUrl(event.target.value)}
-              placeholder="Paste full Google Drive link or just the ID"
-              data-ocid="forms.url.input"
-            />
+              <Label htmlFor="form-url">Google Drive Link</Label>
+              <Input
+                id="form-url"
+                value={fileUrl}
+                onChange={(event) => setFileUrl(event.target.value)}
+                placeholder="Paste full Google Drive link or just the ID"
+                className="text-foreground caret-primary"
+                data-ocid="forms.url.input"
+              />
             <p className="text-xs text-muted-foreground">
               Drive file links are stored as file IDs. Google Docs, Sheets, and
               Slides links stay as full links so they open correctly.

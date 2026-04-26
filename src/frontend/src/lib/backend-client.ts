@@ -3460,59 +3460,9 @@ export interface SubmitAmendmentRequest {
   additionalDetails?: string;
 }
 
-const _incidents: IncidentReport[] = [
-  {
-    id: 1,
-    reporterId: "mock-user-3",
-    reporterName: "Nathaniel Oglie Narh",
-    agency: "ADEISO",
-    contact: "0552571081",
-    issueCategory: "NIA",
-    subject: "NIA",
-    description: "{cfdjlfdln",
-    priority: "high",
-    status: "resolved",
-    assignedTo: null,
-    resolution: "Resolved by IT Admin.",
-    createdAt: BigInt(1769040000000),
-    updatedAt: BigInt(1769043600000),
-  },
-  {
-    id: 2,
-    reporterId: "db-user-3",
-    reporterName: "Nathaniel Oglie Narh",
-    agency: "HEAD OFFICE",
-    contact: "0552571081",
-    issueCategory: "NCOMPUTING",
-    subject: "NCOMPUTING",
-    description: "NComputing device is not powering on",
-    priority: "medium",
-    status: "resolved",
-    assignedTo: "db-user-2",
-    resolution: "Resolved by IT Admin.",
-    createdAt: BigInt(1768867200000),
-    updatedAt: BigInt(1768870800000),
-  },
-  {
-    id: 3,
-    reporterId: "mock-user-3",
-    reporterName: "Abena Ofori",
-    agency: "ADEISO",
-    contact: "0557234789",
-    issueCategory: "NETWORK",
-    subject: "Network",
-    description:
-      "Intermittent internet connectivity at ADEISO branch affecting online banking transactions.",
-    priority: "medium",
-    status: "open",
-    assignedTo: null,
-    resolution: null,
-    createdAt: BigInt(Date.now() - 3600000),
-    updatedAt: BigInt(Date.now() - 3600000),
-  },
-];
+const _incidents: IncidentReport[] = [];
 
-const _amendments: ProfileAmendment[] = [
+const _amendments: ProfileAmendment[] = []; /*
   {
     id: 1,
     requesterId: "mock-user-3",
@@ -3553,10 +3503,10 @@ const _amendments: ProfileAmendment[] = [
     createdAt: BigInt(Date.now() - 259200000),
     updatedAt: BigInt(Date.now() - 172800000),
   },
-];
+*/
 
-let _incidentIdCounter = 4;
-let _amendmentIdCounter = 3;
+let _incidentIdCounter = 1;
+let _amendmentIdCounter = 1;
 
 export async function apiSubmitIncidentReport(
   req: SubmitIncidentRequest,
