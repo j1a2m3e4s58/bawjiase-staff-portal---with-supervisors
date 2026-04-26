@@ -149,7 +149,7 @@ function FormDialog({
           ? initial.department
           : "ALL"),
     );
-  }, [open, initial, canTargetAllBranches, manageableBranches]);
+  }, [open, initial?.id]);
 
   useEffect(() => {
     if (!canTargetAllBranches && branchTarget === "ALL" && manageableBranches.length > 0) {
