@@ -126,6 +126,10 @@
           window.setTimeout(() => fallback.remove(), 260);
         }
 
+        function appHasMounted() {
+          return !!window.__BCB_APP_READY__ || !!document.getElementById("root")?.childElementCount;
+        }
+
         function markErrorAndReload() {
           if (!fallback) return;
           fallback.setAttribute("data-error", "true");
@@ -135,7 +139,7 @@
           }
         }
 
-        if (window.__BCB_APP_READY__) {
+        if (appHasMounted()) {
           window.sessionStorage.removeItem(RELOAD_KEY);
           hideFallback();
           return;
@@ -161,8 +165,16 @@
           true,
         );
 
+        const readinessPoll = window.setInterval(() => {
+          if (!appHasMounted()) return;
+          window.clearInterval(readinessPoll);
+          window.sessionStorage.removeItem(RELOAD_KEY);
+          hideFallback();
+        }, 120);
+
         window.setTimeout(() => {
-          if (document.getElementById("root")?.childElementCount) {
+          window.clearInterval(readinessPoll);
+          if (appHasMounted()) {
             hideFallback();
             return;
           }
