@@ -45,7 +45,11 @@ const PRESENCE_CHECK_MS = 5 * 1000;
 const PROFILE_SYNC_MS = 15 * 1000;
 
 function markActivity(timestamp = Date.now()) {
-  localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
+  try {
+    localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
+  } catch {
+    // Ignore storage failures to keep the app usable.
+  }
 }
 
 function loadStoredUser(): User | null {
@@ -77,20 +81,28 @@ function loadStoredUser(): User | null {
 }
 
 function saveStoredUser(user: User, remember: boolean, updateActivity = true) {
-  localStorage.setItem(AUTH_KEY, JSON.stringify(user));
-  if (updateActivity) {
-    markActivity();
-  }
-  if (remember) {
-    const expiry = Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000;
-    localStorage.setItem(AUTH_EXPIRY_KEY, String(expiry));
+  try {
+    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+    if (updateActivity) {
+      markActivity();
+    }
+    if (remember) {
+      const expiry = Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000;
+      localStorage.setItem(AUTH_EXPIRY_KEY, String(expiry));
+    }
+  } catch {
+    // Ignore storage failures to keep the in-memory session alive.
   }
 }
 
 function clearStoredUser() {
-  localStorage.removeItem(AUTH_KEY);
-  localStorage.removeItem(AUTH_EXPIRY_KEY);
-  localStorage.removeItem(AUTH_ACTIVITY_KEY);
+  try {
+    localStorage.removeItem(AUTH_KEY);
+    localStorage.removeItem(AUTH_EXPIRY_KEY);
+    localStorage.removeItem(AUTH_ACTIVITY_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
 }
 
 function liveSyncSignature(user: User | null): string {
@@ -140,8 +152,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const authSessionRef = useRef(0);
   const userRef = useRef<User | null>(user);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
-    const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
-    return stored ?? "dark";
+    try {
+      const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
+      return stored ?? "dark";
+    } catch {
+      return "dark";
+    }
   });
 
   useEffect(() => {
@@ -387,7 +403,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const toggleTheme = useCallback(() => {
     setThemeMode((prev) => {
       const next = prev === "light" ? "dark" : "light";
-      localStorage.setItem(THEME_KEY, next);
+      try {
+        localStorage.setItem(THEME_KEY, next);
+      } catch {
+        // Ignore storage failures.
+      }
       return next;
     });
   }, []);

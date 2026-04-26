@@ -47,41 +47,99 @@ function writeFrontendError(message: string) {
   }
 }
 
+function lazyPage<TModule extends { default: React.ComponentType<any> }>(
+  cacheKey: string,
+  factory: () => Promise<TModule>,
+) {
+  return lazy(async () => {
+    try {
+      const loaded = await factory();
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(`bcb:lazy-reload:${cacheKey}`);
+      }
+      return loaded;
+    } catch (error) {
+      if (typeof window !== "undefined") {
+        const reloadKey = `bcb:lazy-reload:${cacheKey}`;
+        if (!window.sessionStorage.getItem(reloadKey)) {
+          window.sessionStorage.setItem(reloadKey, "1");
+          window.location.reload();
+          await new Promise(() => {
+            // Keep the boundary pending while the browser reloads.
+          });
+        }
+      }
+      throw error;
+    }
+  });
+}
+
 // ── Lazy Pages ─────────────────────────────────────────────────────────────────
 
-const LoginPage = lazy(() => import("@/pages/LoginPage"));
-const RegisterPage = lazy(() => import("@/pages/RegisterPage"));
-const ForgotPasswordPage = lazy(() => import("@/pages/ForgotPasswordPage"));
-const ResetPasswordPage = lazy(() => import("@/pages/ResetPasswordPage"));
-const VerifyEmailPage = lazy(() => import("@/pages/VerifyEmailPage"));
-const DashboardPage = lazy(() => import("@/pages/DashboardPage"));
-const AnnouncementsPage = lazy(() => import("@/pages/AnnouncementsPage"));
-const NewsPortalPage = lazy(() => import("@/pages/NewsPortalPage"));
-const AnnouncementsTrashPage = lazy(
+const LoginPage = lazyPage("login", () => import("@/pages/LoginPage"));
+const RegisterPage = lazyPage("register", () => import("@/pages/RegisterPage"));
+const ForgotPasswordPage = lazyPage(
+  "forgot-password",
+  () => import("@/pages/ForgotPasswordPage"),
+);
+const ResetPasswordPage = lazyPage(
+  "reset-password",
+  () => import("@/pages/ResetPasswordPage"),
+);
+const VerifyEmailPage = lazyPage(
+  "verify-email",
+  () => import("@/pages/VerifyEmailPage"),
+);
+const DashboardPage = lazyPage("dashboard", () => import("@/pages/DashboardPage"));
+const AnnouncementsPage = lazyPage(
+  "announcements",
+  () => import("@/pages/AnnouncementsPage"),
+);
+const NewsPortalPage = lazyPage("news-portal", () => import("@/pages/NewsPortalPage"));
+const AnnouncementsTrashPage = lazyPage(
+  "announcements-trash",
   () => import("@/pages/AnnouncementsTrashPage"),
 );
-const FormsPage = lazy(() => import("@/pages/FormsPage"));
-const DirectoryPage = lazy(() => import("@/pages/DirectoryPage"));
-const SupervisorManagementPage = lazy(
+const FormsPage = lazyPage("forms", () => import("@/pages/FormsPage"));
+const DirectoryPage = lazyPage("directory", () => import("@/pages/DirectoryPage"));
+const SupervisorManagementPage = lazyPage(
+  "supervisors",
   () => import("@/pages/SupervisorManagementPage"),
 );
-const PastStaffPage = lazy(() => import("@/pages/PastStaffPage"));
-const NotificationsPage = lazy(() => import("@/pages/NotificationsPage"));
-const ProfilePage = lazy(() => import("@/pages/ProfilePage"));
-const TrainingHubPage = lazy(() => import("@/pages/TrainingHubPage"));
-const TrainingVideoPage = lazy(() => import("@/pages/TrainingVideoPage"));
-const TrainingDocumentPage = lazy(() => import("@/pages/TrainingDocumentPage"));
-const TrainingUploadVideoPage = lazy(
+const PastStaffPage = lazyPage("past-staff", () => import("@/pages/PastStaffPage"));
+const NotificationsPage = lazyPage(
+  "notifications",
+  () => import("@/pages/NotificationsPage"),
+);
+const ProfilePage = lazyPage("profile", () => import("@/pages/ProfilePage"));
+const TrainingHubPage = lazyPage("training", () => import("@/pages/TrainingHubPage"));
+const TrainingVideoPage = lazyPage(
+  "training-video",
+  () => import("@/pages/TrainingVideoPage"),
+);
+const TrainingDocumentPage = lazyPage(
+  "training-document",
+  () => import("@/pages/TrainingDocumentPage"),
+);
+const TrainingUploadVideoPage = lazyPage(
+  "training-upload-video",
   () => import("@/pages/TrainingUploadVideoPage"),
 );
-const TrainingUploadDocumentPage = lazy(
+const TrainingUploadDocumentPage = lazyPage(
+  "training-upload-document",
   () => import("@/pages/TrainingUploadDocumentPage"),
 );
-const TrainingAdminPage = lazy(() => import("@/pages/TrainingAdminPage"));
-const SupportPage = lazy(() => import("@/pages/SupportPage"));
-const SupportAdminPage = lazy(() => import("@/pages/SupportAdminPage"));
-const AuditLogsPage = lazy(() => import("@/pages/AuditLogsPage"));
-const BackupCenterPage = lazy(() => import("@/pages/BackupCenterPage"));
+const TrainingAdminPage = lazyPage(
+  "training-admin",
+  () => import("@/pages/TrainingAdminPage"),
+);
+const SupportPage = lazyPage("support", () => import("@/pages/SupportPage"));
+const SupportAdminPage = lazyPage(
+  "support-admin",
+  () => import("@/pages/SupportAdminPage"),
+);
+const AuditLogsPage = lazyPage("audit", () => import("@/pages/AuditLogsPage"));
+const BackupCenterPage = lazyPage("backup", () => import("@/pages/BackupCenterPage"));
 
 // ── Loading Fallback ───────────────────────────────────────────────────────────
 
