@@ -23,10 +23,151 @@
     <link rel="icon" type="image/png" sizes="192x192" href="./app-icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./app-icons/apple-touch-icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
-    <script type="module" crossorigin src="/assets/index-OPm7iZxF.js"></script>
-    <link rel="stylesheet" crossorigin href="/assets/index-U6foxMKQ.css">
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background:
+          radial-gradient(circle at top left, rgba(120, 205, 255, 0.28), transparent 30%),
+          radial-gradient(circle at top right, rgba(96, 165, 250, 0.18), transparent 24%),
+          linear-gradient(180deg, #dff4ff 0%, #d2efff 38%, #c4e6fb 100%);
+        color: #10233f;
+        font-family: "DM Sans", system-ui, sans-serif;
+      }
+
+      #boot-fallback {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        z-index: 9999;
+        transition: opacity 220ms ease;
+      }
+
+      #boot-fallback[data-hidden="true"] {
+        opacity: 0;
+        pointer-events: none;
+      }
+
+      .boot-fallback__card {
+        width: min(92vw, 420px);
+        padding: 28px 24px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(255, 255, 255, 0.4);
+        box-shadow: 0 18px 40px rgba(16, 35, 63, 0.12);
+        backdrop-filter: blur(14px);
+        text-align: center;
+      }
+
+      .boot-fallback__logo {
+        width: 76px;
+        height: 76px;
+        border-radius: 999px;
+        -o-object-fit: cover;
+           object-fit: cover;
+        box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.6);
+      }
+
+      .boot-fallback__title {
+        margin: 16px 0 6px;
+        font-size: 1.55rem;
+        font-weight: 700;
+      }
+
+      .boot-fallback__text {
+        margin: 0;
+        font-size: 0.95rem;
+        line-height: 1.6;
+        color: rgba(16, 35, 63, 0.74);
+      }
+
+      .boot-fallback__text--error {
+        display: none;
+        margin-top: 14px;
+        color: #8b1e3f;
+        font-weight: 600;
+      }
+
+      #boot-fallback[data-error="true"] .boot-fallback__text--error {
+        display: block;
+      }
+    </style>
+    <script type="module" crossorigin src="/assets/index-CzF3Xswh.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-59mPD9-k.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="boot-fallback" aria-live="polite">
+      <div class="boot-fallback__card">
+        <img
+          src="./assets/images/bcb-logo.png"
+          alt="BCB Staff Portal"
+          class="boot-fallback__logo"
+        />
+        <div class="boot-fallback__title">Opening your workspace...</div>
+        <p class="boot-fallback__text">
+          BCB Staff Portal is preparing your latest files.
+        </p>
+        <p class="boot-fallback__text boot-fallback__text--error">
+          The latest screen is taking longer than usual to appear. Please wait a moment or refresh once.
+        </p>
+      </div>
+    </div>
+    <div id="root"></div>
+    <script>
+      (function () {
+        const APP_READY_EVENT = "bcb:app-ready";
+        const RELOAD_KEY = "bcb:entry-reload";
+        const fallback = document.getElementById("boot-fallback");
+
+        function hideFallback() {
+          if (!fallback) return;
+          fallback.setAttribute("data-hidden", "true");
+          window.setTimeout(() => fallback.remove(), 260);
+        }
+
+        function markErrorAndReload() {
+          if (!fallback) return;
+          fallback.setAttribute("data-error", "true");
+          if (!window.sessionStorage.getItem(RELOAD_KEY)) {
+            window.sessionStorage.setItem(RELOAD_KEY, "1");
+            window.setTimeout(() => window.location.reload(), 150);
+          }
+        }
+
+        window.addEventListener(APP_READY_EVENT, () => {
+          window.sessionStorage.removeItem(RELOAD_KEY);
+          hideFallback();
+        });
+
+        window.addEventListener(
+          "error",
+          (event) => {
+            const target = event.target;
+            if (!(target instanceof HTMLElement)) return;
+            if (target.tagName !== "SCRIPT" && target.tagName !== "LINK") return;
+            const source = target.getAttribute("src") || target.getAttribute("href") || "";
+            if (!source) return;
+            if (source.includes("/assets/") || source.includes("./src/main.tsx")) {
+              markErrorAndReload();
+            }
+          },
+          true,
+        );
+
+        window.setTimeout(() => {
+          if (document.getElementById("root")?.childElementCount) {
+            hideFallback();
+            return;
+          }
+          if (fallback) {
+            fallback.setAttribute("data-error", "true");
+          }
+        }, 10000);
+      })();
+    </script>
   </body>
 </html>

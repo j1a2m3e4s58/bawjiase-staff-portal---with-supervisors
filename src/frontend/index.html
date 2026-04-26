@@ -109,7 +109,7 @@
           BCB Staff Portal is preparing your latest files.
         </p>
         <p class="boot-fallback__text boot-fallback__text--error">
-          The latest screen did not load correctly. Reloading once automatically.
+          The latest screen is taking longer than usual to appear. Please wait a moment or refresh once.
         </p>
       </div>
     </div>
@@ -160,12 +160,10 @@
             hideFallback();
             return;
           }
-          if (!window.sessionStorage.getItem(RELOAD_KEY)) {
-            markErrorAndReload();
-          } else if (fallback) {
+          if (fallback) {
             fallback.setAttribute("data-error", "true");
           }
-        }, 4500);
+        }, 10000);
       })();
     </script>
     <script type="module" src="./src/main.tsx"></script>

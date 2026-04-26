@@ -5,6 +5,8 @@ import { StartupSplash } from "./components/StartupSplash";
 import { withBase } from "./lib/app-base";
 import "./index.css";
 
+const APP_READY_EVENT = "bcb:app-ready";
+
 BigInt.prototype.toJSON = function () {
   return this.toString();
 };
@@ -31,6 +33,12 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </StartupSplash>
   </QueryClientProvider>,
 );
+
+window.requestAnimationFrame(() => {
+  window.requestAnimationFrame(() => {
+    window.dispatchEvent(new CustomEvent(APP_READY_EVENT));
+  });
+});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
