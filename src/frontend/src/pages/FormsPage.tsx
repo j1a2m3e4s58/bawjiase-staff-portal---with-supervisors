@@ -113,20 +113,28 @@ function FormDialog({
   );
   const [fileUrl, setFileUrl] = useState(initial?.fileUrl ?? "");
   const [sendExternalEmails, setSendExternalEmails] = useState(false);
-  const manageableBranches = getManageableBranches(currentUser);
+  const manageableBranches = useMemo(
+    () => getManageableBranches(currentUser),
+    [currentUser],
+  );
   const canTargetAllBranches =
     currentUser?.role === "SuperAdmin" || currentUser?.role === "HRAdmin";
   const [branchTarget, setBranchTarget] = useState("ALL");
   const [departmentTarget, setDepartmentTarget] = useState("ALL");
-  const manageableDepartments = branchTarget === "ALL"
-    ? [...DEPARTMENTS]
-    : getManageableDepartmentsForBranch(currentUser, branchTarget);
+  const manageableDepartments = useMemo(
+    () =>
+      branchTarget === "ALL"
+        ? [...DEPARTMENTS]
+        : getManageableDepartmentsForBranch(currentUser, branchTarget),
+    [branchTarget, currentUser],
+  );
   const canTargetAllDepartments =
     currentUser?.role === "SuperAdmin" ||
     currentUser?.role === "HRAdmin" ||
     manageableDepartments.length === DEPARTMENTS.length;
 
   useEffect(() => {
+    if (!open) return;
     setTitle(initial?.title ?? "");
     setCategory(initial?.category ?? "General");
     setFileUrl(initial?.fileUrl ?? "");
@@ -141,7 +149,7 @@ function FormDialog({
           ? initial.department
           : "ALL"),
     );
-  }, [initial, canTargetAllBranches, manageableBranches]);
+  }, [open, initial, canTargetAllBranches, manageableBranches]);
 
   useEffect(() => {
     if (!canTargetAllBranches && branchTarget === "ALL" && manageableBranches.length > 0) {
