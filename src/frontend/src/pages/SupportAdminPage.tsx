@@ -8,6 +8,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
+  apiClearAllAmendments,
+  apiClearAllIncidents,
   apiDeleteResolvedAmendments,
   apiDeleteResolvedIncidents,
   apiExportAmendmentsCsv,
@@ -136,7 +138,7 @@ function SummaryStrip({
   );
 }
 
-function IncidentsSection() {
+function IncidentsSection({ onDataChanged }: { onDataChanged: () => void }) {
   const [loading, setLoading] = useState(true);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [loadError, setLoadError] = useState(false);
@@ -144,6 +146,7 @@ function IncidentsSection() {
   const [selectionNotice, setSelectionNotice] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -191,6 +194,7 @@ function IncidentsSection() {
     } else {
       toast.success("Incident resolved.");
       await load();
+      onDataChanged();
     }
     setBusy(false);
     setConfirmResolve(null);
@@ -208,9 +212,24 @@ function IncidentsSection() {
     } else {
       toast.success(`${selected.size} resolved incident(s) deleted.`);
       await load();
+      onDataChanged();
     }
     setBusy(false);
     setConfirmDelete(false);
+  }
+
+  async function handleClearAll() {
+    setBusy(true);
+    const result = await apiClearAllIncidents();
+    if ("err" in result) {
+      toast.error(result.err);
+    } else {
+      toast.success("All incident reports cleared.");
+      await load();
+      onDataChanged();
+    }
+    setBusy(false);
+    setConfirmClearAll(false);
   }
 
   function handleExport() {
@@ -267,6 +286,16 @@ function IncidentsSection() {
           >
             <Trash2 className="h-4 w-4" />
             Delete Selected
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setConfirmClearAll(true)}
+            data-ocid="incidents.clear_all_button"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear All
           </Button>
         </div>
       </div>
@@ -412,13 +441,22 @@ function IncidentsSection() {
         variant="destructive"
         onConfirm={handleDeleteSelected}
       />
+      <ConfirmDialog
+        open={confirmClearAll}
+        onOpenChange={setConfirmClearAll}
+        title="Clear all incident reports?"
+        description="This will permanently remove every incident record in the IT Admin Center."
+        confirmLabel={busy ? "Clearing..." : "Clear All"}
+        variant="destructive"
+        onConfirm={handleClearAll}
+      />
 
       <span className="hidden">{resolvedIds.length}</span>
     </div>
   );
 }
 
-function AmendmentsSection() {
+function AmendmentsSection({ onDataChanged }: { onDataChanged: () => void }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [amendments, setAmendments] = useState<ProfileAmendment[]>([]);
@@ -427,6 +465,7 @@ function AmendmentsSection() {
   const [selectionNotice, setSelectionNotice] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState<number | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
   const [busy, setBusy] = useState(false);
 
   const load = useCallback(async () => {
@@ -471,6 +510,7 @@ function AmendmentsSection() {
     } else {
       toast.success("Amendment request resolved.");
       await load();
+      onDataChanged();
     }
     setBusy(false);
     setConfirmResolve(null);
@@ -488,9 +528,24 @@ function AmendmentsSection() {
     } else {
       toast.success(`${selected.size} resolved amendment(s) deleted.`);
       await load();
+      onDataChanged();
     }
     setBusy(false);
     setConfirmDelete(false);
+  }
+
+  async function handleClearAll() {
+    setBusy(true);
+    const result = await apiClearAllAmendments();
+    if ("err" in result) {
+      toast.error(result.err);
+    } else {
+      toast.success("All amendment requests cleared.");
+      await load();
+      onDataChanged();
+    }
+    setBusy(false);
+    setConfirmClearAll(false);
   }
 
   function handleExport() {
@@ -550,6 +605,16 @@ function AmendmentsSection() {
           >
             <Trash2 className="h-4 w-4" />
             Delete Selected
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2 border-destructive/40 text-destructive hover:bg-destructive/10 hover:text-destructive"
+            onClick={() => setConfirmClearAll(true)}
+            data-ocid="amendments.clear_all_button"
+          >
+            <Trash2 className="h-4 w-4" />
+            Clear All
           </Button>
         </div>
       </div>
@@ -708,6 +773,15 @@ function AmendmentsSection() {
         variant="destructive"
         onConfirm={handleDeleteSelected}
       />
+      <ConfirmDialog
+        open={confirmClearAll}
+        onOpenChange={setConfirmClearAll}
+        title="Clear all amendment requests?"
+        description="This will permanently remove every T24 amendment request in the IT Admin Center."
+        confirmLabel={busy ? "Clearing..." : "Clear All"}
+        variant="destructive"
+        onConfirm={handleClearAll}
+      />
     </div>
   );
 }
@@ -719,12 +793,17 @@ export default function SupportAdminPage() {
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [amendments, setAmendments] = useState<ProfileAmendment[]>([]);
   const [summaryLoadError, setSummaryLoadError] = useState(false);
+  const [summaryRefreshKey, setSummaryRefreshKey] = useState(0);
 
   useEffect(() => {
     if (!canAccess) {
       navigate({ to: "/support/incident" });
     }
   }, [canAccess, navigate]);
+
+  const triggerSummaryRefresh = useCallback(() => {
+    setSummaryRefreshKey((current) => current + 1);
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
@@ -744,7 +823,7 @@ export default function SupportAdminPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [summaryRefreshKey]);
 
   if (!canAccess) return null;
 
@@ -789,8 +868,8 @@ export default function SupportAdminPage() {
         )}
 
         <div className="space-y-6">
-          <IncidentsSection />
-          <AmendmentsSection />
+          <IncidentsSection onDataChanged={triggerSummaryRefresh} />
+          <AmendmentsSection onDataChanged={triggerSummaryRefresh} />
         </div>
       </div>
       </RoleGuard>

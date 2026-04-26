@@ -20,6 +20,7 @@ import {
   apiUploadProfilePhotoFile,
   resolveStoredAssetUrl,
 } from "@/lib/backend-client";
+import { optimizeImageFile } from "@/lib/image-upload";
 import { useAuth } from "@/store/auth";
 import { BRANCHES, DEPARTMENTS } from "@/types";
 import type { Role, User } from "@/types";
@@ -63,8 +64,14 @@ function cleanDisplayText(value: string | null | undefined): string {
     .trim();
 }
 
+function normalizePortalTimestamp(value: bigint): number {
+  const raw = Number(value);
+  if (raw <= 0) return 0;
+  return raw < 1_000_000_000_000 ? raw * 1000 : raw;
+}
+
 function formatLastSeen(value: bigint): string {
-  const timestamp = Number(value);
+  const timestamp = normalizePortalTimestamp(value);
   if (timestamp <= 0) return "Never";
 
   const now = Date.now();
@@ -88,7 +95,7 @@ function formatLastSeen(value: bigint): string {
 }
 
 function formatRegisteredAt(value: bigint): string {
-  const timestamp = Number(value);
+  const timestamp = normalizePortalTimestamp(value);
   if (timestamp <= 0) return "Unknown";
 
   return new Date(timestamp).toLocaleString("en-GB", {
@@ -235,9 +242,10 @@ export default function ProfilePage() {
     }
   }
 
-  function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+  async function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
+    const selected = event.target.files?.[0];
+    if (!selected) return;
+    let file = selected;
     if (!file.type.startsWith("image/")) {
       toast.error("Please select an image file");
       return;
@@ -245,6 +253,14 @@ export default function ProfilePage() {
     if (file.size > 10 * 1024 * 1024) {
       toast.error("Please keep profile photos under 10 MB");
       return;
+    }
+    try {
+      file = await optimizeImageFile(file, {
+        maxDimension: 1200,
+        quality: 0.82,
+      });
+    } catch {
+      // keep original image if optimization fails
     }
     if (photoPreview?.startsWith("blob:")) {
       URL.revokeObjectURL(photoPreview);

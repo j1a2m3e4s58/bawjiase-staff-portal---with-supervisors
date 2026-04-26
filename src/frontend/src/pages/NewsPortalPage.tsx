@@ -24,6 +24,7 @@ import {
   getManageableDepartmentsForBranch,
   getScopeCoverageWarning,
 } from "@/lib/backend-client";
+import { optimizeImageFile } from "@/lib/image-upload";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/store/auth";
 import { DEPARTMENTS } from "@/types";
@@ -157,9 +158,25 @@ function NewsPortalForm() {
       return;
     }
 
-    setFileName(file.name);
-    setSelectedFile(file);
-    setImagePreviewUrl(file.type.startsWith("image/") ? URL.createObjectURL(file) : null);
+    let normalizedFile = file;
+    if (file.type.startsWith("image/")) {
+      try {
+        normalizedFile = await optimizeImageFile(file, {
+          maxDimension: 1600,
+          quality: 0.84,
+        });
+      } catch {
+        normalizedFile = file;
+      }
+    }
+
+    setFileName(normalizedFile.name);
+    setSelectedFile(normalizedFile);
+    setImagePreviewUrl(
+      normalizedFile.type.startsWith("image/")
+        ? URL.createObjectURL(normalizedFile)
+        : null,
+    );
     setCapturedImage(null);
   }
 

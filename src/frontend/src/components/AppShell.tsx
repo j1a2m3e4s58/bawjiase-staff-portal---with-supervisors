@@ -1,4 +1,5 @@
 import { NotificationBell } from "@/components/NotificationBell";
+import { SlowNetworkBanner } from "@/components/SlowNetworkBanner";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -699,6 +700,7 @@ export function AppShell({ children }: AppShellProps) {
 
       {/* Main area */}
       <div className="flex-1 flex flex-col min-w-0">
+        <SlowNetworkBanner />
         {isMobile && <TopBar onMenuClick={() => setDrawerOpen(true)} />}
         {!isMobile && <DesktopTopNav />}
         <main

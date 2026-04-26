@@ -46,6 +46,17 @@ const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 const ENABLE_SEEDED_FALLBACK =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_SEEDED_FALLBACK === "true";
 const RECENT_USER_OVERRIDE_MS = 30 * 1000;
+const REQUEST_ACTIVITY_EVENT = "bcb:request-activity";
+const ACTIVITY_LOG_UPDATED_EVENT = "bcb:activity-log-updated";
+const ACTIVITY_LOG_KEY = "bcb_activity_log";
+const ACTIVITY_LOG_LIMIT = 40;
+
+export interface ActivityLogEntry {
+  id: string;
+  title: string;
+  detail: string;
+  timestamp: number;
+}
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -55,6 +66,91 @@ function ok<T>(value: T): ApiResult<T> {
 
 function err<T>(message: string): ApiResult<T> {
   return { err: message };
+}
+
+function dispatchRequestActivity(
+  detail:
+    | {
+        kind: "start" | "finish";
+        pendingCount?: number;
+      }
+    | {
+        kind: "slow";
+        path: string;
+      },
+) {
+  if (typeof window === "undefined") return;
+  window.dispatchEvent(
+    new CustomEvent(REQUEST_ACTIVITY_EVENT, {
+      detail,
+    }),
+  );
+}
+
+let pendingRequestCount = 0;
+
+async function withRequestActivity<T>(
+  path: string,
+  task: () => Promise<T>,
+): Promise<T> {
+  pendingRequestCount += 1;
+  dispatchRequestActivity({ kind: "start", pendingCount: pendingRequestCount });
+  let slowTimer: number | null = window.setTimeout(() => {
+    dispatchRequestActivity({ kind: "slow", path });
+  }, 2000);
+  try {
+    return await task();
+  } finally {
+    if (slowTimer !== null) {
+      window.clearTimeout(slowTimer);
+      slowTimer = null;
+    }
+    pendingRequestCount = Math.max(0, pendingRequestCount - 1);
+    dispatchRequestActivity({
+      kind: "finish",
+      pendingCount: pendingRequestCount,
+    });
+  }
+}
+
+function loadActivityLog(): ActivityLogEntry[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = window.localStorage.getItem(ACTIVITY_LOG_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as ActivityLogEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function persistActivityLog(entries: ActivityLogEntry[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(entries));
+    window.dispatchEvent(new CustomEvent(ACTIVITY_LOG_UPDATED_EVENT));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+export function apiGetActivityLog(): ActivityLogEntry[] {
+  return loadActivityLog();
+}
+
+export function apiRecordActivity(title: string, detail: string) {
+  const nextEntry: ActivityLogEntry = {
+    id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    title,
+    detail,
+    timestamp: Date.now(),
+  };
+  const entries = [nextEntry, ...loadActivityLog()].slice(0, ACTIVITY_LOG_LIMIT);
+  persistActivityLog(entries);
+}
+
+export function apiClearActivityLog() {
+  persistActivityLog([]);
 }
 
 function getStoredSessionToken(): string | null {
@@ -94,14 +190,16 @@ function handleSessionExpired() {
 }
 
 async function postMailApi(path: string, payload: Record<string, unknown>) {
-  const token = getStoredSessionToken();
-  const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
+  const response = await withRequestActivity(path, async () => {
+    const token = getStoredSessionToken();
+    return fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
   });
   const data = (await response.json().catch(() => ({}))) as {
     error?: string;
@@ -119,14 +217,16 @@ async function postMailApiJson(
   path: string,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
-  const token = getStoredSessionToken();
-  const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
+  const response = await withRequestActivity(path, async () => {
+    const token = getStoredSessionToken();
+    return fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(payload),
+    });
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
     error?: string;
@@ -142,11 +242,13 @@ async function postMailApiJson(
 }
 
 async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
-  const token = getStoredSessionToken();
-  const response = await fetch(withCacheBuster(withSessionToken(`${MAIL_API_URL}${path}`)), {
-    method: "GET",
-    cache: "no-store",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+  const response = await withRequestActivity(path, async () => {
+    const token = getStoredSessionToken();
+    return fetch(withCacheBuster(withSessionToken(`${MAIL_API_URL}${path}`)), {
+      method: "GET",
+      cache: "no-store",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    });
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
     error?: string;
@@ -165,13 +267,15 @@ async function uploadMailApiFile(
   path: string,
   file: File,
 ): Promise<Record<string, unknown>> {
-  const token = getStoredSessionToken();
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
-    method: "POST",
-    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
-    body: formData,
+  const response = await withRequestActivity(path, async () => {
+    const token = getStoredSessionToken();
+    return fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: formData,
+    });
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
     error?: string;
@@ -1362,6 +1466,10 @@ export async function apiUpdateMyProfile(
   const user = deserializeUser(rawUser);
   rememberRecentUserOverride(user);
   upsertCachedUser(user);
+  apiRecordActivity(
+    "Profile updated",
+    `${user.fullname} profile details were saved.`,
+  );
   return ok(user);
   } catch (error) {
     return err(error instanceof Error ? error.message : "User not found");
@@ -1432,6 +1540,10 @@ export async function apiUpdateStaff(
   const user = deserializeUser(rawUser);
   rememberRecentUserOverride(user);
   upsertCachedUser(user);
+  apiRecordActivity(
+    "Staff updated",
+    `${user.fullname} is now assigned to ${user.department} at ${user.branch}.`,
+  );
   return ok(user);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Staff member not found");
@@ -1444,6 +1556,7 @@ export async function apiArchiveStaff(
   try {
     await postMailApi(`/staff/${encodeURIComponent(userId)}/archive`, {});
     await refreshUsersCache();
+    apiRecordActivity("Staff archived", "A staff member was moved to Past Staff.");
     return ok(null);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Staff member not found");
@@ -1456,6 +1569,7 @@ export async function apiRestoreStaff(
   try {
     await postMailApi(`/staff/${encodeURIComponent(userId)}/restore`, {});
     await refreshUsersCache();
+    apiRecordActivity("Staff restored", "A past staff record was restored.");
     return ok(null);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Staff member not found");
@@ -1468,6 +1582,10 @@ export async function apiDeleteStaff(userId: string): Promise<ApiResult<null>> {
     await postMailApi(`/staff/${encodeURIComponent(userId)}/delete`, {});
     _mockUsers = _mockUsers.filter((user) => user.id !== userId);
     persistUsersStore();
+    apiRecordActivity(
+      "Past staff deleted",
+      "A past staff record was removed permanently.",
+    );
     return ok(null);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Staff member not found");
@@ -1866,6 +1984,13 @@ export async function apiCreateAnnouncement(
     if (!rawAnnouncement) return err("Announcement could not be created");
     const announcement = deserializeAnnouncement(rawAnnouncement);
     _announcements.unshift(announcement);
+    apiRecordActivity(
+      "Announcement posted",
+      `${announcement.title} was published to ${formatAudienceSummary(
+        announcement.branchScope,
+        announcement.departmentScope,
+      )}.`,
+    );
     return ok(announcement);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Announcement could not be created");
@@ -1915,6 +2040,7 @@ export async function apiUpdateAnnouncement(
       const updated = deserializeAnnouncement(rawAnnouncement);
       const idx = _announcements.findIndex((item) => item.id === id);
       if (idx >= 0) _announcements[idx] = updated;
+      apiRecordActivity("Announcement updated", `${updated.title} was updated.`);
       return ok(updated);
     } catch (error) {
       return err(error instanceof Error ? error.message : "Announcement not found");
@@ -1960,6 +2086,7 @@ export async function apiUpdateAnnouncement(
         : null;
   }
 
+  apiRecordActivity("Announcement updated", `${announcement.title} was updated.`);
   return ok(announcement);
 }
 
@@ -2028,6 +2155,7 @@ export async function apiDeleteAnnouncement(
     }
   }
   _announcements.splice(index, 1);
+  apiRecordActivity("Announcement deleted", "An announcement was deleted.");
   return ok(null);
 }
 
@@ -2336,6 +2464,13 @@ export async function apiCreateForm(
     if (!rawForm) return err("Form could not be created");
     const form = deserializeForm(rawForm);
     _forms.unshift(form);
+    apiRecordActivity(
+      "Form uploaded",
+      `${form.title} was added for ${formatAudienceSummary(
+        form.branchScope,
+        form.departmentScope,
+      )}.`,
+    );
     return ok(form);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Form could not be created");
@@ -2361,6 +2496,7 @@ export async function apiUpdateForm(
       if (!rawForm) return err("Form not found");
       const form = deserializeForm(rawForm);
       _forms[idx] = form;
+      apiRecordActivity("Form updated", `${form.title} was updated.`);
       return ok(form);
     } catch (error) {
       return err(error instanceof Error ? error.message : "Form not found");
@@ -2380,6 +2516,7 @@ export async function apiUpdateForm(
           : _forms[idx].department,
     updatedAt: BigInt(Date.now()),
   };
+  apiRecordActivity("Form updated", `${_forms[idx].title} was updated.`);
   return ok(_forms[idx]);
 }
 
@@ -2395,6 +2532,7 @@ export async function apiDeleteForm(id: number): Promise<ApiResult<null>> {
     }
   }
   _forms.splice(idx, 1);
+  apiRecordActivity("Form deleted", "A form was removed from the library.");
   return ok(null);
 }
 
@@ -2938,6 +3076,7 @@ export async function apiUploadTrainingVideo(
     if (!rawVideo) return err("Video could not be uploaded");
     const video = deserializeTrainingVideo(rawVideo);
     _trainingVideos.unshift(video);
+    apiRecordActivity("Training video uploaded", `${video.title} was added.`);
     return ok(video);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Video could not be uploaded");
@@ -3119,6 +3258,7 @@ export async function apiUploadTrainingDocument(
     if (!rawDocument) return err("Document could not be uploaded");
     const doc = deserializeTrainingDocument(rawDocument);
     _trainingDocuments.unshift(doc);
+    apiRecordActivity("Training document uploaded", `${doc.title} was added.`);
     return ok(doc);
   } catch (error) {
     return err(error instanceof Error ? error.message : "Document could not be uploaded");
@@ -3647,6 +3787,18 @@ export async function apiDeleteResolvedAmendments(
     const idx = _amendments.findIndex((a) => a.id === id);
     if (idx >= 0) _amendments.splice(idx, 1);
   }
+  return ok(null);
+}
+
+export async function apiClearAllIncidents(): Promise<ApiResult<null>> {
+  await delay(300);
+  _incidents.splice(0, _incidents.length);
+  return ok(null);
+}
+
+export async function apiClearAllAmendments(): Promise<ApiResult<null>> {
+  await delay(300);
+  _amendments.splice(0, _amendments.length);
   return ok(null);
 }
 

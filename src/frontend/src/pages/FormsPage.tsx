@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { LiveSyncBadge } from "@/components/LiveSyncBadge";
+import { RetryPanel } from "@/components/RetryPanel";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,7 @@ import {
   apiDeleteForm,
   apiDownloadFormUrl,
   apiExtractDriveFileId,
+  apiGetCachedForms,
   apiGetForms,
   apiOpenFormUrl,
   apiUpdateForm,
@@ -55,6 +57,8 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
+
+const FORMS_PAGE_SIZE = 12;
 
 const CATEGORIES = [
   "General",
@@ -223,6 +227,8 @@ function FormDialog({
                 onChange={(event) => setTitle(event.target.value)}
                 placeholder="e.g. 2025 Leave Request"
                 className="text-foreground caret-primary"
+                autoComplete="off"
+                style={{ color: "rgb(241 245 249)", WebkitTextFillColor: "rgb(241 245 249)" }}
                 data-ocid="forms.title.input"
               />
           </div>
@@ -258,6 +264,8 @@ function FormDialog({
                 onChange={(event) => setFileUrl(event.target.value)}
                 placeholder="Paste full Google Drive link or just the ID"
                 className="text-foreground caret-primary"
+                autoComplete="off"
+                style={{ color: "rgb(241 245 249)", WebkitTextFillColor: "rgb(241 245 249)" }}
                 data-ocid="forms.url.input"
               />
             <p className="text-xs text-muted-foreground">
@@ -467,8 +475,10 @@ export default function FormsPage() {
   const manageableBranches = getManageableBranches(user);
   const actingScope = formatManageableScopeSummary(user);
 
-  const [forms, setForms] = useState<PortalForm[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [forms, setForms] = useState<PortalForm[]>(() => apiGetCachedForms(user));
+  const [isLoading, setIsLoading] = useState(() => apiGetCachedForms(user).length === 0);
+  const [loadError, setLoadError] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(FORMS_PAGE_SIZE);
   const [search, setSearch] = useState("");
   const [branchFilter, setBranchFilter] = useState("ALL");
   const [departmentFilter, setDepartmentFilter] = useState("ALL");
@@ -486,9 +496,13 @@ export default function FormsPage() {
         const data = await apiGetForms(user);
         if (cancelled) return;
         setForms(data);
+        setLoadError(false);
       } catch {
         if (cancelled) return;
-        setForms([]);
+        if (apiGetCachedForms(user).length === 0) {
+          setForms([]);
+        }
+        setLoadError(true);
         toast.error("Forms could not be loaded. Please try again.");
       } finally {
         if (!cancelled) setIsLoading(false);
@@ -500,6 +514,10 @@ export default function FormsPage() {
       cancelled = true;
     };
   }, [user]);
+
+  useEffect(() => {
+    setVisibleCount(FORMS_PAGE_SIZE);
+  }, [forms.length, search, branchFilter, departmentFilter]);
 
   const filtered = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -627,6 +645,23 @@ export default function FormsPage() {
     setDeleteTarget(undefined);
   }
 
+  async function retryForms() {
+    setIsLoading(true);
+    try {
+      const data = await apiGetForms(user);
+      setForms(data);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+      toast.error("Forms could not be loaded. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  }
+
+  const visibleForms = filtered.slice(0, visibleCount);
+  const hasMoreForms = filtered.length > visibleCount;
+
   return (
     <AppShell>
       <div className="max-w-6xl mx-auto space-y-6" data-ocid="forms.page">
@@ -704,7 +739,14 @@ export default function FormsPage() {
             </div>
           </div>
 
-          {isLoading ? (
+          {loadError && forms.length === 0 ? (
+            <RetryPanel
+              title="Forms failed to load"
+              description="Retry this section without leaving the Forms Centre."
+              onRetry={() => void retryForms()}
+              icon={<FileText className="h-4 w-4 text-primary" />}
+            />
+          ) : isLoading ? (
             <div
               className="grid md:grid-cols-2 gap-3"
               data-ocid="forms.loading_state"
@@ -730,8 +772,17 @@ export default function FormsPage() {
               data-ocid="forms.empty_state"
             />
           ) : (
-            <div className="grid md:grid-cols-2 gap-3">
-                {filtered.map((form, index) => (
+            <div className="space-y-4">
+              {loadError ? (
+                <RetryPanel
+                  title="Using saved forms"
+                  description="The latest refresh failed, but your cached forms are still available."
+                  onRetry={() => void retryForms()}
+                  icon={<FileText className="h-4 w-4 text-primary" />}
+                />
+              ) : null}
+              <div className="grid md:grid-cols-2 gap-3">
+                {visibleForms.map((form, index) => (
                   <FormCard
                     key={form.id}
                     form={form}
@@ -744,6 +795,20 @@ export default function FormsPage() {
                   index={index + 1}
                 />
               ))}
+              </div>
+              {hasMoreForms ? (
+                <div className="flex justify-center">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() =>
+                      setVisibleCount((current) => current + FORMS_PAGE_SIZE)
+                    }
+                  >
+                    Load more forms
+                  </Button>
+                </div>
+              ) : null}
             </div>
           )}
         </div>

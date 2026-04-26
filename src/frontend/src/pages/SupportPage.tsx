@@ -1,5 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
+import { LiveSyncBadge } from "@/components/LiveSyncBadge";
+import { RetryPanel } from "@/components/RetryPanel";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -34,6 +36,8 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
+
+const SUPPORT_PAGE_SIZE = 5;
 
 const ISSUE_CATEGORIES = [
   "Temenos 24",
@@ -619,6 +623,8 @@ function RecentIncidents({ refreshKey }: { refreshKey: number }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(SUPPORT_PAGE_SIZE);
 
   useEffect(() => {
     if (!user) return;
@@ -629,11 +635,13 @@ function RecentIncidents({ refreshKey }: { refreshKey: number }) {
       .then((data) => {
         if (!cancelled) {
           setIncidents(data);
+          setLoadError(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setIncidents([]);
+          setLoadError(true);
           toast.error("Recent incident reports could not be loaded.");
         }
       })
@@ -647,7 +655,21 @@ function RecentIncidents({ refreshKey }: { refreshKey: number }) {
     };
   }, [user, refreshKey]);
 
+  useEffect(() => {
+    setVisibleCount(SUPPORT_PAGE_SIZE);
+  }, [incidents.length]);
+
   if (loading) return <SkeletonCard lines={3} />;
+  if (loadError && incidents.length === 0) {
+    return (
+      <RetryPanel
+        title="Incident reports failed to load"
+        description="Retry your recent reports without leaving this page."
+        onRetry={() => window.location.reload()}
+        icon={<AlertCircle className="h-4 w-4 text-primary" />}
+      />
+    );
+  }
   if (!incidents.length) {
     return (
       <EmptyState
@@ -660,7 +682,15 @@ function RecentIncidents({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-3">
-      {incidents.map((incident) => (
+      {loadError ? (
+        <RetryPanel
+          title="Using saved incident reports"
+          description="The latest refresh failed, but your recent reports are still visible."
+          onRetry={() => window.location.reload()}
+          icon={<AlertCircle className="h-4 w-4 text-primary" />}
+        />
+      ) : null}
+      {incidents.slice(0, visibleCount).map((incident) => (
         <div key={incident.id} className="glass-card rounded-xl p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -682,6 +712,19 @@ function RecentIncidents({ refreshKey }: { refreshKey: number }) {
           </p>
         </div>
       ))}
+      {incidents.length > visibleCount ? (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setVisibleCount((current) => current + SUPPORT_PAGE_SIZE)
+            }
+          >
+            Load more reports
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -690,6 +733,8 @@ function RecentAmendments({ refreshKey }: { refreshKey: number }) {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [amendments, setAmendments] = useState<ProfileAmendment[]>([]);
+  const [loadError, setLoadError] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(SUPPORT_PAGE_SIZE);
 
   useEffect(() => {
     if (!user) return;
@@ -700,11 +745,13 @@ function RecentAmendments({ refreshKey }: { refreshKey: number }) {
       .then((data) => {
         if (!cancelled) {
           setAmendments(data);
+          setLoadError(false);
         }
       })
       .catch(() => {
         if (!cancelled) {
           setAmendments([]);
+          setLoadError(true);
           toast.error("Recent amendment requests could not be loaded.");
         }
       })
@@ -718,7 +765,21 @@ function RecentAmendments({ refreshKey }: { refreshKey: number }) {
     };
   }, [user, refreshKey]);
 
+  useEffect(() => {
+    setVisibleCount(SUPPORT_PAGE_SIZE);
+  }, [amendments.length]);
+
   if (loading) return <SkeletonCard lines={3} />;
+  if (loadError && amendments.length === 0) {
+    return (
+      <RetryPanel
+        title="Amendment requests failed to load"
+        description="Retry your recent T24 requests without leaving this page."
+        onRetry={() => window.location.reload()}
+        icon={<AlertCircle className="h-4 w-4 text-primary" />}
+      />
+    );
+  }
   if (!amendments.length) {
     return (
       <EmptyState
@@ -731,7 +792,15 @@ function RecentAmendments({ refreshKey }: { refreshKey: number }) {
 
   return (
     <div className="space-y-3">
-      {amendments.map((amendment) => (
+      {loadError ? (
+        <RetryPanel
+          title="Using saved amendment requests"
+          description="The latest refresh failed, but your recent requests are still visible."
+          onRetry={() => window.location.reload()}
+          icon={<AlertCircle className="h-4 w-4 text-primary" />}
+        />
+      ) : null}
+      {amendments.slice(0, visibleCount).map((amendment) => (
         <div key={amendment.id} className="glass-card rounded-xl p-4">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -753,6 +822,19 @@ function RecentAmendments({ refreshKey }: { refreshKey: number }) {
           </p>
         </div>
       ))}
+      {amendments.length > visibleCount ? (
+        <div className="flex justify-center">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() =>
+              setVisibleCount((current) => current + SUPPORT_PAGE_SIZE)
+            }
+          >
+            Load more requests
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -768,18 +850,21 @@ export default function SupportPage() {
   return (
     <AppShell>
       <div className="max-w-3xl mx-auto space-y-6" data-ocid="support.page">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
-            <Headphones className="h-5 w-5 text-primary" />
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary/15 flex items-center justify-center">
+              <Headphones className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-xl font-display font-bold text-foreground">
+                IT Support
+              </h1>
+              <p className="text-sm text-muted-foreground">
+                Report incidents or request T24 profile amendments
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-xl font-display font-bold text-foreground">
-              IT Support
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Report incidents or request T24 profile amendments
-            </p>
-          </div>
+          <LiveSyncBadge eventNames={[]} />
         </div>
 
         <Tabs
