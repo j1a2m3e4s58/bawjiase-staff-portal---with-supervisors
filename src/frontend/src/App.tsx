@@ -1,4 +1,5 @@
 import { BrandLoader } from "@/components/BrandLoader";
+import { RouteLoadingBar } from "@/components/RouteLoadingBar";
 import { appBasePath, withBase } from "@/lib/app-base";
 import { AuthProvider, useAuth } from "@/store/auth";
 import {
@@ -316,6 +317,12 @@ const trainingRoute = createRoute({
   component: TrainingHubPage,
 });
 
+const handbookRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/handbook",
+  component: TrainingHubPage,
+});
+
 const trainingVideoRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/training/video/$id",
@@ -419,6 +426,7 @@ const routeTree = rootRoute.addChildren([
     directoryPastRoute,
     supervisorManagementRoute,
     trainingRoute,
+    handbookRoute,
     trainingVideoRoute,
     trainingDocumentRoute,
     trainingUploadVideoRoute,
@@ -454,6 +462,7 @@ export default function App() {
   return (
     <AuthProvider>
       <FrontendCrashMonitor />
+      <RouteLoadingBar />
       <RouterProvider router={router} />
     </AuthProvider>
   );

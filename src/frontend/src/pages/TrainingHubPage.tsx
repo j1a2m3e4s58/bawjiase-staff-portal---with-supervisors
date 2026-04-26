@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { LiveSyncBadge } from "@/components/LiveSyncBadge";
 import { PortalCard } from "@/components/PortalCard";
 import { RoleGuard } from "@/components/RoleGuard";
+import { RetryPanel } from "@/components/RetryPanel";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -92,7 +93,9 @@ export default function TrainingHubPage() {
   const canManageVideoModule = userHasPermission(user, "trainingVideos");
   const canManageDocumentModule = userHasPermission(user, "trainingDocuments");
   const canOpenTrainingAdmin = canManageVideoModule || canManageDocumentModule;
-  const [tab, setTab] = useState("videos");
+  const [tab, setTab] = useState(() =>
+    location.pathname.includes("/handbook") ? "documents" : "videos",
+  );
   const [videos, setVideos] = useState<TrainingVideo[]>(() => apiGetCachedTrainingVideos());
   const [documents, setDocuments] = useState<TrainingDocument[]>(() => apiGetCachedTrainingDocuments());
   const [videoProgress, setVideoProgress] = useState<Record<number, number>>(
@@ -103,6 +106,8 @@ export default function TrainingHubPage() {
   );
   const [loadingVideos, setLoadingVideos] = useState(() => apiGetCachedTrainingVideos().length === 0);
   const [loadingDocuments, setLoadingDocuments] = useState(() => apiGetCachedTrainingDocuments().length === 0);
+  const [videosError, setVideosError] = useState(false);
+  const [documentsError, setDocumentsError] = useState(false);
   const [query, setQuery] = useState("");
   const [visibilityFilter, setVisibilityFilter] = useState("all");
   const [mandatoryFilter, setMandatoryFilter] = useState("all");
@@ -122,11 +127,14 @@ export default function TrainingHubPage() {
     setLoadingVideos(true);
     setLoadingDocuments(true);
 
+    setTab(location.pathname.includes("/handbook") ? "documents" : "videos");
+
     async function loadVideos() {
       try {
         const items = await apiGetTrainingVideos();
         if (cancelled) return;
         setVideos(items);
+        setVideosError(false);
         const progressEntries = await Promise.all(
           items.map(async (video) => {
             try {
@@ -141,8 +149,11 @@ export default function TrainingHubPage() {
         setVideoProgress(Object.fromEntries(progressEntries));
       } catch {
         if (cancelled) return;
-        setVideos([]);
+        if (apiGetCachedTrainingVideos().length === 0) {
+          setVideos([]);
+        }
         setVideoProgress({});
+        setVideosError(true);
         toast.error("Training videos could not be loaded. Please try again.");
       } finally {
         if (!cancelled) setLoadingVideos(false);
@@ -154,6 +165,7 @@ export default function TrainingHubPage() {
         const items = await apiGetTrainingDocuments();
         if (cancelled) return;
         setDocuments(items);
+        setDocumentsError(false);
         const openedEntries = await Promise.all(
           items.map(async (doc) => {
             try {
@@ -168,8 +180,11 @@ export default function TrainingHubPage() {
         setDocumentOpened(Object.fromEntries(openedEntries));
       } catch {
         if (cancelled) return;
-        setDocuments([]);
+        if (apiGetCachedTrainingDocuments().length === 0) {
+          setDocuments([]);
+        }
         setDocumentOpened({});
+        setDocumentsError(true);
         toast.error(
           "Training documents could not be loaded. Please try again.",
         );
@@ -185,6 +200,34 @@ export default function TrainingHubPage() {
       cancelled = true;
     };
   }, [user?.id, location.pathname]);
+
+  async function retryVideos() {
+    setLoadingVideos(true);
+    try {
+      const items = await apiGetTrainingVideos();
+      setVideos(items);
+      setVideosError(false);
+    } catch {
+      setVideosError(true);
+      toast.error("Training videos could not be loaded. Please try again.");
+    } finally {
+      setLoadingVideos(false);
+    }
+  }
+
+  async function retryDocuments() {
+    setLoadingDocuments(true);
+    try {
+      const items = await apiGetTrainingDocuments();
+      setDocuments(items);
+      setDocumentsError(false);
+    } catch {
+      setDocumentsError(true);
+      toast.error("Training documents could not be loaded. Please try again.");
+    } finally {
+      setLoadingDocuments(false);
+    }
+  }
 
   const departments = useMemo(() => {
     const values = new Set<string>();
@@ -450,6 +493,15 @@ export default function TrainingHubPage() {
           </TabsList>
 
           <TabsContent value="videos" className="space-y-4">
+            {videosError ? (
+              <RetryPanel
+                title="Video feed needs a retry"
+                description="Training videos could not refresh just now. Retry this section without leaving the page."
+                onRetry={() => void retryVideos()}
+                icon={<Video className="h-4 w-4 text-primary" />}
+                compact
+              />
+            ) : null}
             {loadingVideos ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {[
@@ -596,6 +648,15 @@ export default function TrainingHubPage() {
           </TabsContent>
 
           <TabsContent value="documents" className="space-y-4">
+            {documentsError ? (
+              <RetryPanel
+                title="Document feed needs a retry"
+                description="Training documents could not refresh just now. Retry this section without leaving the page."
+                onRetry={() => void retryDocuments()}
+                icon={<BookOpen className="h-4 w-4 text-primary" />}
+                compact
+              />
+            ) : null}
             {loadingDocuments ? (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
                 {[

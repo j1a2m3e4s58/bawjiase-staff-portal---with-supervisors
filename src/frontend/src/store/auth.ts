@@ -42,7 +42,7 @@ const INACTIVITY_LIMIT_MS = 15 * 60 * 1000;
 const PRESENCE_PING_MS = 4 * 1000;
 const PRESENCE_IDLE_MS = 10 * 60 * 1000;
 const PRESENCE_CHECK_MS = 5 * 1000;
-const PROFILE_SYNC_MS = 5 * 1000;
+const PROFILE_SYNC_MS = 15 * 1000;
 
 function markActivity(timestamp = Date.now()) {
   localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
@@ -339,9 +339,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
     if (!user?.id) return;
 
     let cancelled = false;
+    let syncInFlight = false;
 
     const syncProfile = async () => {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible" || syncInFlight) return;
+      syncInFlight = true;
       try {
         const profile = await apiGetMyProfile(user.id);
         if (cancelled || !profile) return;
@@ -351,6 +353,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
         }
       } catch {
         // Keep current local auth state when sync is temporarily unavailable.
+      } finally {
+        syncInFlight = false;
       }
     };
 

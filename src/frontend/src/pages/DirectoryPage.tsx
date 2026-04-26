@@ -1,6 +1,7 @@
 import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { LiveSyncBadge } from "@/components/LiveSyncBadge";
+import { RetryPanel } from "@/components/RetryPanel";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +48,7 @@ import {
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 
-const DIRECTORY_REFRESH_MS = 2000;
+const DIRECTORY_REFRESH_MS = 5000;
 const DIRECTORY_PAGE_SIZE = 24;
 const USERS_UPDATED_EVENT = "bcb:users-updated";
 
@@ -465,6 +466,7 @@ export default function DirectoryPage() {
 
   const [staff, setStaff] = useState<User[]>(() => apiGetCachedActiveStaff());
   const [loading, setLoading] = useState(() => apiGetCachedActiveStaff().length === 0);
+  const [loadError, setLoadError] = useState(false);
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [editTarget, setEditTarget] = useState<User | null>(null);
@@ -479,10 +481,20 @@ export default function DirectoryPage() {
     let mounted = true;
 
     const loadStaff = async () => {
-      const data = await apiGetActiveStaff();
-      if (!mounted) return;
-      setStaff(data);
-      setLoading(false);
+      try {
+        const data = await apiGetActiveStaff();
+        if (!mounted) return;
+        setStaff(data);
+        setLoadError(false);
+      } catch {
+        if (!mounted) return;
+        setLoadError(true);
+        toast.error("Staff directory could not refresh. Please try again.");
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
     };
 
     void loadStaff();
@@ -634,6 +646,17 @@ export default function DirectoryPage() {
         <div className="flex justify-end">
           <LiveSyncBadge />
         </div>
+        {loadError ? (
+          <RetryPanel
+            title="Directory sync needs a retry"
+            description="The latest staff refresh failed. Your newest cached directory is still showing."
+            onRetry={() => void apiGetActiveStaff().then(setStaff).catch(() => {
+              setLoadError(true);
+              toast.error("Staff directory could not refresh. Please try again.");
+            })}
+            icon={<Users className="h-4 w-4 text-primary" />}
+          />
+        ) : null}
 
         {loading ? (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">

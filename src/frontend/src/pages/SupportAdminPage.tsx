@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { EmptyState } from "@/components/EmptyState";
 import { RoleGuard } from "@/components/RoleGuard";
+import { RetryPanel } from "@/components/RetryPanel";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -138,6 +139,7 @@ function SummaryStrip({
 function IncidentsSection() {
   const [loading, setLoading] = useState(true);
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectionNotice, setSelectionNotice] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState<number | null>(null);
@@ -150,8 +152,10 @@ function IncidentsSection() {
       const data = await apiGetIncidentReports();
       setIncidents(data);
       setSelected(new Set());
+      setLoadError(false);
     } catch {
       setIncidents([]);
+      setLoadError(true);
       toast.error("Incident reports could not be loaded.");
     } finally {
       setLoading(false);
@@ -215,6 +219,17 @@ function IncidentsSection() {
   }
 
   if (loading) return <SkeletonCard lines={6} />;
+
+  if (loadError && incidents.length === 0) {
+    return (
+      <RetryPanel
+        title="Incident reports failed to load"
+        description="Retry this section without leaving the IT Admin Center."
+        onRetry={() => void load()}
+        icon={<AlertCircle className="h-4 w-4 text-yellow-500" />}
+      />
+    );
+  }
 
   return (
     <div className="glass-card rounded-xl overflow-hidden">
@@ -407,6 +422,7 @@ function AmendmentsSection() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [amendments, setAmendments] = useState<ProfileAmendment[]>([]);
+  const [loadError, setLoadError] = useState(false);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectionNotice, setSelectionNotice] = useState(false);
   const [confirmResolve, setConfirmResolve] = useState<number | null>(null);
@@ -419,8 +435,10 @@ function AmendmentsSection() {
       const data = await apiGetProfileAmendments();
       setAmendments(data);
       setSelected(new Set());
+      setLoadError(false);
     } catch {
       setAmendments([]);
+      setLoadError(true);
       toast.error("Amendment requests could not be loaded.");
     } finally {
       setLoading(false);
@@ -484,6 +502,17 @@ function AmendmentsSection() {
   }
 
   if (loading) return <SkeletonCard lines={6} />;
+
+  if (loadError && amendments.length === 0) {
+    return (
+      <RetryPanel
+        title="Amendment requests failed to load"
+        description="Retry this section without leaving the IT Admin Center."
+        onRetry={() => void load()}
+        icon={<UserCog className="h-4 w-4 text-cyan-500" />}
+      />
+    );
+  }
 
   return (
     <div className="glass-card rounded-xl overflow-hidden">
@@ -689,6 +718,7 @@ export default function SupportAdminPage() {
   const canAccess = userHasPermission(user, "support");
   const [incidents, setIncidents] = useState<IncidentReport[]>([]);
   const [amendments, setAmendments] = useState<ProfileAmendment[]>([]);
+  const [summaryLoadError, setSummaryLoadError] = useState(false);
 
   useEffect(() => {
     if (!canAccess) {
@@ -703,11 +733,13 @@ export default function SupportAdminPage() {
         if (cancelled) return;
         setIncidents(nextIncidents);
         setAmendments(nextAmendments);
+        setSummaryLoadError(false);
       })
       .catch(() => {
         if (cancelled) return;
         setIncidents([]);
         setAmendments([]);
+        setSummaryLoadError(true);
       });
     return () => {
       cancelled = true;
@@ -745,7 +777,16 @@ export default function SupportAdminPage() {
           </Button>
         </div>
 
-        <SummaryStrip incidents={incidents} amendments={amendments} />
+        {summaryLoadError ? (
+          <RetryPanel
+            title="Support summary failed to refresh"
+            description="The IT Admin summary could not refresh just now. The sections below can still be retried separately."
+            onRetry={() => window.location.reload()}
+            icon={<Shield className="h-4 w-4 text-primary" />}
+          />
+        ) : (
+          <SummaryStrip incidents={incidents} amendments={amendments} />
+        )}
 
         <div className="space-y-6">
           <IncidentsSection />

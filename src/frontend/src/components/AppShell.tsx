@@ -129,6 +129,7 @@ function BCBBadge({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
         src={BRAND_LOGO}
         alt="Bawjiase Community Bank logo"
         className="h-full w-full object-cover"
+        decoding="async"
       />
     </div>
   );
@@ -576,7 +577,7 @@ function DesktopTopNav() {
       icon: <FileText className="h-4 w-4" />,
     },
     {
-      to: "/training",
+      to: "/handbook",
       label: "Handbook",
       icon: <BookOpen className="h-4 w-4" />,
     },

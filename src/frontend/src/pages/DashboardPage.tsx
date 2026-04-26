@@ -2,6 +2,7 @@ import { AppShell } from "@/components/AppShell";
 import { EmptyState } from "@/components/EmptyState";
 import { LiveSyncBadge } from "@/components/LiveSyncBadge";
 import { RoleGuard } from "@/components/RoleGuard";
+import { RetryPanel } from "@/components/RetryPanel";
 import { SkeletonCard } from "@/components/SkeletonCard";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -182,6 +183,8 @@ function AnnouncementAttachment({
           <img
             src={resolvedImageUrl}
             alt={ann.title}
+            loading="lazy"
+            decoding="async"
             className={
               compact
                 ? "h-44 w-full object-cover"
@@ -802,7 +805,7 @@ function OperationsPanel({
             icon={<FileText className="h-8 w-8" />}
           />
           <ShortcutTile
-            to="/training"
+            to="/handbook"
             label="Handbook"
             icon={<BookOpen className="h-8 w-8" />}
           />
@@ -961,30 +964,40 @@ export default function DashboardPage() {
   );
   const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const canAccessITArea = user?.department?.toUpperCase() === "IT";
 
   useEffect(() => {
     let cancelled = false;
 
+    async function refreshDashboard() {
+      const [nextOverview, nextAnnouncements] = await Promise.all([
+        apiGetDashboardOverview(),
+        apiGetAnnouncements(user?.id),
+      ]);
+      if (cancelled) return;
+      setOverview(nextOverview);
+      setAnnouncements(nextAnnouncements);
+      setLoadError(false);
+    }
+
     async function loadDashboard() {
       try {
-        const [nextOverview, nextAnnouncements] = await Promise.all([
-          apiGetDashboardOverview(),
-          apiGetAnnouncements(user?.id),
-        ]);
-        if (cancelled) return;
-        setOverview(nextOverview);
-        setAnnouncements(nextAnnouncements);
+        await refreshDashboard();
       } catch {
         if (cancelled) return;
-        setOverview(null);
-        setAnnouncements([]);
+        if (!apiGetCachedDashboardOverview()) {
+          setOverview(null);
+          setAnnouncements([]);
+        }
+        setLoadError(true);
         toast.error("Dashboard data could not be loaded. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
+    setLoading(true);
     setOverview(apiGetCachedDashboardOverview());
     void loadDashboard();
     const handleUsersUpdated = () => {
@@ -996,6 +1009,24 @@ export default function DashboardPage() {
       window.removeEventListener(USERS_UPDATED_EVENT, handleUsersUpdated);
     };
   }, [user?.id, user?.branch, user?.department, user?.role]);
+
+  const retryDashboard = async () => {
+    setLoading(true);
+    try {
+      const [nextOverview, nextAnnouncements] = await Promise.all([
+        apiGetDashboardOverview(),
+        apiGetAnnouncements(user?.id),
+      ]);
+      setOverview(nextOverview);
+      setAnnouncements(nextAnnouncements);
+      setLoadError(false);
+    } catch {
+      setLoadError(true);
+      toast.error("Dashboard data could not be loaded. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <AppShell>
@@ -1013,6 +1044,14 @@ export default function DashboardPage() {
             <div className="flex justify-end">
               <LiveSyncBadge />
             </div>
+            {loadError ? (
+              <RetryPanel
+                title="Dashboard sync needs a retry"
+                description="The latest dashboard refresh failed, so you are seeing the newest cached view."
+                onRetry={() => void retryDashboard()}
+                icon={<BarChart3 className="h-4 w-4 text-primary" />}
+              />
+            ) : null}
             <section className="grid grid-cols-1 xl:grid-cols-[2fr_1fr] gap-6">
               <div className="space-y-6">
                 <WelcomePanel fullname={user?.fullname ?? "Staff"} />
