@@ -135,6 +135,12 @@
           }
         }
 
+        if (window.__BCB_APP_READY__) {
+          window.sessionStorage.removeItem(RELOAD_KEY);
+          hideFallback();
+          return;
+        }
+
         window.addEventListener(APP_READY_EVENT, () => {
           window.sessionStorage.removeItem(RELOAD_KEY);
           hideFallback();

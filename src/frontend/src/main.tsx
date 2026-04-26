@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { StartupSplash } from "./components/StartupSplash";
@@ -15,6 +16,10 @@ declare global {
   interface BigInt {
     toJSON(): string;
   }
+
+  interface Window {
+    __BCB_APP_READY__?: boolean;
+  }
 }
 
 const queryClient = new QueryClient({
@@ -26,19 +31,23 @@ const queryClient = new QueryClient({
   },
 });
 
+function AppReadySignal() {
+  useEffect(() => {
+    window.__BCB_APP_READY__ = true;
+    window.dispatchEvent(new CustomEvent(APP_READY_EVENT));
+  }, []);
+
+  return null;
+}
+
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <QueryClientProvider client={queryClient}>
+    <AppReadySignal />
     <StartupSplash>
       <App />
     </StartupSplash>
   </QueryClientProvider>,
 );
-
-window.requestAnimationFrame(() => {
-  window.requestAnimationFrame(() => {
-    window.dispatchEvent(new CustomEvent(APP_READY_EVENT));
-  });
-});
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
