@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
+  apiGetCachedArchivedStaff,
   apiDeleteStaff,
   apiGetArchivedStaff,
   apiRestoreStaff,
@@ -147,9 +148,10 @@ function PastStaffRow({
 export default function PastStaffPage() {
   const canAccess = useHasRole(["SuperAdmin", "HRAdmin"]);
   const navigate = useNavigate();
+  const cachedStaff = apiGetCachedArchivedStaff();
 
-  const [staff, setStaff] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<User[]>(() => cachedStaff);
+  const [loading, setLoading] = useState(cachedStaff.length === 0);
   const [restoreTarget, setRestoreTarget] = useState<User | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [busy, setBusy] = useState(false);
@@ -164,6 +166,9 @@ export default function PastStaffPage() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
+      if (staff.length === 0) {
+        setLoading(true);
+      }
       try {
         const data = await apiGetArchivedStaff();
         if (cancelled) return;
@@ -181,7 +186,7 @@ export default function PastStaffPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [staff.length]);
 
   async function handleRestoreConfirm() {
     if (!restoreTarget) return;

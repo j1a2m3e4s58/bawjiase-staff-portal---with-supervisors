@@ -1569,6 +1569,12 @@ export async function apiGetArchivedStaff(): Promise<User[]> {
   }
 }
 
+export function apiGetCachedArchivedStaff(): User[] {
+  return _mockUsers
+    .filter((u) => isPortalStaff(u) && u.isArchived)
+    .sort((a, b) => a.fullname.localeCompare(b.fullname));
+}
+
 export async function apiGetStaffMember(userId: string): Promise<User | null> {
   await refreshUsersCache();
   return fetchUserById(userId);
