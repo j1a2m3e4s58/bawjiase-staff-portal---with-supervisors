@@ -299,13 +299,7 @@ function handleSessionExpired(sessionToken?: string | null) {
   if (sessionToken && activeToken && sessionToken !== activeToken) {
     return;
   }
-  apiSetCurrentAuthUser(null);
   if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(AUTH_STORAGE_KEY);
-  } catch {
-    // ignore storage failures
-  }
   window.dispatchEvent(new CustomEvent(SESSION_EXPIRED_EVENT));
 }
 

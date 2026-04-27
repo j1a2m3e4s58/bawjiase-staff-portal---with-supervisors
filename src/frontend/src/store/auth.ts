@@ -183,6 +183,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const handleSessionExpired = () => {
+      const currentUser = userRef.current;
+      if (!currentUser) return;
+      const lastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
+      const recentlyActive =
+        document.visibilityState === "visible" &&
+        Number.isFinite(lastActivity) &&
+        lastActivity > 0 &&
+        Date.now() - lastActivity < INACTIVITY_LIMIT_MS;
+
+      if (recentlyActive) {
+        markActivity(Date.now());
+        return;
+      }
+
       authSessionRef.current += 1;
       userRef.current = null;
       apiSetCurrentAuthUser(null);
