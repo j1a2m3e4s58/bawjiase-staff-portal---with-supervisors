@@ -157,7 +157,7 @@ export default function AnnouncementsTrashPage() {
   const navigate = useNavigate();
   const cachedTrashed = apiGetCachedTrashedAnnouncements();
   const [trashed, setTrashed] = useState<Announcement[]>(() => cachedTrashed);
-  const [loading, setLoading] = useState(cachedTrashed.length === 0);
+  const [loading, setLoading] = useState(false);
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
   const [branchFilter, setBranchFilter] = useState("ALL");
   const [departmentFilter, setDepartmentFilter] = useState("ALL");
@@ -167,9 +167,6 @@ export default function AnnouncementsTrashPage() {
     let cancelled = false;
 
     async function loadTrash() {
-      if (trashed.length === 0) {
-        setLoading(true);
-      }
       try {
         const data = await apiGetTrashedAnnouncements();
         if (cancelled) return;
@@ -187,7 +184,7 @@ export default function AnnouncementsTrashPage() {
     return () => {
       cancelled = true;
     };
-  }, [trashed.length]);
+  }, []);
 
   async function handleRestore(id: number) {
     const result = await apiRestoreAnnouncement(id);
