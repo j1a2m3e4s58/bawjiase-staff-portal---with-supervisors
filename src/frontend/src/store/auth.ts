@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import {
   apiGetMyProfile,
   apiLogout,
+  apiSetCurrentAuthUser,
   apiSetPresenceOffline,
   apiSyncCachedUser,
   apiUpdateLastSeen,
@@ -95,6 +96,8 @@ function saveStoredUser(user: User, remember: boolean, updateActivity = true) {
     if (remember) {
       const expiry = Date.now() + REMEMBER_DAYS * 24 * 60 * 60 * 1000;
       localStorage.setItem(AUTH_EXPIRY_KEY, String(expiry));
+    } else {
+      localStorage.removeItem(AUTH_EXPIRY_KEY);
     }
   } catch {
     // Ignore storage failures to keep the in-memory session alive.
@@ -168,6 +171,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     userRef.current = user;
+  }, [user]);
+
+  useEffect(() => {
+    apiSetCurrentAuthUser(user);
   }, [user]);
 
   useEffect(() => {

@@ -46,6 +46,7 @@ const TRAINING_VIDEOS_STORE_KEY = "bcb_training_videos_cache";
 const TRAINING_DOCUMENTS_STORE_KEY = "bcb_training_documents_cache";
 const NOTIFICATIONS_STORE_KEY = "bcb_notifications_cache";
 const AUDIT_LOGS_STORE_KEY = "bcb_audit_logs_cache";
+const STAFF_STATS_STORE_KEY = "bcb_staff_stats_cache";
 const USERS_UPDATED_EVENT = "bcb:users-updated";
 export const ANNOUNCEMENTS_UPDATED_EVENT = "bcb:announcements-updated";
 export const FORMS_UPDATED_EVENT = "bcb:forms-updated";
@@ -58,6 +59,8 @@ const REQUEST_ACTIVITY_EVENT = "bcb:request-activity";
 const ACTIVITY_LOG_UPDATED_EVENT = "bcb:activity-log-updated";
 const ACTIVITY_LOG_KEY = "bcb_activity_log";
 const ACTIVITY_LOG_LIMIT = 40;
+let _liveAuthUser: User | null = null;
+let _liveSessionToken: string | null = null;
 
 export interface ActivityLogEntry {
   id: string;
@@ -142,6 +145,54 @@ function persistActivityLog(entries: ActivityLogEntry[]) {
   }
 }
 
+function loadStaffStatsCache(): StaffStats | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(STAFF_STATS_STORE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StaffStats>;
+    return {
+      total: Number(parsed.total ?? 0),
+      active: Number(parsed.active ?? 0),
+      archived: Number(parsed.archived ?? 0),
+      byDepartment: (parsed.byDepartment as Record<string, number>) ?? {},
+      byBranch: (parsed.byBranch as Record<string, number>) ?? {},
+      byRole: (parsed.byRole as Record<string, number>) ?? {},
+    };
+  } catch {
+    return null;
+  }
+}
+
+function persistStaffStatsCache(stats: StaffStats) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(STAFF_STATS_STORE_KEY, JSON.stringify(stats));
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function deriveLocalStaffStats(): StaffStats {
+  const active = _mockUsers.filter((u) => !u.isArchived && u.isActive);
+  const byDept: Record<string, number> = {};
+  const byBranch: Record<string, number> = {};
+  const byRole: Record<string, number> = {};
+  for (const u of active) {
+    byDept[u.department] = (byDept[u.department] ?? 0) + 1;
+    byBranch[u.branch] = (byBranch[u.branch] ?? 0) + 1;
+    byRole[u.role] = (byRole[u.role] ?? 0) + 1;
+  }
+  return {
+    total: _mockUsers.length,
+    active: active.length,
+    archived: _mockUsers.filter((u) => u.isArchived).length,
+    byDepartment: byDept,
+    byBranch: byBranch,
+    byRole: byRole,
+  };
+}
+
 function serializeContentCache<T>(items: T[]): string {
   return JSON.stringify(items, (_key, value) =>
     typeof value === "bigint" ? value.toString() : value,
@@ -198,6 +249,7 @@ export function apiClearActivityLog() {
 }
 
 function getStoredSessionToken(): string | null {
+  if (_liveSessionToken) return _liveSessionToken;
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
@@ -218,12 +270,18 @@ function getAuthHeaders(
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
+export function apiSetCurrentAuthUser(user: User | null) {
+  _liveAuthUser = user;
+  _liveSessionToken = user?.sessionToken ?? null;
+}
+
 function withCacheBuster(url: string): string {
   const separator = url.includes("?") ? "&" : "?";
   return `${url}${separator}_ts=${Date.now()}`;
 }
 
 function handleSessionExpired() {
+  apiSetCurrentAuthUser(null);
   if (typeof window === "undefined") return;
   try {
     window.localStorage.removeItem(AUTH_STORAGE_KEY);
@@ -751,6 +809,7 @@ const _recentUserOverrides = new Map<
 function persistUsersStore(notify = true) {
   if (typeof window === "undefined") return;
   window.localStorage.setItem(USERS_STORE_KEY, serializeUsers(_mockUsers));
+  persistStaffStatsCache(deriveLocalStaffStats());
   if (notify) {
     window.dispatchEvent(new CustomEvent(USERS_UPDATED_EVENT));
   }
@@ -814,7 +873,7 @@ function applyRecentUserOverrides(users: User[]): User[] {
 
 function reconcileServerUser(user: User): User {
   const existing = _mockUsers.find((item) => item.id === user.id);
-  const currentAuth = getStoredAuthUser();
+  const currentAuth = _liveAuthUser ?? getStoredAuthUser();
   const currentToken = getStoredSessionToken();
   const sessionToken =
     existing?.sessionToken ??
@@ -1386,6 +1445,7 @@ export async function apiLogin(
     }
     user.sessionToken = sessionToken;
     user.isOnlineNow = true;
+    apiSetCurrentAuthUser(user);
     const sharedLastSeen = await pingSharedPresence(user.id);
     if (sharedLastSeen) {
       user.lastSeen = sharedLastSeen;
@@ -1436,6 +1496,7 @@ export async function apiLogout(
   } catch {
     // Ignore logout API failures so the local session can still clear.
   }
+  apiSetCurrentAuthUser(null);
 }
 
 export async function apiRequestPasswordReset(
@@ -1629,7 +1690,7 @@ export async function apiGetStaffStats(): Promise<StaffStats> {
   await delay(300);
   try {
     const payload = await getMailApiJson("/staff/stats");
-    return {
+    const stats = {
       total: Number(payload.total ?? 0),
       active: Number(payload.active ?? 0),
       archived: Number(payload.archived ?? 0),
@@ -1637,24 +1698,12 @@ export async function apiGetStaffStats(): Promise<StaffStats> {
       byBranch: (payload.byBranch as Record<string, number>) ?? {},
       byRole: (payload.byRole as Record<string, number>) ?? {},
     };
+    persistStaffStatsCache(stats);
+    return stats;
   } catch {
-    const active = _mockUsers.filter((u) => !u.isArchived && u.isActive);
-    const byDept: Record<string, number> = {};
-    const byBranch: Record<string, number> = {};
-    const byRole: Record<string, number> = {};
-    for (const u of active) {
-      byDept[u.department] = (byDept[u.department] ?? 0) + 1;
-      byBranch[u.branch] = (byBranch[u.branch] ?? 0) + 1;
-      byRole[u.role] = (byRole[u.role] ?? 0) + 1;
-    }
-    return {
-      total: _mockUsers.length,
-      active: active.length,
-      archived: _mockUsers.filter((u) => u.isArchived).length,
-      byDepartment: byDept,
-      byBranch: byBranch,
-      byRole: byRole,
-    };
+    const cached = loadStaffStatsCache();
+    if (cached) return cached;
+    return deriveLocalStaffStats();
   }
 }
 
@@ -1739,6 +1788,7 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
 }
 
 export function apiGetCachedDashboardOverview(): DashboardOverview {
+  const cachedStats = loadStaffStatsCache();
   const activeStaff = _mockUsers.filter(
     (u) =>
       u.isActive &&
@@ -1758,15 +1808,29 @@ export function apiGetCachedDashboardOverview(): DashboardOverview {
   );
   const departmentCounts = new Map<string, number>();
 
-  for (const user of activeStaff) {
-    const branch = user.branch.trim().toUpperCase();
-    branchCounts.set(branch, (branchCounts.get(branch) ?? 0) + 1);
-    if (user.role !== "SuperAdmin") {
-      const department = user.department.trim().toUpperCase() || "OTHER";
+  if (cachedStats) {
+    for (const [branch, value] of Object.entries(cachedStats.byBranch ?? {})) {
+      branchCounts.set(branch.trim().toUpperCase(), Number(value ?? 0));
+    }
+    for (const [department, value] of Object.entries(
+      cachedStats.byDepartment ?? {},
+    )) {
       departmentCounts.set(
-        department,
-        (departmentCounts.get(department) ?? 0) + 1,
+        department.trim().toUpperCase() || "OTHER",
+        Number(value ?? 0),
       );
+    }
+  } else {
+    for (const user of activeStaff) {
+      const branch = user.branch.trim().toUpperCase();
+      branchCounts.set(branch, (branchCounts.get(branch) ?? 0) + 1);
+      if (user.role !== "SuperAdmin") {
+        const department = user.department.trim().toUpperCase() || "OTHER";
+        departmentCounts.set(
+          department,
+          (departmentCounts.get(department) ?? 0) + 1,
+        );
+      }
     }
   }
 
@@ -1794,7 +1858,7 @@ export function apiGetCachedDashboardOverview(): DashboardOverview {
   );
 
   return {
-    totalStaff: activeStaff.length,
+    totalStaff: cachedStats?.active ?? activeStaff.length,
     activeBranches: branchDistribution.filter((item) => item.value > 0).length,
     openOperations: supportPending,
     resolutionRate: ticketFlow
@@ -2673,6 +2737,7 @@ export interface AdminTrainingOverview {
 }
 
 function getStoredAuthUser(): User | null {
+  if (_liveAuthUser) return _liveAuthUser;
   if (typeof window === "undefined") return null;
   try {
     const raw = window.localStorage.getItem(AUTH_STORAGE_KEY);
