@@ -475,8 +475,8 @@ export default function FormsPage() {
   const manageableBranches = getManageableBranches(user);
   const actingScope = formatManageableScopeSummary(user);
 
-  const [forms, setForms] = useState<PortalForm[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [forms, setForms] = useState<PortalForm[]>(() => apiGetCachedForms(user));
+  const [isLoading, setIsLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [visibleCount, setVisibleCount] = useState(FORMS_PAGE_SIZE);
   const [search, setSearch] = useState("");

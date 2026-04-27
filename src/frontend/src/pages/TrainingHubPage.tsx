@@ -96,16 +96,18 @@ export default function TrainingHubPage() {
   const [tab, setTab] = useState(() =>
     location.pathname.includes("/handbook") ? "documents" : "videos",
   );
-  const [videos, setVideos] = useState<TrainingVideo[]>([]);
-  const [documents, setDocuments] = useState<TrainingDocument[]>([]);
+  const [videos, setVideos] = useState<TrainingVideo[]>(() => apiGetCachedTrainingVideos());
+  const [documents, setDocuments] = useState<TrainingDocument[]>(() =>
+    apiGetCachedTrainingDocuments(),
+  );
   const [videoProgress, setVideoProgress] = useState<Record<number, number>>(
     {},
   );
   const [documentOpened, setDocumentOpened] = useState<Record<number, boolean>>(
     {},
   );
-  const [loadingVideos, setLoadingVideos] = useState(true);
-  const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [loadingVideos, setLoadingVideos] = useState(false);
+  const [loadingDocuments, setLoadingDocuments] = useState(false);
   const [videosError, setVideosError] = useState(false);
   const [documentsError, setDocumentsError] = useState(false);
   const [query, setQuery] = useState("");
@@ -124,9 +126,6 @@ export default function TrainingHubPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingVideos(true);
-    setLoadingDocuments(true);
-
     setTab(location.pathname.includes("/handbook") ? "documents" : "videos");
 
     async function loadVideos() {

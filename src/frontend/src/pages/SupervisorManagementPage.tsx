@@ -10,6 +10,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import {
+  apiGetCachedActiveStaff,
   apiGetActiveStaff,
   apiUpdateStaff,
   formatAudienceSummary,
@@ -40,8 +41,8 @@ function normalizedUserPermissions(user: User | null): UserPermissions {
 export default function SupervisorManagementPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [staff, setStaff] = useState<User[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [staff, setStaff] = useState<User[]>(() => apiGetCachedActiveStaff());
+  const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState("");
   const [selectedId, setSelectedId] = useState<string>("");
   const [role, setRole] = useState<User["role"]>("GeneralStaff");

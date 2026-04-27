@@ -40,6 +40,11 @@ const MAIL_API_ROOT = MAIL_API_URL.replace(/\/api$/, "");
 const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
+const ANNOUNCEMENTS_STORE_KEY = "bcb_announcements_cache";
+const FORMS_STORE_KEY = "bcb_forms_cache";
+const TRAINING_VIDEOS_STORE_KEY = "bcb_training_videos_cache";
+const TRAINING_DOCUMENTS_STORE_KEY = "bcb_training_documents_cache";
+const NOTIFICATIONS_STORE_KEY = "bcb_notifications_cache";
 const USERS_UPDATED_EVENT = "bcb:users-updated";
 export const ANNOUNCEMENTS_UPDATED_EVENT = "bcb:announcements-updated";
 export const FORMS_UPDATED_EVENT = "bcb:forms-updated";
@@ -131,6 +136,38 @@ function persistActivityLog(entries: ActivityLogEntry[]) {
   try {
     window.localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(entries));
     window.dispatchEvent(new CustomEvent(ACTIVITY_LOG_UPDATED_EVENT));
+  } catch {
+    // ignore storage failures
+  }
+}
+
+function serializeContentCache<T>(items: T[]): string {
+  return JSON.stringify(items, (_key, value) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
+}
+
+function loadContentCache<T>(
+  key: string,
+  fallback: T[],
+  revive: (raw: Record<string, unknown>) => T,
+): T[] {
+  if (typeof window === "undefined") return fallback;
+  try {
+    const raw = window.localStorage.getItem(key);
+    if (!raw) return ENABLE_SEEDED_FALLBACK ? fallback : [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return ENABLE_SEEDED_FALLBACK ? fallback : [];
+    return parsed.map((item) => revive(item as Record<string, unknown>));
+  } catch {
+    return ENABLE_SEEDED_FALLBACK ? fallback : [];
+  }
+}
+
+function persistContentCache<T>(key: string, items: T[]) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(key, serializeContentCache(items));
   } catch {
     // ignore storage failures
   }
@@ -1032,6 +1069,7 @@ function deserializeAuditLog(raw: Record<string, unknown>): AuditLog {
 
 function replaceSharedAnnouncements(items: AnnouncementWithPoll[]) {
   _announcements.splice(0, _announcements.length, ...items);
+  persistContentCache(ANNOUNCEMENTS_STORE_KEY, _announcements);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
   }
@@ -1039,6 +1077,7 @@ function replaceSharedAnnouncements(items: AnnouncementWithPoll[]) {
 
 function replaceSharedForms(items: PortalForm[]) {
   _forms.splice(0, _forms.length, ...items);
+  persistContentCache(FORMS_STORE_KEY, _forms);
   if (typeof window !== "undefined") {
     window.dispatchEvent(new CustomEvent(FORMS_UPDATED_EVENT));
   }
@@ -1046,10 +1085,12 @@ function replaceSharedForms(items: PortalForm[]) {
 
 function replaceSharedTrainingVideos(items: TrainingVideo[]) {
   _trainingVideos.splice(0, _trainingVideos.length, ...items);
+  persistContentCache(TRAINING_VIDEOS_STORE_KEY, _trainingVideos);
 }
 
 function replaceSharedTrainingDocuments(items: TrainingDocument[]) {
   _trainingDocuments.splice(0, _trainingDocuments.length, ...items);
+  persistContentCache(TRAINING_DOCUMENTS_STORE_KEY, _trainingDocuments);
 }
 
 function getDismissalStore(): Record<string, number[]> {
@@ -1802,7 +1843,7 @@ export function apiGetCachedDashboardOverview(): DashboardOverview {
 
 // ── Announcements ─────────────────────────────────────────────────────────────
 
-const _announcements: AnnouncementWithPoll[] = [
+const SEEDED_ANNOUNCEMENTS: AnnouncementWithPoll[] = [
   {
     id: 1,
     title: "BCB Annual General Meeting 2026",
@@ -1890,7 +1931,12 @@ export interface CreateAnnouncementRequest {
 export interface UpdateAnnouncementRequest
   extends Partial<CreateAnnouncementRequest> {}
 
-let _announcementIdCounter = _announcements.length + 1;
+const _announcements: AnnouncementWithPoll[] = loadContentCache(
+  ANNOUNCEMENTS_STORE_KEY,
+  SEEDED_ANNOUNCEMENTS,
+  deserializeAnnouncement,
+);
+let _announcementIdCounter = Math.max(0, ..._announcements.map((item) => item.id)) + 1;
 let _pollIdCounter = 2;
 let _pollOptionIdCounter = 4;
 const _announcementVotes = new Map<string, number>();
@@ -2217,7 +2263,11 @@ export async function apiVoteAnnouncementPoll(
 
 // ── Notifications ─────────────────────────────────────────────────────────────
 
-const _notifications: Notification[] = [];
+let _notifications: Notification[] = loadContentCache(
+  NOTIFICATIONS_STORE_KEY,
+  [],
+  deserializeNotification,
+);
 
 export async function apiGetUnreadNotificationCount(): Promise<number> {
   await delay(200);
@@ -2238,12 +2288,18 @@ export async function apiGetNotifications(): Promise<Notification[]> {
           deserializeNotification,
         )
       : [];
+    _notifications = items;
+    persistContentCache(NOTIFICATIONS_STORE_KEY, _notifications);
     return items.sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
   } catch {
     return [..._notifications].sort(
       (a, b) => Number(b.createdAt) - Number(a.createdAt),
     );
   }
+}
+
+export function apiGetCachedNotifications(): Notification[] {
+  return [..._notifications].sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 }
 
 export async function apiMarkNotificationRead(id: number): Promise<boolean> {
@@ -2255,6 +2311,7 @@ export async function apiMarkNotificationRead(id: number): Promise<boolean> {
   }
   const notif = _notifications.find((n) => n.id === id);
   if (notif) notif.isRead = true;
+  persistContentCache(NOTIFICATIONS_STORE_KEY, _notifications);
   return !!notif;
 }
 
@@ -2266,6 +2323,7 @@ export async function apiMarkAllNotificationsRead(): Promise<void> {
     // Fall back to local state below.
   }
   for (const n of _notifications) n.isRead = true;
+  persistContentCache(NOTIFICATIONS_STORE_KEY, _notifications);
 }
 
 export async function apiDeleteNotification(id: number): Promise<boolean> {
@@ -2278,6 +2336,7 @@ export async function apiDeleteNotification(id: number): Promise<boolean> {
   const idx = _notifications.findIndex((n) => n.id === id);
   if (idx >= 0) {
     _notifications.splice(idx, 1);
+    persistContentCache(NOTIFICATIONS_STORE_KEY, _notifications);
     return true;
   }
   return false;
@@ -2285,7 +2344,7 @@ export async function apiDeleteNotification(id: number): Promise<boolean> {
 
 // ── Forms Centre ──────────────────────────────────────────────────────────────
 
-let _forms: PortalForm[] = [
+const SEEDED_FORMS: PortalForm[] = [
   {
     id: 4,
     title: "OATH OF SECRECY",
@@ -2373,7 +2432,13 @@ let _forms: PortalForm[] = [
   },
 ];
 
-let _formIdCounter = Math.max(..._forms.map((form) => form.id)) + 1;
+let _forms: PortalForm[] = loadContentCache(
+  FORMS_STORE_KEY,
+  SEEDED_FORMS,
+  deserializeForm,
+);
+
+let _formIdCounter = Math.max(0, ..._forms.map((form) => form.id)) + 1;
 
 export interface CreateFormRequest {
   title: string;
@@ -2797,7 +2862,7 @@ function eligibleUsersForDocument(doc: TrainingDocument) {
   return getPortalActiveUsers().filter((user) => userMatchesScopedItem(user, doc));
 }
 
-const _trainingVideos: TrainingVideo[] = [
+const SEEDED_TRAINING_VIDEOS: TrainingVideo[] = [
   {
     id: 1,
     title: "Cybersecurity Fundamentals for Bank Staff",
@@ -2888,7 +2953,7 @@ const _trainingVideos: TrainingVideo[] = [
   },
 ];
 
-const _trainingDocuments: TrainingDocument[] = [
+const SEEDED_TRAINING_DOCUMENTS: TrainingDocument[] = [
   {
     id: 1,
     title: "BCB Staff Handbook 2026",
@@ -2976,10 +3041,21 @@ const _trainingDocuments: TrainingDocument[] = [
   },
 ];
 
+const _trainingVideos: TrainingVideo[] = loadContentCache(
+  TRAINING_VIDEOS_STORE_KEY,
+  SEEDED_TRAINING_VIDEOS,
+  deserializeTrainingVideo,
+);
+const _trainingDocuments: TrainingDocument[] = loadContentCache(
+  TRAINING_DOCUMENTS_STORE_KEY,
+  SEEDED_TRAINING_DOCUMENTS,
+  deserializeTrainingDocument,
+);
+
 const _videoProgress: Record<string, VideoProgress> = {};
 const _documentOpens: Record<string, bigint> = {};
-let _videoIdCounter = _trainingVideos.length + 1;
-let _docIdCounter = _trainingDocuments.length + 1;
+let _videoIdCounter = Math.max(0, ..._trainingVideos.map((item) => item.id)) + 1;
+let _docIdCounter = Math.max(0, ..._trainingDocuments.map((item) => item.id)) + 1;
 
 function videoProgressKey(userId: string, videoId: number) {
   return `${userId}-${videoId}`;

@@ -961,12 +961,12 @@ function StaffDistribution({ overview }: { overview: DashboardOverview }) {
 export default function DashboardPage() {
   const { user } = useAuth();
   const [overview, setOverview] = useState<DashboardOverview | null>(() =>
-    null,
+    apiGetCachedDashboardOverview(),
   );
   const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>(() =>
-    [],
+    apiGetCachedAnnouncements(user?.id),
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const canAccessITArea = user?.department?.toUpperCase() === "IT";
 
@@ -1000,8 +1000,6 @@ export default function DashboardPage() {
       }
     }
 
-    setOverview(null);
-    setAnnouncements([]);
     void loadDashboard();
     const handleUsersUpdated = () => {
       setOverview(apiGetCachedDashboardOverview());

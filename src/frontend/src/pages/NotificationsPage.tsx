@@ -4,6 +4,7 @@ import { EmptyState } from "@/components/EmptyState";
 import { SkeletonRow } from "@/components/SkeletonCard";
 import { Button } from "@/components/ui/button";
 import {
+  apiGetCachedNotifications,
   apiDeleteNotification,
   apiGetNotifications,
   apiMarkAllNotificationsRead,
@@ -165,8 +166,10 @@ function NotifItem({
 
 export default function NotificationsPage() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [notifications, setNotifications] = useState<Notification[]>(() =>
+    apiGetCachedNotifications(),
+  );
+  const [isLoading, setIsLoading] = useState(false);
   const [isMarkingAll, setIsMarkingAll] = useState(false);
   const [selectionMode, setSelectionMode] = useState(false);
   const [selectedNotificationId, setSelectedNotificationId] = useState<
