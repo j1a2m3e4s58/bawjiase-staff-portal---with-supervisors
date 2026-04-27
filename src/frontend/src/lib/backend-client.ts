@@ -946,12 +946,38 @@ async function fetchUserById(userId: string): Promise<User | null> {
   }
 }
 
+async function probeUserSession(
+  userId: string,
+  sessionTokenOverride?: string | null,
+): Promise<User | null> {
+  try {
+    const payload = await getOptionalApi(
+      `/users/${encodeURIComponent(userId)}`,
+      sessionTokenOverride,
+    );
+    const rawUser = payload?.user as WireUser | undefined;
+    if (!rawUser) return null;
+    const user = deserializeUser(rawUser);
+    mergeUsersCache([user], false);
+    return _mockUsers.find((item) => item.id === user.id) ?? user;
+  } catch {
+    return null;
+  }
+}
+
 function upsertCachedUser(user: User) {
   mergeUsersCache([user], true);
 }
 
 export function apiSyncCachedUser(user: User) {
   upsertCachedUser(user);
+}
+
+export async function apiProbeCurrentSession(
+  userId: string,
+  sessionTokenOverride?: string | null,
+): Promise<User | null> {
+  return probeUserSession(userId, sessionTokenOverride);
 }
 
 function contentId(value: unknown): number {
@@ -1480,8 +1506,10 @@ export async function apiUpdateLastSeen(
   userId: string,
 ): Promise<ApiResult<User>> {
   await delay(120);
-  await refreshUsersCache();
-  const user = _mockUsers.find((item) => item.id === userId && item.isActive);
+  const liveUser =
+    _mockUsers.find((item) => item.id === userId && item.isActive) ??
+    (_liveAuthUser?.id === userId && _liveAuthUser.isActive ? _liveAuthUser : null);
+  const user = liveUser ? { ...liveUser } : null;
   if (!user || user.isArchived) return err("User not found");
   user.lastSeen = currentPresenceTimestampMs();
   user.isOnlineNow = true;
@@ -1489,7 +1517,7 @@ export async function apiUpdateLastSeen(
   if (sharedLastSeen) {
     user.lastSeen = sharedLastSeen;
   }
-  persistUsersStore(false);
+  upsertCachedUser(user);
   return ok({ ...user });
 }
 

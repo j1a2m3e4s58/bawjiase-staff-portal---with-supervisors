@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 import {
   apiGetMyProfile,
   apiLogout,
+  apiProbeCurrentSession,
   apiSetCurrentAuthUser,
   apiSetPresenceOffline,
   apiSyncCachedUser,
@@ -160,6 +161,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading] = useState(false);
   const authSessionRef = useRef(0);
   const userRef = useRef<User | null>(user);
+  const sessionRecoveryRef = useRef(false);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
@@ -183,9 +185,40 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const handleSessionExpired = () => {
-      authSessionRef.current += 1;
-      setUser(null);
-      clearStoredUser();
+      const currentUser = userRef.current;
+      if (!currentUser || sessionRecoveryRef.current) {
+        authSessionRef.current += 1;
+        userRef.current = null;
+        setUser(null);
+        clearStoredUser();
+        return;
+      }
+
+      sessionRecoveryRef.current = true;
+      void apiProbeCurrentSession(currentUser.id, currentUser.sessionToken ?? null)
+        .then((recoveredUser) => {
+          if (!recoveredUser) {
+            authSessionRef.current += 1;
+            userRef.current = null;
+            setUser(null);
+            clearStoredUser();
+            return;
+          }
+          const mergedUser = {
+            ...recoveredUser,
+            sessionToken:
+              recoveredUser.sessionToken ??
+              currentUser.sessionToken,
+          };
+          userRef.current = mergedUser;
+          apiSyncCachedUser(mergedUser);
+          setUser(mergedUser);
+          const remember = !!localStorage.getItem(AUTH_EXPIRY_KEY);
+          saveStoredUser(mergedUser, remember, false);
+        })
+        .finally(() => {
+          sessionRecoveryRef.current = false;
+        });
     };
 
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
