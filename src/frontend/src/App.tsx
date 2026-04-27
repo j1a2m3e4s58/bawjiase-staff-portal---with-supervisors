@@ -276,7 +276,12 @@ function GuestGuard() {
 // ── Route Tree ─────────────────────────────────────────────────────────────────
 
 const rootRoute = createRootRoute({
-  component: () => <Outlet />,
+  component: () => (
+    <>
+      <RouteLoadingBar />
+      <Outlet />
+    </>
+  ),
   notFoundComponent: RouteNotFoundComponent,
   errorComponent: RouteErrorComponent,
 });
@@ -518,9 +523,7 @@ export default function App() {
   return (
     <AuthProvider>
       <FrontendCrashMonitor />
-      <RouterProvider router={router}>
-        <RouteLoadingBar />
-      </RouterProvider>
+      <RouterProvider router={router} />
     </AuthProvider>
   );
 }

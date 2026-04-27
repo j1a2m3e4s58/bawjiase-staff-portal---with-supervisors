@@ -13,7 +13,9 @@ export function isPageReload(): boolean {
     return false;
   }
 
-  const entries = performance.getEntriesByType("navigation");
+  const entries = performance.getEntriesByType(
+    "navigation",
+  ) as PerformanceNavigationTiming[];
   if (entries.length > 0) {
     return entries[0].type === "reload";
   }

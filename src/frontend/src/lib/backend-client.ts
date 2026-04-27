@@ -148,6 +148,10 @@ function serializeContentCache<T>(items: T[]): string {
   );
 }
 
+function seededFallback<T>(items: T[]): T[] {
+  return ENABLE_SEEDED_FALLBACK ? items : [];
+}
+
 function loadContentCache<T>(
   key: string,
   fallback: T[],
@@ -207,11 +211,11 @@ function getStoredSessionToken(): string | null {
   }
 }
 
-function withSessionToken(url: string): string {
-  const token = getStoredSessionToken();
-  if (!token) return url;
-  const separator = url.includes("?") ? "&" : "?";
-  return `${url}${separator}sessionToken=${encodeURIComponent(token)}`;
+function getAuthHeaders(
+  sessionTokenOverride?: string | null,
+): Record<string, string> | undefined {
+  const token = sessionTokenOverride ?? getStoredSessionToken();
+  return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
 function withCacheBuster(url: string): string {
@@ -231,12 +235,11 @@ function handleSessionExpired() {
 
 async function postMailApi(path: string, payload: Record<string, unknown>) {
   const response = await withRequestActivity(path, async () => {
-    const token = getStoredSessionToken();
-    return fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
+    return fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(getAuthHeaders() ?? {}),
       },
       body: JSON.stringify(payload),
     });
@@ -258,12 +261,11 @@ async function postMailApiJson(
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   const response = await withRequestActivity(path, async () => {
-    const token = getStoredSessionToken();
-    return fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
+    return fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(getAuthHeaders() ?? {}),
       },
       body: JSON.stringify(payload),
     });
@@ -283,11 +285,10 @@ async function postMailApiJson(
 
 async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
   const response = await withRequestActivity(path, async () => {
-    const token = getStoredSessionToken();
-    return fetch(withCacheBuster(withSessionToken(`${MAIL_API_URL}${path}`)), {
+    return fetch(withCacheBuster(`${MAIL_API_URL}${path}`), {
       method: "GET",
       cache: "no-store",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: getAuthHeaders(),
     });
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
@@ -310,10 +311,9 @@ async function uploadMailApiFile(
   const formData = new FormData();
   formData.append("file", file);
   const response = await withRequestActivity(path, async () => {
-    const token = getStoredSessionToken();
-    return fetch(withSessionToken(`${MAIL_API_URL}${path}`), {
+    return fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: getAuthHeaders(),
       body: formData,
     });
   });
@@ -584,20 +584,27 @@ function deserializeUsers(raw: string): User[] {
 
 function loadUsersStore(): User[] {
   if (typeof window === "undefined") {
-    return INITIAL_MOCK_USERS.map((user) => ({ ...user }));
+    return ENABLE_SEEDED_FALLBACK
+      ? INITIAL_MOCK_USERS.map((user) => ({ ...user }))
+      : [];
   }
   try {
     const raw = window.localStorage.getItem(USERS_STORE_KEY);
     if (!raw) {
-      window.localStorage.setItem(
-        USERS_STORE_KEY,
-        serializeUsers(INITIAL_MOCK_USERS),
-      );
-      return INITIAL_MOCK_USERS.map((user) => ({ ...user }));
+      if (ENABLE_SEEDED_FALLBACK) {
+        window.localStorage.setItem(
+          USERS_STORE_KEY,
+          serializeUsers(INITIAL_MOCK_USERS),
+        );
+        return INITIAL_MOCK_USERS.map((user) => ({ ...user }));
+      }
+      return [];
     }
     return deserializeUsers(raw);
   } catch {
-    return INITIAL_MOCK_USERS.map((user) => ({ ...user }));
+    return ENABLE_SEEDED_FALLBACK
+      ? INITIAL_MOCK_USERS.map((user) => ({ ...user }))
+      : [];
   }
 }
 
@@ -608,16 +615,12 @@ async function postOptionalApi(
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
-  const token = sessionTokenOverride ?? getStoredSessionToken();
   try {
-    const url = token
-      ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
-      : `${MAIL_API_URL}${path}`;
-    const response = await fetch(url, {
+    const response = await fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...(getAuthHeaders(sessionTokenOverride) ?? {}),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -637,14 +640,10 @@ async function getOptionalApi(
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
-  const token = sessionTokenOverride ?? getStoredSessionToken();
   try {
-    const url = token
-      ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
-      : `${MAIL_API_URL}${path}`;
-    const response = await fetch(url, {
+    const response = await fetch(`${MAIL_API_URL}${path}`, {
       method: "GET",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      headers: getAuthHeaders(sessionTokenOverride),
       signal: controller.signal,
     });
     if (!response.ok) return null;
@@ -661,22 +660,12 @@ async function postKeepaliveApi(
   payload: Record<string, unknown>,
   sessionTokenOverride?: string | null,
 ): Promise<void> {
-  const token = sessionTokenOverride ?? getStoredSessionToken();
-  const url = token
-    ? `${MAIL_API_URL}${path}?sessionToken=${encodeURIComponent(token)}`
-    : `${MAIL_API_URL}${path}`;
   try {
-    if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
-      const body = new Blob([JSON.stringify(payload)], {
-        type: "application/json",
-      });
-      const sent = navigator.sendBeacon(url, body);
-      if (sent) return;
-    }
-    await fetch(url, {
+    await fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        ...(getAuthHeaders(sessionTokenOverride) ?? {}),
       },
       body: JSON.stringify(payload),
       keepalive: true,
@@ -823,41 +812,49 @@ function applyRecentUserOverrides(users: User[]): User[] {
   return users.map((user) => resolveRecentUserOverride(user));
 }
 
+function reconcileServerUser(user: User): User {
+  const existing = _mockUsers.find((item) => item.id === user.id);
+  const currentAuth = getStoredAuthUser();
+  const currentToken = getStoredSessionToken();
+  const sessionToken =
+    existing?.sessionToken ??
+    (currentAuth?.id === user.id
+      ? currentToken ?? currentAuth.sessionToken ?? user.sessionToken
+      : user.sessionToken);
+  const lastSeen =
+    existing && existing.lastSeen > user.lastSeen ? existing.lastSeen : user.lastSeen;
+  const nextUser = {
+    ...user,
+    sessionToken,
+    lastSeen,
+    isOnlineNow: existing?.isOnlineNow ?? user.isOnlineNow,
+  };
+  return resolveRecentUserOverride(nextUser);
+}
+
+function replaceUsersCache(users: User[], notify = false): User[] {
+  _mockUsers = users.map((user) => reconcileServerUser(user));
+  persistUsersStore(notify);
+  return _mockUsers;
+}
+
+function mergeUsersCache(users: User[], notify = false): User[] {
+  const byId = new Map(_mockUsers.map((user) => [user.id, user] as const));
+  for (const user of users) {
+    byId.set(user.id, reconcileServerUser(user));
+  }
+  _mockUsers = Array.from(byId.values());
+  persistUsersStore(notify);
+  return _mockUsers;
+}
+
 async function refreshUsersCache(): Promise<User[]> {
   try {
     const payload = await getMailApiJson("/users");
     const rawUsers = Array.isArray(payload.users) ? (payload.users as WireUser[]) : [];
-    const knownTokens = new Map(
-      _mockUsers
-        .filter((user) => user.sessionToken)
-        .map((user) => [user.id, user.sessionToken as string]),
-    );
-    const currentToken = getStoredSessionToken();
-    _mockUsers = rawUsers.map((rawUser) => {
-      const user = deserializeUser(rawUser);
-      user.sessionToken = knownTokens.get(user.id) ?? user.sessionToken;
-      return user;
-    });
-    _mockUsers = applyRecentUserOverrides(_mockUsers);
-    if (currentToken) {
-      const currentAuthRaw = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      if (currentAuthRaw) {
-        const currentAuth = deserializeUser(JSON.parse(currentAuthRaw) as WireUser);
-        const idx = _mockUsers.findIndex((user) => user.id === currentAuth.id);
-        if (idx >= 0) {
-          _mockUsers[idx] = {
-            ..._mockUsers[idx],
-            sessionToken: currentToken,
-          };
-        }
-      }
-    }
-    persistUsersStore(false);
+    replaceUsersCache(rawUsers.map(deserializeUser), false);
   } catch {
-    _mockUsers = loadUsersStore().map((user) => ({
-      ...user,
-      isOnlineNow: false,
-    }));
+    // Keep the last real cached users on network failure.
   }
   return _mockUsers;
 }
@@ -867,33 +864,16 @@ async function fetchUserById(userId: string): Promise<User | null> {
     const payload = await getMailApiJson(`/users/${encodeURIComponent(userId)}`);
     const rawUser = payload.user as WireUser | undefined;
     if (!rawUser) return null;
-  const user = deserializeUser(rawUser);
-  user.sessionToken =
-    _mockUsers.find((item) => item.id === user.id)?.sessionToken ??
-    getStoredSessionToken() ??
-    undefined;
-  const resolvedUser = resolveRecentUserOverride(user);
-  const idx = _mockUsers.findIndex((item) => item.id === user.id);
-  if (idx >= 0) {
-    _mockUsers[idx] = resolvedUser;
-  } else {
-    _mockUsers.push(resolvedUser);
+    const user = deserializeUser(rawUser);
+    mergeUsersCache([user], false);
+    return _mockUsers.find((item) => item.id === user.id) ?? user;
+  } catch {
+    return _mockUsers.find((user) => user.id === userId) ?? null;
   }
-  persistUsersStore(false);
-  return resolvedUser;
-} catch {
-  return _mockUsers.find((user) => user.id === userId) ?? null;
-}
 }
 
 function upsertCachedUser(user: User) {
-  const idx = _mockUsers.findIndex((item) => item.id === user.id);
-  if (idx >= 0) {
-    _mockUsers[idx] = user;
-  } else {
-    _mockUsers.push(user);
-  }
-  persistUsersStore();
+  mergeUsersCache([user], true);
 }
 
 export function apiSyncCachedUser(user: User) {
@@ -1557,10 +1537,7 @@ export async function apiGetArchivedStaff(): Promise<User[]> {
       .map(deserializeUser)
       .filter((user) => isPortalStaff(user))
       .sort((a, b) => a.fullname.localeCompare(b.fullname));
-    _mockUsers = users.concat(
-      _mockUsers.filter((user) => !users.some((item) => item.id === user.id)),
-    );
-    persistUsersStore();
+    mergeUsersCache(users, true);
     return users;
   } catch {
     return _mockUsers
@@ -1940,7 +1917,7 @@ export interface UpdateAnnouncementRequest
 
 const _announcements: AnnouncementWithPoll[] = loadContentCache(
   ANNOUNCEMENTS_STORE_KEY,
-  SEEDED_ANNOUNCEMENTS,
+  seededFallback(SEEDED_ANNOUNCEMENTS),
   deserializeAnnouncement,
 );
 let _announcementIdCounter = Math.max(0, ..._announcements.map((item) => item.id)) + 1;
@@ -1959,9 +1936,7 @@ export async function apiGetAnnouncements(
       : [];
     replaceSharedAnnouncements(sharedItems);
   } catch {
-    if (!ENABLE_SEEDED_FALLBACK) {
-      replaceSharedAnnouncements([]);
-    }
+    // Keep the last real cached data on network failure.
   }
   const authUser = getStoredAuthUser();
   const dismissedIds = getDismissedAnnouncementIds(userId);
@@ -1991,9 +1966,7 @@ export async function apiGetTrashedAnnouncements(): Promise<Announcement[]> {
       : [];
     replaceSharedAnnouncements(sharedItems);
   } catch {
-    if (!ENABLE_SEEDED_FALLBACK) {
-      replaceSharedAnnouncements([]);
-    }
+    // Keep the last real cached data on network failure.
   }
   return _announcements
     .filter((a) => a.isTrashed)
@@ -2447,7 +2420,7 @@ const SEEDED_FORMS: PortalForm[] = [
 
 let _forms: PortalForm[] = loadContentCache(
   FORMS_STORE_KEY,
-  SEEDED_FORMS,
+  seededFallback(SEEDED_FORMS),
   deserializeForm,
 );
 
@@ -2512,9 +2485,7 @@ export async function apiGetForms(user?: User | null): Promise<PortalForm[]> {
       : [];
     replaceSharedForms(sharedItems);
   } catch {
-    if (!ENABLE_SEEDED_FALLBACK) {
-      replaceSharedForms([]);
-    }
+    // Keep the last real cached data on network failure.
   }
   return _forms
     .filter((form) => canUserSeeForm(form, user))
@@ -2752,7 +2723,7 @@ function isGoogleDocUrl(input: string) {
 function localAssetUrl(ref: string) {
   const filename = ref.replace(/^LOCAL:/, "").trim();
   return filename
-    ? `${withSessionToken(`${MAIL_API_ROOT}/uploads/${filename}`)}&_v=${encodeURIComponent(ref)}`
+    ? `${MAIL_API_ROOT}/uploads/${filename}?_v=${encodeURIComponent(ref)}`
     : "";
 }
 
@@ -3056,12 +3027,12 @@ const SEEDED_TRAINING_DOCUMENTS: TrainingDocument[] = [
 
 const _trainingVideos: TrainingVideo[] = loadContentCache(
   TRAINING_VIDEOS_STORE_KEY,
-  SEEDED_TRAINING_VIDEOS,
+  seededFallback(SEEDED_TRAINING_VIDEOS),
   deserializeTrainingVideo,
 );
 const _trainingDocuments: TrainingDocument[] = loadContentCache(
   TRAINING_DOCUMENTS_STORE_KEY,
-  SEEDED_TRAINING_DOCUMENTS,
+  seededFallback(SEEDED_TRAINING_DOCUMENTS),
   deserializeTrainingDocument,
 );
 
@@ -3118,9 +3089,7 @@ export async function apiGetTrainingVideos(): Promise<TrainingVideo[]> {
       : [];
     replaceSharedTrainingVideos(sharedItems);
   } catch {
-    if (!ENABLE_SEEDED_FALLBACK) {
-      replaceSharedTrainingVideos([]);
-    }
+    // Keep the last real cached data on network failure.
   }
   const user = currentTrainingUser();
   return _trainingVideos
@@ -3300,9 +3269,7 @@ export async function apiGetTrainingDocuments(): Promise<TrainingDocument[]> {
       : [];
     replaceSharedTrainingDocuments(sharedItems);
   } catch {
-    if (!ENABLE_SEEDED_FALLBACK) {
-      replaceSharedTrainingDocuments([]);
-    }
+    // Keep the last real cached data on network failure.
   }
   const user = currentTrainingUser();
   return _trainingDocuments
@@ -3997,7 +3964,7 @@ const SEEDED_AUDIT_LOGS: AuditLog[] = [
 
 const _auditLogs: AuditLog[] = loadContentCache(
   AUDIT_LOGS_STORE_KEY,
-  SEEDED_AUDIT_LOGS,
+  seededFallback(SEEDED_AUDIT_LOGS),
   deserializeAuditLog,
 );
 
