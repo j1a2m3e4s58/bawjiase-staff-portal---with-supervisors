@@ -73,6 +73,7 @@ import {
   YAxis,
 } from "recharts";
 import { toast } from "sonner";
+import { isPageReload } from "@/lib/app-base";
 
 const USERS_UPDATED_EVENT = "bcb:users-updated";
 const BRANCH_BAR_COLORS: Record<string, string> = {
@@ -960,14 +961,15 @@ function StaffDistribution({ overview }: { overview: DashboardOverview }) {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const isReload = isPageReload();
   const [overview, setOverview] = useState<DashboardOverview | null>(() =>
-    apiGetCachedDashboardOverview(),
+    isReload ? null : apiGetCachedDashboardOverview(),
   );
   const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>(() =>
-    apiGetCachedAnnouncements(user?.id),
+    isReload ? [] : apiGetCachedAnnouncements(user?.id),
   );
   const [loading, setLoading] = useState(() =>
-    apiGetCachedDashboardOverview() === null,
+    isReload || apiGetCachedDashboardOverview() === null,
   );
   const [loadError, setLoadError] = useState(false);
   const canAccessITArea = user?.department?.toUpperCase() === "IT";
@@ -994,7 +996,7 @@ export default function DashboardPage() {
         if (!apiGetCachedDashboardOverview()) {
           setOverview(null);
         }
-        setAnnouncements(apiGetCachedAnnouncements(user?.id));
+        setAnnouncements(isReload ? [] : apiGetCachedAnnouncements(user?.id));
         setLoadError(true);
         toast.error("Dashboard data could not be loaded. Please try again.");
       } finally {
@@ -1002,8 +1004,8 @@ export default function DashboardPage() {
       }
     }
 
-    setOverview(apiGetCachedDashboardOverview());
-    setAnnouncements(apiGetCachedAnnouncements(user?.id));
+    setOverview(isReload ? null : apiGetCachedDashboardOverview());
+    setAnnouncements(isReload ? [] : apiGetCachedAnnouncements(user?.id));
     void loadDashboard();
     const handleUsersUpdated = () => {
       setOverview(apiGetCachedDashboardOverview());
