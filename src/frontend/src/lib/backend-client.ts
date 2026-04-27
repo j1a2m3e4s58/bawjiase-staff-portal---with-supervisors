@@ -263,10 +263,14 @@ function getStoredSessionToken(): string | null {
   }
 }
 
+function resolveAuthToken(sessionTokenOverride?: string | null): string | null {
+  return sessionTokenOverride ?? getStoredSessionToken();
+}
+
 function getAuthHeaders(
   sessionTokenOverride?: string | null,
 ): Record<string, string> | undefined {
-  const token = sessionTokenOverride ?? getStoredSessionToken();
+  const token = resolveAuthToken(sessionTokenOverride);
   return token ? { Authorization: `Bearer ${token}` } : undefined;
 }
 
@@ -280,7 +284,11 @@ function withCacheBuster(url: string): string {
   return `${url}${separator}_ts=${Date.now()}`;
 }
 
-function handleSessionExpired() {
+function handleSessionExpired(sessionToken?: string | null) {
+  const activeToken = getStoredSessionToken();
+  if (sessionToken && activeToken && sessionToken !== activeToken) {
+    return;
+  }
   apiSetCurrentAuthUser(null);
   if (typeof window === "undefined") return;
   try {
@@ -292,12 +300,13 @@ function handleSessionExpired() {
 }
 
 async function postMailApi(path: string, payload: Record<string, unknown>) {
+  const sessionToken = resolveAuthToken();
   const response = await withRequestActivity(path, async () => {
     return fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(getAuthHeaders() ?? {}),
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -307,7 +316,7 @@ async function postMailApi(path: string, payload: Record<string, unknown>) {
   };
   if (!response.ok) {
     if (response.status === 401) {
-      handleSessionExpired();
+      handleSessionExpired(sessionToken);
       throw new Error("Session expired. Please log in again.");
     }
     throw new Error(data.error || "Email could not be sent");
@@ -318,12 +327,13 @@ async function postMailApiJson(
   path: string,
   payload: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
+  const sessionToken = resolveAuthToken();
   const response = await withRequestActivity(path, async () => {
     return fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(getAuthHeaders() ?? {}),
+        ...(sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
       },
       body: JSON.stringify(payload),
     });
@@ -333,7 +343,7 @@ async function postMailApiJson(
   };
   if (!response.ok) {
     if (response.status === 401) {
-      handleSessionExpired();
+      handleSessionExpired(sessionToken);
       throw new Error("Session expired. Please log in again.");
     }
     throw new Error(data.error || "Request failed");
@@ -342,11 +352,12 @@ async function postMailApiJson(
 }
 
 async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
+  const sessionToken = resolveAuthToken();
   const response = await withRequestActivity(path, async () => {
     return fetch(withCacheBuster(`${MAIL_API_URL}${path}`), {
       method: "GET",
       cache: "no-store",
-      headers: getAuthHeaders(),
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
     });
   });
   const data = (await response.json().catch(() => ({}))) as Record<string, unknown> & {
@@ -354,7 +365,7 @@ async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
   };
   if (!response.ok) {
     if (response.status === 401) {
-      handleSessionExpired();
+      handleSessionExpired(sessionToken);
       throw new Error("Session expired. Please log in again.");
     }
     throw new Error(data.error || "Request failed");
@@ -366,12 +377,13 @@ async function uploadMailApiFile(
   path: string,
   file: File,
 ): Promise<Record<string, unknown>> {
+  const sessionToken = resolveAuthToken();
   const formData = new FormData();
   formData.append("file", file);
   const response = await withRequestActivity(path, async () => {
     return fetch(`${MAIL_API_URL}${path}`, {
       method: "POST",
-      headers: getAuthHeaders(),
+      headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
       body: formData,
     });
   });
@@ -380,7 +392,7 @@ async function uploadMailApiFile(
   };
   if (!response.ok) {
     if (response.status === 401) {
-      handleSessionExpired();
+      handleSessionExpired(sessionToken);
       throw new Error("Session expired. Please log in again.");
     }
     throw new Error(data.error || "Upload failed");
@@ -4128,14 +4140,14 @@ export async function apiDeleteAuditLogs(
 
 export async function apiDownloadProductionBackup(): Promise<ApiResult<string>> {
   try {
-    const token = getStoredSessionToken();
+    const token = resolveAuthToken();
     const response = await fetch(`${MAIL_API_URL}/backup/export`, {
       method: "GET",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
     });
     if (!response.ok) {
       if (response.status === 401) {
-        handleSessionExpired();
+        handleSessionExpired(token);
         return err("Session expired. Please log in again.");
       }
       const data = (await response.json().catch(() => ({}))) as {
