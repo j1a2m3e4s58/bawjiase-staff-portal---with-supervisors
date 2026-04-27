@@ -162,6 +162,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const authSessionRef = useRef(0);
   const userRef = useRef<User | null>(user);
   const sessionRecoveryRef = useRef(false);
+  const sessionGraceUntilRef = useRef(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
@@ -194,10 +195,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return;
       }
 
+      if (Date.now() < sessionGraceUntilRef.current) {
+        return;
+      }
+
       sessionRecoveryRef.current = true;
       void apiProbeCurrentSession(currentUser.id, currentUser.sessionToken ?? null)
         .then((recoveredUser) => {
           if (!recoveredUser) {
+            if (Date.now() < sessionGraceUntilRef.current) {
+              return;
+            }
             authSessionRef.current += 1;
             userRef.current = null;
             setUser(null);
@@ -287,8 +295,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       timeoutId = window.setTimeout(() => {
         if (cancelled || authSessionRef.current !== sessionId) return;
         void setPresenceOffline();
-        setUser(null);
-        clearStoredUser();
       }, INACTIVITY_LIMIT_MS);
     };
 
@@ -318,8 +324,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       if (Date.now() - effectiveLastActivity > INACTIVITY_LIMIT_MS) {
         void setPresenceOffline();
-        setUser(null);
-        clearStoredUser();
+        lastActivityAt = Date.now();
+        markActivity(lastActivityAt);
+        scheduleTimeout();
         return;
       }
       if (document.visibilityState !== "visible") {
@@ -365,6 +372,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   const login = useCallback((newUser: User, remember = true) => {
     authSessionRef.current += 1;
+    sessionGraceUntilRef.current = Date.now() + 20_000;
     userRef.current = newUser;
     apiSyncCachedUser(newUser);
     setUser(newUser);
