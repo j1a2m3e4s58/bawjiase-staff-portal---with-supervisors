@@ -263,7 +263,7 @@ export default function AuditLogsPage() {
   const canViewAudit = user?.department?.toUpperCase() === "IT";
   const navigate = useNavigate();
   const cachedLogs = apiGetCachedAuditLogs();
-  const [loading, setLoading] = useState(cachedLogs.length === 0);
+  const [loading, setLoading] = useState(false);
   const [logs, setLogs] = useState<AuditLog[]>(() => cachedLogs);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -281,14 +281,11 @@ export default function AuditLogsPage() {
   }, [canViewAudit, navigate]);
 
   const loadLogs = useCallback(async () => {
-    if (logs.length === 0) {
-      setLoading(true);
-    }
     const data = await apiGetAuditLogs();
     setLogs(data.slice(0, 150));
     setLoading(false);
     setSelected(new Set());
-  }, [logs.length]);
+  }, []);
 
   useEffect(() => {
     loadLogs();

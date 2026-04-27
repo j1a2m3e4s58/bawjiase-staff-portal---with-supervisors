@@ -151,7 +151,7 @@ export default function PastStaffPage() {
   const cachedStaff = apiGetCachedArchivedStaff();
 
   const [staff, setStaff] = useState<User[]>(() => cachedStaff);
-  const [loading, setLoading] = useState(cachedStaff.length === 0);
+  const [loading, setLoading] = useState(false);
   const [restoreTarget, setRestoreTarget] = useState<User | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<User | null>(null);
   const [busy, setBusy] = useState(false);
@@ -166,9 +166,6 @@ export default function PastStaffPage() {
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      if (staff.length === 0) {
-        setLoading(true);
-      }
       try {
         const data = await apiGetArchivedStaff();
         if (cancelled) return;
@@ -186,7 +183,7 @@ export default function PastStaffPage() {
     return () => {
       cancelled = true;
     };
-  }, [staff.length]);
+  }, []);
 
   async function handleRestoreConfirm() {
     if (!restoreTarget) return;
