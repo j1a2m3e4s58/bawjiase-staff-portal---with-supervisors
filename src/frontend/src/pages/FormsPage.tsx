@@ -57,7 +57,6 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
-import { isPageReload } from "@/lib/app-base";
 
 const FORMS_PAGE_SIZE = 12;
 
@@ -472,17 +471,12 @@ function FormCard({ form, canManage, onEdit, onDelete, index }: FormCardProps) {
 
 export default function FormsPage() {
   const { user } = useAuth();
-  const isReload = isPageReload();
   const canAdmin = canManageForms(user);
   const manageableBranches = getManageableBranches(user);
   const actingScope = formatManageableScopeSummary(user);
 
-  const [forms, setForms] = useState<PortalForm[]>(() =>
-    isReload ? [] : apiGetCachedForms(user),
-  );
-  const [isLoading, setIsLoading] = useState(
-    () => isReload || apiGetCachedForms(user).length === 0,
-  );
+  const [forms, setForms] = useState<PortalForm[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [visibleCount, setVisibleCount] = useState(FORMS_PAGE_SIZE);
   const [search, setSearch] = useState("");

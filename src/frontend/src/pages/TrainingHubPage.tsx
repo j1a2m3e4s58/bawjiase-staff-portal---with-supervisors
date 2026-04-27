@@ -32,7 +32,6 @@ import {
   userCanManageScopedItem,
   userHasPermission,
 } from "@/lib/backend-client";
-import { isPageReload } from "@/lib/app-base";
 import { useAuth } from "@/store/auth";
 import type { TrainingDocument, TrainingVideo } from "@/types";
 import { useLocation, useNavigate } from "@tanstack/react-router";
@@ -94,28 +93,19 @@ export default function TrainingHubPage() {
   const canManageVideoModule = userHasPermission(user, "trainingVideos");
   const canManageDocumentModule = userHasPermission(user, "trainingDocuments");
   const canOpenTrainingAdmin = canManageVideoModule || canManageDocumentModule;
-  const isReload = isPageReload();
   const [tab, setTab] = useState(() =>
     location.pathname.includes("/handbook") ? "documents" : "videos",
   );
-  const [videos, setVideos] = useState<TrainingVideo[]>(() =>
-    isReload ? [] : apiGetCachedTrainingVideos(),
-  );
-  const [documents, setDocuments] = useState<TrainingDocument[]>(() =>
-    isReload ? [] : apiGetCachedTrainingDocuments(),
-  );
+  const [videos, setVideos] = useState<TrainingVideo[]>([]);
+  const [documents, setDocuments] = useState<TrainingDocument[]>([]);
   const [videoProgress, setVideoProgress] = useState<Record<number, number>>(
     {},
   );
   const [documentOpened, setDocumentOpened] = useState<Record<number, boolean>>(
     {},
   );
-  const [loadingVideos, setLoadingVideos] = useState(
-    () => isReload || apiGetCachedTrainingVideos().length === 0,
-  );
-  const [loadingDocuments, setLoadingDocuments] = useState(
-    () => isReload || apiGetCachedTrainingDocuments().length === 0,
-  );
+  const [loadingVideos, setLoadingVideos] = useState(true);
+  const [loadingDocuments, setLoadingDocuments] = useState(true);
   const [videosError, setVideosError] = useState(false);
   const [documentsError, setDocumentsError] = useState(false);
   const [query, setQuery] = useState("");
@@ -134,8 +124,8 @@ export default function TrainingHubPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingVideos(isReload || apiGetCachedTrainingVideos().length === 0);
-    setLoadingDocuments(isReload || apiGetCachedTrainingDocuments().length === 0);
+    setLoadingVideos(true);
+    setLoadingDocuments(true);
 
     setTab(location.pathname.includes("/handbook") ? "documents" : "videos");
 
