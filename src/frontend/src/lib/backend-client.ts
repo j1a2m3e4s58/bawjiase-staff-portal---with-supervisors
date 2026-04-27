@@ -41,6 +41,8 @@ const ANNOUNCEMENT_DISMISS_KEY = "bcb_announcement_dismissals";
 const USERS_STORE_KEY = "bcb_mock_users";
 const AUTH_STORAGE_KEY = "bcb_auth_user";
 const USERS_UPDATED_EVENT = "bcb:users-updated";
+export const ANNOUNCEMENTS_UPDATED_EVENT = "bcb:announcements-updated";
+export const FORMS_UPDATED_EVENT = "bcb:forms-updated";
 const OPTIONAL_API_TIMEOUT_MS = 8000;
 const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 const ENABLE_SEEDED_FALLBACK =
@@ -1030,10 +1032,16 @@ function deserializeAuditLog(raw: Record<string, unknown>): AuditLog {
 
 function replaceSharedAnnouncements(items: AnnouncementWithPoll[]) {
   _announcements.splice(0, _announcements.length, ...items);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
+  }
 }
 
 function replaceSharedForms(items: PortalForm[]) {
   _forms.splice(0, _forms.length, ...items);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(FORMS_UPDATED_EVENT));
+  }
 }
 
 function replaceSharedTrainingVideos(items: TrainingVideo[]) {
@@ -2098,6 +2106,9 @@ export async function apiDismissAnnouncement(
   const announcement = _announcements.find((item) => item.id === id);
   if (!announcement) return err("Announcement not found");
   addDismissedAnnouncement(userId, id);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
+  }
   return ok(null);
 }
 
@@ -2111,12 +2122,18 @@ export async function apiTrashAnnouncement(
     try {
       await postMailApi(`/content/announcements/${id}/trash`, {});
       announcement.isTrashed = true;
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
+      }
       return ok(null);
     } catch (error) {
       return err(error instanceof Error ? error.message : "Announcement not found");
     }
   }
   announcement.isTrashed = true;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
+  }
   return ok(null);
 }
 
@@ -2516,6 +2533,9 @@ export async function apiUpdateForm(
           : _forms[idx].department,
     updatedAt: BigInt(Date.now()),
   };
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(FORMS_UPDATED_EVENT));
+  }
   apiRecordActivity("Form updated", `${_forms[idx].title} was updated.`);
   return ok(_forms[idx]);
 }
@@ -2532,6 +2552,9 @@ export async function apiDeleteForm(id: number): Promise<ApiResult<null>> {
     }
   }
   _forms.splice(idx, 1);
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(FORMS_UPDATED_EVENT));
+  }
   apiRecordActivity("Form deleted", "A form was removed from the library.");
   return ok(null);
 }
