@@ -23,7 +23,19 @@
     <link rel="icon" type="image/png" sizes="192x192" href="./app-icons/icon-192.png" />
     <link rel="apple-touch-icon" href="./app-icons/apple-touch-icon.png" />
     <link rel="manifest" href="./site.webmanifest" />
+    <script>
+      try {
+        if (sessionStorage.getItem("bcb_portal_splash_seen")) {
+          document.documentElement.classList.add("bcb-boot-fallback-hidden");
+        }
+      } catch {
+        // Ignore storage failures.
+      }
+    </script>
     <style>
+      .bcb-boot-fallback-hidden #boot-fallback {
+        display: none !important;
+      }
       html,
       body {
         margin: 0;
@@ -128,6 +140,12 @@
 
         function appHasMounted() {
           return !!window.__BCB_APP_READY__ || !!document.getElementById("root")?.childElementCount;
+        }
+
+        try {
+          window.sessionStorage.setItem("bcb_portal_splash_seen", "true");
+        } catch {
+          // Ignore storage failures in private or restricted browsing modes.
         }
 
         function markErrorAndReload() {

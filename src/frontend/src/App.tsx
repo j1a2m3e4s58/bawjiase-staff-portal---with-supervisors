@@ -60,13 +60,11 @@ function lazyPage<TModule extends { default: React.ComponentType<any> }>(
       return loaded;
     } catch (error) {
       if (typeof window !== "undefined") {
+        console.error("Lazy page load failed:", cacheKey, error);
         const reloadKey = `bcb:lazy-reload:${cacheKey}`;
         if (!window.sessionStorage.getItem(reloadKey)) {
           window.sessionStorage.setItem(reloadKey, "1");
           window.location.reload();
-          await new Promise(() => {
-            // Keep the boundary pending while the browser reloads.
-          });
         }
       }
       throw error;
@@ -520,8 +518,9 @@ export default function App() {
   return (
     <AuthProvider>
       <FrontendCrashMonitor />
-      <RouteLoadingBar />
-      <RouterProvider router={router} />
+      <RouterProvider router={router}>
+        <RouteLoadingBar />
+      </RouterProvider>
     </AuthProvider>
   );
 }
