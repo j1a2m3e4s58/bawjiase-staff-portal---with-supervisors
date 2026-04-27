@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dialog";
 import {
   apiGetCachedDashboardOverview,
+  apiGetCachedAnnouncements,
   apiDismissAnnouncement,
   apiGetAnnouncements,
   apiGetDashboardOverview,
@@ -962,8 +963,12 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(() =>
     apiGetCachedDashboardOverview(),
   );
-  const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>(() =>
+    apiGetCachedAnnouncements(user?.id),
+  );
+  const [loading, setLoading] = useState(() =>
+    apiGetCachedDashboardOverview() === null,
+  );
   const [loadError, setLoadError] = useState(false);
   const canAccessITArea = user?.department?.toUpperCase() === "IT";
 
@@ -988,8 +993,8 @@ export default function DashboardPage() {
         if (cancelled) return;
         if (!apiGetCachedDashboardOverview()) {
           setOverview(null);
-          setAnnouncements([]);
         }
+        setAnnouncements(apiGetCachedAnnouncements(user?.id));
         setLoadError(true);
         toast.error("Dashboard data could not be loaded. Please try again.");
       } finally {
@@ -997,11 +1002,12 @@ export default function DashboardPage() {
       }
     }
 
-    setLoading(true);
     setOverview(apiGetCachedDashboardOverview());
+    setAnnouncements(apiGetCachedAnnouncements(user?.id));
     void loadDashboard();
     const handleUsersUpdated = () => {
       setOverview(apiGetCachedDashboardOverview());
+      setAnnouncements(apiGetCachedAnnouncements(user?.id));
     };
     window.addEventListener(USERS_UPDATED_EVENT, handleUsersUpdated);
     return () => {
