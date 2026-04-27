@@ -11,6 +11,7 @@ import {
   apiGetMyProfile,
   apiLogout,
   apiProbeCurrentSession,
+  REQUEST_ACTIVITY_EVENT,
   apiSetCurrentAuthUser,
   apiSetPresenceOffline,
   apiSyncCachedUser,
@@ -58,6 +59,18 @@ function markActivity(timestamp = Date.now()) {
   } catch {
     // Ignore storage failures to keep the app usable.
   }
+}
+
+function readEffectiveLastActivity(fallback = Date.now()) {
+  try {
+    const storedLastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
+    if (Number.isFinite(storedLastActivity) && storedLastActivity > 0) {
+      return storedLastActivity;
+    }
+  } catch {
+    // Ignore storage failures.
+  }
+  return fallback;
 }
 
 function loadStoredUser(): User | null {
@@ -203,6 +216,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       void apiProbeCurrentSession(currentUser.id, currentUser.sessionToken ?? null)
         .then((recoveredUser) => {
           if (!recoveredUser) {
+            const effectiveLastActivity = readEffectiveLastActivity();
+            const isRecentlyActive =
+              document.visibilityState === "visible" &&
+              Date.now() - effectiveLastActivity < INACTIVITY_LIMIT_MS;
+            if (isRecentlyActive) {
+              sessionGraceUntilRef.current = Date.now() + 30_000;
+              markActivity(Date.now());
+              return;
+            }
             if (Date.now() < sessionGraceUntilRef.current) {
               return;
             }
@@ -308,6 +330,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
     };
 
+    const handleRequestActivity = () => {
+      if (document.visibilityState !== "visible") return;
+      const now = Date.now();
+      lastActivityAt = now;
+      markActivity(now);
+      scheduleTimeout();
+    };
+
     handleActivity();
 
     const intervalId = window.setInterval(() => {
@@ -354,6 +384,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.addEventListener("touchstart", handleActivity);
     window.addEventListener("scroll", handleActivity, { passive: true });
     window.addEventListener("focus", handleActivity);
+    window.addEventListener(REQUEST_ACTIVITY_EVENT, handleRequestActivity as EventListener);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
@@ -366,6 +397,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener("touchstart", handleActivity);
       window.removeEventListener("scroll", handleActivity);
       window.removeEventListener("focus", handleActivity);
+      window.removeEventListener(REQUEST_ACTIVITY_EVENT, handleRequestActivity as EventListener);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [user]);

@@ -55,7 +55,7 @@ const SESSION_EXPIRED_EVENT = "bcb:session-expired";
 const ENABLE_SEEDED_FALLBACK =
   import.meta.env.DEV || import.meta.env.VITE_ENABLE_SEEDED_FALLBACK === "true";
 const RECENT_USER_OVERRIDE_MS = 30 * 1000;
-const REQUEST_ACTIVITY_EVENT = "bcb:request-activity";
+export const REQUEST_ACTIVITY_EVENT = "bcb:request-activity";
 const ACTIVITY_LOG_UPDATED_EVENT = "bcb:activity-log-updated";
 const ACTIVITY_LOG_KEY = "bcb_activity_log";
 const ACTIVITY_LOG_LIMIT = 40;
