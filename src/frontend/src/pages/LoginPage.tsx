@@ -30,7 +30,8 @@ export default function LoginPage() {
       if (isOk(result)) {
         login(result.ok, rememberMe);
         toast.success(`Welcome back, ${result.ok.fullname.split(" ")[0]}!`);
-        navigate({ to: "/" });
+        await new Promise((resolve) => window.setTimeout(resolve, 0));
+        navigate({ to: "/", replace: true });
       } else {
         toast.error(result.err);
       }

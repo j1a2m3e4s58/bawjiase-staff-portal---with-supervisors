@@ -142,7 +142,8 @@ export default function RegisterPage() {
           toast.success(
             `Welcome to BCB Staff Portal, ${userResult.ok.fullname.split(" ")[0]}!`,
           );
-          navigate({ to: "/" });
+          await new Promise((resolve) => window.setTimeout(resolve, 0));
+          navigate({ to: "/", replace: true });
         }
       } else {
         toast.error("Invalid verification code. Please try again.");

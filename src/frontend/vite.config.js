@@ -39,6 +39,11 @@ export default defineConfig(({ mode }) => {
           target: "http://127.0.0.1:4943",
           changeOrigin: true,
         },
+        "/mail-api": {
+          target: "http://127.0.0.1:4185",
+          changeOrigin: true,
+          rewrite: (path) => path.replace(/^\/mail-api/, ""),
+        },
       },
     },
     plugins: [
