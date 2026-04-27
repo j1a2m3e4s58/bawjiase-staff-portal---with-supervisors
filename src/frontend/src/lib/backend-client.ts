@@ -267,6 +267,13 @@ function resolveAuthToken(sessionTokenOverride?: string | null): string | null {
   return sessionTokenOverride ?? getStoredSessionToken();
 }
 
+function withSessionToken(url: string, sessionTokenOverride?: string | null): string {
+  const token = resolveAuthToken(sessionTokenOverride);
+  if (!token) return url;
+  const separator = url.includes("?") ? "&" : "?";
+  return `${url}${separator}sessionToken=${encodeURIComponent(token)}`;
+}
+
 function getAuthHeaders(
   sessionTokenOverride?: string | null,
 ): Record<string, string> | undefined {
@@ -305,7 +312,7 @@ function handleSessionExpired(sessionToken?: string | null) {
 async function postMailApi(path: string, payload: Record<string, unknown>) {
   const sessionToken = resolveAuthToken();
   const response = await withRequestActivity(path, async () => {
-    return fetch(`${MAIL_API_URL}${path}`, {
+    return fetch(withSessionToken(`${MAIL_API_URL}${path}`, sessionToken), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -332,7 +339,7 @@ async function postMailApiJson(
 ): Promise<Record<string, unknown>> {
   const sessionToken = resolveAuthToken();
   const response = await withRequestActivity(path, async () => {
-    return fetch(`${MAIL_API_URL}${path}`, {
+    return fetch(withSessionToken(`${MAIL_API_URL}${path}`, sessionToken), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -357,7 +364,7 @@ async function postMailApiJson(
 async function getMailApiJson(path: string): Promise<Record<string, unknown>> {
   const sessionToken = resolveAuthToken();
   const response = await withRequestActivity(path, async () => {
-    return fetch(withCacheBuster(`${MAIL_API_URL}${path}`), {
+    return fetch(withCacheBuster(withSessionToken(`${MAIL_API_URL}${path}`, sessionToken)), {
       method: "GET",
       cache: "no-store",
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
@@ -384,7 +391,7 @@ async function uploadMailApiFile(
   const formData = new FormData();
   formData.append("file", file);
   const response = await withRequestActivity(path, async () => {
-    return fetch(`${MAIL_API_URL}${path}`, {
+    return fetch(withSessionToken(`${MAIL_API_URL}${path}`, sessionToken), {
       method: "POST",
       headers: sessionToken ? { Authorization: `Bearer ${sessionToken}` } : undefined,
       body: formData,
@@ -688,12 +695,13 @@ async function postOptionalApi(
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
+  const token = resolveAuthToken(sessionTokenOverride);
   try {
-    const response = await fetch(`${MAIL_API_URL}${path}`, {
+    const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`, token), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(getAuthHeaders(sessionTokenOverride) ?? {}),
+        ...(getAuthHeaders(token) ?? {}),
       },
       body: JSON.stringify(payload),
       signal: controller.signal,
@@ -713,10 +721,11 @@ async function getOptionalApi(
 ): Promise<Record<string, unknown> | null> {
   const controller = new AbortController();
   const timeoutId = window.setTimeout(() => controller.abort(), OPTIONAL_API_TIMEOUT_MS);
+  const token = resolveAuthToken(sessionTokenOverride);
   try {
-    const response = await fetch(`${MAIL_API_URL}${path}`, {
+    const response = await fetch(withSessionToken(`${MAIL_API_URL}${path}`, token), {
       method: "GET",
-      headers: getAuthHeaders(sessionTokenOverride),
+      headers: getAuthHeaders(token),
       signal: controller.signal,
     });
     if (!response.ok) return null;
@@ -733,12 +742,13 @@ async function postKeepaliveApi(
   payload: Record<string, unknown>,
   sessionTokenOverride?: string | null,
 ): Promise<void> {
+  const token = resolveAuthToken(sessionTokenOverride);
   try {
-    await fetch(`${MAIL_API_URL}${path}`, {
+    await fetch(withSessionToken(`${MAIL_API_URL}${path}`, token), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(getAuthHeaders(sessionTokenOverride) ?? {}),
+        ...(getAuthHeaders(token) ?? {}),
       },
       body: JSON.stringify(payload),
       keepalive: true,

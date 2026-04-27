@@ -10,8 +10,6 @@ import type { ReactNode } from "react";
 import {
   apiGetMyProfile,
   apiLogout,
-  apiProbeCurrentSession,
-  REQUEST_ACTIVITY_EVENT,
   apiSetCurrentAuthUser,
   apiSetPresenceOffline,
   apiSyncCachedUser,
@@ -59,18 +57,6 @@ function markActivity(timestamp = Date.now()) {
   } catch {
     // Ignore storage failures to keep the app usable.
   }
-}
-
-function readEffectiveLastActivity(fallback = Date.now()) {
-  try {
-    const storedLastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
-    if (Number.isFinite(storedLastActivity) && storedLastActivity > 0) {
-      return storedLastActivity;
-    }
-  } catch {
-    // Ignore storage failures.
-  }
-  return fallback;
 }
 
 function loadStoredUser(): User | null {
@@ -174,8 +160,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading] = useState(false);
   const authSessionRef = useRef(0);
   const userRef = useRef<User | null>(user);
-  const sessionRecoveryRef = useRef(false);
-  const sessionGraceUntilRef = useRef(0);
   const [themeMode, setThemeMode] = useState<ThemeMode>(() => {
     try {
       const stored = localStorage.getItem(THEME_KEY) as ThemeMode | null;
@@ -199,56 +183,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   useEffect(() => {
     const handleSessionExpired = () => {
-      const currentUser = userRef.current;
-      if (!currentUser || sessionRecoveryRef.current) {
-        authSessionRef.current += 1;
-        userRef.current = null;
-        setUser(null);
-        clearStoredUser();
-        return;
-      }
-
-      if (Date.now() < sessionGraceUntilRef.current) {
-        return;
-      }
-
-      sessionRecoveryRef.current = true;
-      void apiProbeCurrentSession(currentUser.id, currentUser.sessionToken ?? null)
-        .then((recoveredUser) => {
-          if (!recoveredUser) {
-            const effectiveLastActivity = readEffectiveLastActivity();
-            const isRecentlyActive =
-              document.visibilityState === "visible" &&
-              Date.now() - effectiveLastActivity < INACTIVITY_LIMIT_MS;
-            if (isRecentlyActive) {
-              sessionGraceUntilRef.current = Date.now() + 30_000;
-              markActivity(Date.now());
-              return;
-            }
-            if (Date.now() < sessionGraceUntilRef.current) {
-              return;
-            }
-            authSessionRef.current += 1;
-            userRef.current = null;
-            setUser(null);
-            clearStoredUser();
-            return;
-          }
-          const mergedUser = {
-            ...recoveredUser,
-            sessionToken:
-              recoveredUser.sessionToken ??
-              currentUser.sessionToken,
-          };
-          userRef.current = mergedUser;
-          apiSyncCachedUser(mergedUser);
-          setUser(mergedUser);
-          const remember = !!localStorage.getItem(AUTH_EXPIRY_KEY);
-          saveStoredUser(mergedUser, remember, false);
-        })
-        .finally(() => {
-          sessionRecoveryRef.current = false;
-        });
+      authSessionRef.current += 1;
+      userRef.current = null;
+      apiSetCurrentAuthUser(null);
+      setUser(null);
+      clearStoredUser();
     };
 
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
@@ -317,6 +256,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       timeoutId = window.setTimeout(() => {
         if (cancelled || authSessionRef.current !== sessionId) return;
         void setPresenceOffline();
+        userRef.current = null;
+        apiSetCurrentAuthUser(null);
+        setUser(null);
+        clearStoredUser();
       }, INACTIVITY_LIMIT_MS);
     };
 
@@ -342,21 +285,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const intervalId = window.setInterval(() => {
       if (cancelled || authSessionRef.current !== sessionId) return;
-      const storedLastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
-      const effectiveLastActivity =
-        Number.isFinite(storedLastActivity) && storedLastActivity > 0
-          ? storedLastActivity
-          : lastActivityAt;
-
-      if (!storedLastActivity) {
-        markActivity(lastActivityAt);
-      }
-
-      if (Date.now() - effectiveLastActivity > INACTIVITY_LIMIT_MS) {
+      const lastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
+      if (!lastActivity || Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
         void setPresenceOffline();
-        lastActivityAt = Date.now();
-        markActivity(lastActivityAt);
-        scheduleTimeout();
+        userRef.current = null;
+        apiSetCurrentAuthUser(null);
+        setUser(null);
+        clearStoredUser();
         return;
       }
       if (document.visibilityState !== "visible") {
@@ -384,7 +319,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     window.addEventListener("touchstart", handleActivity);
     window.addEventListener("scroll", handleActivity, { passive: true });
     window.addEventListener("focus", handleActivity);
-    window.addEventListener(REQUEST_ACTIVITY_EVENT, handleRequestActivity as EventListener);
     document.addEventListener("visibilitychange", onVisibility);
 
     return () => {
@@ -397,15 +331,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
       window.removeEventListener("touchstart", handleActivity);
       window.removeEventListener("scroll", handleActivity);
       window.removeEventListener("focus", handleActivity);
-      window.removeEventListener(REQUEST_ACTIVITY_EVENT, handleRequestActivity as EventListener);
       document.removeEventListener("visibilitychange", onVisibility);
     };
   }, [user]);
 
   const login = useCallback((newUser: User, remember = true) => {
     authSessionRef.current += 1;
-    sessionGraceUntilRef.current = Date.now() + 20_000;
     userRef.current = newUser;
+    apiSetCurrentAuthUser(newUser);
     apiSyncCachedUser(newUser);
     setUser(newUser);
     saveStoredUser(newUser, remember);
@@ -427,6 +360,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
     authSessionRef.current += 1;
     userRef.current = null;
+    apiSetCurrentAuthUser(null);
     setUser(null);
     clearStoredUser();
     window.dispatchEvent(new CustomEvent(USERS_UPDATED_EVENT));
