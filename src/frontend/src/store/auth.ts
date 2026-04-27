@@ -44,6 +44,12 @@ const PRESENCE_IDLE_MS = 10 * 60 * 1000;
 const PRESENCE_CHECK_MS = 5 * 1000;
 const PROFILE_SYNC_MS = 15 * 1000;
 
+function serializeAuthUser(user: User): string {
+  return JSON.stringify(user, (_key, value) =>
+    typeof value === "bigint" ? value.toString() : value,
+  );
+}
+
 function markActivity(timestamp = Date.now()) {
   try {
     localStorage.setItem(AUTH_ACTIVITY_KEY, String(timestamp));
@@ -82,7 +88,7 @@ function loadStoredUser(): User | null {
 
 function saveStoredUser(user: User, remember: boolean, updateActivity = true) {
   try {
-    localStorage.setItem(AUTH_KEY, JSON.stringify(user));
+    localStorage.setItem(AUTH_KEY, serializeAuthUser(user));
     if (updateActivity) {
       markActivity();
     }

@@ -1661,6 +1661,12 @@ export async function apiGetStaffStats(): Promise<StaffStats> {
 export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   await delay(350);
   await refreshUsersCache();
+  let staffStats: StaffStats | null = null;
+  try {
+    staffStats = await apiGetStaffStats();
+  } catch {
+    staffStats = null;
+  }
   try {
     const payload = await getMailApiJson("/content/announcements");
     const sharedItems = Array.isArray(payload.announcements)
@@ -1670,12 +1676,6 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   } catch {
     // Keep local seeded content if shared announcements are unavailable.
   }
-  const activeStaff = _mockUsers.filter(
-    (u) =>
-      u.isActive &&
-      !u.isArchived &&
-      !["MASTER ADMIN", "System Admin"].includes(u.fullname),
-  );
   const branchOrder = [
     "HEAD OFFICE",
     "BAWJIASE",
@@ -1684,30 +1684,21 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
     "KASOA NEW MARKET",
     "KASOA MAIN",
   ];
-  const branchCounts = new Map<string, number>(
-    branchOrder.map((branch) => [branch, 0]),
+  const activeStaff = _mockUsers.filter(
+    (u) =>
+      u.isActive &&
+      !u.isArchived &&
+      !["MASTER ADMIN", "System Admin"].includes(u.fullname),
   );
-  const departmentCounts = new Map<string, number>();
-
-  for (const user of activeStaff) {
-    const branch = user.branch.trim().toUpperCase();
-    branchCounts.set(branch, (branchCounts.get(branch) ?? 0) + 1);
-    if (user.role !== "SuperAdmin") {
-      const department = user.department.trim().toUpperCase() || "OTHER";
-      departmentCounts.set(
-        department,
-        (departmentCounts.get(department) ?? 0) + 1,
-      );
-    }
-  }
-
   const branchDistribution = branchOrder.map((name) => ({
     name,
-    value: branchCounts.get(name) ?? 0,
+    value: staffStats?.byBranch?.[name] ?? 0,
   }));
-  const departmentDistribution = [...departmentCounts.entries()]
-    .sort(([, a], [, b]) => b - a)
-    .map(([name, value]) => ({ name, value }));
+  const departmentDistribution = staffStats
+    ? Object.entries(staffStats.byDepartment ?? {})
+        .sort(([, a], [, b]) => b - a)
+        .map(([name, value]) => ({ name, value }))
+    : [];
   const supportPending =
     _incidents.filter((i) => i.status !== "resolved").length +
     _amendments.filter((a) => a.status === "pending").length;
@@ -1725,7 +1716,7 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   );
 
   return {
-    totalStaff: activeStaff.length,
+    totalStaff: staffStats?.active ?? activeStaff.length,
     activeBranches: branchDistribution.filter((item) => item.value > 0).length,
     openOperations: supportPending,
     resolutionRate: ticketFlow
