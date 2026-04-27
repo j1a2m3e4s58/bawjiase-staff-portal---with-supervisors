@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import {
   apiArchiveTrainingVideo,
   apiDeleteTrainingVideo,
+  apiGetCachedTrainingVideos,
   apiGetMyVideoProgress,
   apiGetTrainingVideo,
   apiSendVideoTrainingReminder,
@@ -174,8 +175,12 @@ export default function TrainingVideoPage() {
   const navigate = useNavigate();
   const videoId = Number(id);
 
-  const [video, setVideo] = useState<TrainingVideo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [video, setVideo] = useState<TrainingVideo | null>(() =>
+    apiGetCachedTrainingVideos().find((item) => item.id === videoId) ?? null,
+  );
+  const [loading, setLoading] = useState(() =>
+    apiGetCachedTrainingVideos().find((item) => item.id === videoId) == null,
+  );
   const [progress, setProgress] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);

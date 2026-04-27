@@ -24,6 +24,7 @@ import {
   apiCreateAnnouncement,
   apiDismissAnnouncement,
   apiGetAnnouncements,
+  apiGetCachedAnnouncements,
   resolveAnnouncementAssetUrl,
   apiTrashAnnouncement,
   apiUpdateAnnouncement,
@@ -709,9 +710,11 @@ function AnnouncementModal({
 export default function AnnouncementsPage() {
   const { user } = useAuth();
   const [announcements, setAnnouncements] = useState<AnnouncementWithPoll[]>(
-    [],
+    () => apiGetCachedAnnouncements(user?.id),
   );
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() =>
+    apiGetCachedAnnouncements(user?.id).length === 0,
+  );
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const [filterCategory, setFilterCategory] = useState("all");
@@ -729,13 +732,14 @@ export default function AnnouncementsPage() {
     let cancelled = false;
 
     async function loadAnnouncements() {
+      setAnnouncements(apiGetCachedAnnouncements(currentUserId));
       try {
         const data = await apiGetAnnouncements(currentUserId);
         if (cancelled) return;
         setAnnouncements(data);
       } catch {
         if (cancelled) return;
-        setAnnouncements([]);
+        setAnnouncements(apiGetCachedAnnouncements(currentUserId));
         toast.error("Announcements could not be loaded. Please try again.");
       } finally {
         if (!cancelled) setLoading(false);

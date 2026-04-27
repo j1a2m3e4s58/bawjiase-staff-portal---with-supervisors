@@ -124,8 +124,8 @@ export default function TrainingHubPage() {
 
   useEffect(() => {
     let cancelled = false;
-    setLoadingVideos(true);
-    setLoadingDocuments(true);
+    setLoadingVideos(apiGetCachedTrainingVideos().length === 0);
+    setLoadingDocuments(apiGetCachedTrainingDocuments().length === 0);
 
     setTab(location.pathname.includes("/handbook") ? "documents" : "videos");
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   apiArchiveTrainingDocument,
   apiDeleteTrainingDocument,
+  apiGetCachedTrainingDocuments,
   apiGetMyDocumentOpenState,
   apiGetTrainingDocument,
   apiMarkDocumentOpened,
@@ -41,9 +42,13 @@ export default function TrainingDocumentPage() {
   const navigate = useNavigate();
   const docId = Number(id);
 
-  const [doc, setDoc] = useState<TrainingDocument | null>(null);
+  const [doc, setDoc] = useState<TrainingDocument | null>(() =>
+    apiGetCachedTrainingDocuments().find((item) => item.id === docId) ?? null,
+  );
   const [opened, setOpened] = useState(false);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() =>
+    apiGetCachedTrainingDocuments().find((item) => item.id === docId) == null,
+  );
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
