@@ -15,6 +15,7 @@ import {
   resolveTrainingDocumentDownloadUrl,
   resolveTrainingDocumentViewUrl,
 } from "@/lib/backend-client";
+import { isPageReload } from "@/lib/app-base";
 import type { TrainingDocument } from "@/types";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -41,13 +42,18 @@ export default function TrainingDocumentPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const navigate = useNavigate();
   const docId = Number(id);
+  const isReload = isPageReload();
 
   const [doc, setDoc] = useState<TrainingDocument | null>(() =>
-    apiGetCachedTrainingDocuments().find((item) => item.id === docId) ?? null,
+    isReload
+      ? null
+      : apiGetCachedTrainingDocuments().find((item) => item.id === docId) ?? null,
   );
   const [opened, setOpened] = useState(false);
-  const [loading, setLoading] = useState(() =>
-    apiGetCachedTrainingDocuments().find((item) => item.id === docId) == null,
+  const [loading, setLoading] = useState(
+    () =>
+      isReload ||
+      apiGetCachedTrainingDocuments().find((item) => item.id === docId) == null,
   );
   const [archiveOpen, setArchiveOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);

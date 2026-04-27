@@ -18,6 +18,7 @@ import {
   resolveTrainingVideoEmbedUrl,
   resolveTrainingVideoOpenUrl,
 } from "@/lib/backend-client";
+import { isPageReload } from "@/lib/app-base";
 import type { TrainingVideo } from "@/types";
 import { useNavigate, useParams } from "@tanstack/react-router";
 import {
@@ -174,12 +175,17 @@ export default function TrainingVideoPage() {
   const { id } = useParams({ strict: false }) as { id: string };
   const navigate = useNavigate();
   const videoId = Number(id);
+  const isReload = isPageReload();
 
   const [video, setVideo] = useState<TrainingVideo | null>(() =>
-    apiGetCachedTrainingVideos().find((item) => item.id === videoId) ?? null,
+    isReload
+      ? null
+      : apiGetCachedTrainingVideos().find((item) => item.id === videoId) ?? null,
   );
-  const [loading, setLoading] = useState(() =>
-    apiGetCachedTrainingVideos().find((item) => item.id === videoId) == null,
+  const [loading, setLoading] = useState(
+    () =>
+      isReload ||
+      apiGetCachedTrainingVideos().find((item) => item.id === videoId) == null,
   );
   const [progress, setProgress] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
