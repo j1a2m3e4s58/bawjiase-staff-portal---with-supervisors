@@ -45,6 +45,7 @@ const FORMS_STORE_KEY = "bcb_forms_cache";
 const TRAINING_VIDEOS_STORE_KEY = "bcb_training_videos_cache";
 const TRAINING_DOCUMENTS_STORE_KEY = "bcb_training_documents_cache";
 const NOTIFICATIONS_STORE_KEY = "bcb_notifications_cache";
+const AUDIT_LOGS_STORE_KEY = "bcb_audit_logs_cache";
 const USERS_UPDATED_EVENT = "bcb:users-updated";
 export const ANNOUNCEMENTS_UPDATED_EVENT = "bcb:announcements-updated";
 export const FORMS_UPDATED_EVENT = "bcb:forms-updated";
@@ -1993,6 +1994,12 @@ export async function apiGetTrashedAnnouncements(): Promise<Announcement[]> {
     .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
 }
 
+export function apiGetCachedTrashedAnnouncements(): Announcement[] {
+  return _announcements
+    .filter((a) => a.isTrashed)
+    .sort((a, b) => Number(b.createdAt) - Number(a.createdAt));
+}
+
 export async function apiCreateAnnouncement(
   req: CreateAnnouncementRequest,
   author: Pick<User, "id" | "fullname" | "department">,
@@ -2168,18 +2175,14 @@ export async function apiTrashAnnouncement(
     try {
       await postMailApi(`/content/announcements/${id}/trash`, {});
       announcement.isTrashed = true;
-      if (typeof window !== "undefined") {
-        window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
-      }
+      replaceSharedAnnouncements([..._announcements]);
       return ok(null);
     } catch (error) {
       return err(error instanceof Error ? error.message : "Announcement not found");
     }
   }
   announcement.isTrashed = true;
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(ANNOUNCEMENTS_UPDATED_EVENT));
-  }
+  replaceSharedAnnouncements([..._announcements]);
   return ok(null);
 }
 
@@ -2194,6 +2197,7 @@ export async function apiRestoreAnnouncement(
       await postMailApi(`/content/announcements/${id}/restore`, {});
       announcement.isTrashed = false;
       announcement.isDismissed = false;
+      replaceSharedAnnouncements([..._announcements]);
       return ok(null);
     } catch (error) {
       return err(error instanceof Error ? error.message : "Announcement not found");
@@ -2201,6 +2205,7 @@ export async function apiRestoreAnnouncement(
   }
   announcement.isTrashed = false;
   announcement.isDismissed = false;
+  replaceSharedAnnouncements([..._announcements]);
   return ok(null);
 }
 
@@ -2218,6 +2223,7 @@ export async function apiDeleteAnnouncement(
     }
   }
   _announcements.splice(index, 1);
+  replaceSharedAnnouncements([..._announcements]);
   apiRecordActivity("Announcement deleted", "An announcement was deleted.");
   return ok(null);
 }
@@ -2234,6 +2240,7 @@ export async function apiEmptyAnnouncementTrash(): Promise<ApiResult<null>> {
       _announcements.splice(index, 1);
     }
   }
+  replaceSharedAnnouncements([..._announcements]);
   return ok(null);
 }
 
@@ -3952,7 +3959,7 @@ export function apiExportAmendmentsCsv(amendments: ProfileAmendment[]): string {
 }
 
 // ── Audit Logs ────────────────────────────────────────────────────────────────
-const _auditLogs: AuditLog[] = [
+const SEEDED_AUDIT_LOGS: AuditLog[] = [
   {
     id: 1,
     actorId: "mock-user-1",
@@ -3982,6 +3989,12 @@ const _auditLogs: AuditLog[] = [
   },
 ];
 
+const _auditLogs: AuditLog[] = loadContentCache(
+  AUDIT_LOGS_STORE_KEY,
+  SEEDED_AUDIT_LOGS,
+  deserializeAuditLog,
+);
+
 export async function apiLogAction(
   actorName: string,
   action: string,
@@ -3997,6 +4010,7 @@ export async function apiLogAction(
     const rawLog = payload.log as Record<string, unknown> | undefined;
     if (rawLog) {
       _auditLogs.unshift(deserializeAuditLog(rawLog));
+      persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
     }
     return;
   } catch {
@@ -4011,6 +4025,7 @@ export async function apiLogAction(
     ipAddress,
     timestamp: BigInt(Date.now()),
   });
+  persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
 }
 
 export async function apiGetAuditLogs(): Promise<AuditLog[]> {
@@ -4020,12 +4035,17 @@ export async function apiGetAuditLogs(): Promise<AuditLog[]> {
       ? (payload.logs as Record<string, unknown>[]).map(deserializeAuditLog)
       : [];
     _auditLogs.splice(0, _auditLogs.length, ...logs);
+    persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
   } catch {
     await delay(400);
   }
   return [..._auditLogs].sort(
     (a, b) => Number(b.timestamp) - Number(a.timestamp),
   );
+}
+
+export function apiGetCachedAuditLogs(): AuditLog[] {
+  return [..._auditLogs].sort((a, b) => Number(b.timestamp) - Number(a.timestamp));
 }
 
 export async function apiDeleteAuditLog(id: number): Promise<ApiResult<null>> {
@@ -4038,10 +4058,12 @@ export async function apiDeleteAuditLog(id: number): Promise<ApiResult<null>> {
       return err(error instanceof Error ? error.message : "Log entry not found");
     }
     _auditLogs.splice(idx, 1);
+    persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
     return ok(null);
   }
   const idx = _auditLogs.findIndex((l) => l.id === id);
   if (idx >= 0) _auditLogs.splice(idx, 1);
+  persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
   return ok(null);
 }
 
@@ -4060,6 +4082,7 @@ export async function apiDeleteAuditLogs(
         removed = true;
       }
     }
+    if (removed) persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
     return removed || ids.length === 0
       ? ok(null)
       : err(error instanceof Error ? error.message : "Log entry not found");
@@ -4068,6 +4091,7 @@ export async function apiDeleteAuditLogs(
     const idx = _auditLogs.findIndex((l) => l.id === id);
     if (idx >= 0) _auditLogs.splice(idx, 1);
   }
+  persistContentCache(AUDIT_LOGS_STORE_KEY, _auditLogs);
   return ok(null);
 }
 

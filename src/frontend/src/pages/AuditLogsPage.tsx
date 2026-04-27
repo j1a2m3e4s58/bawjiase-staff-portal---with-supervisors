@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import {
+  apiGetCachedAuditLogs,
   apiDeleteAuditLog,
   apiDeleteAuditLogs,
   apiGetAuditLogs,
@@ -261,8 +262,9 @@ export default function AuditLogsPage() {
   const { user } = useAuth();
   const canViewAudit = user?.department?.toUpperCase() === "IT";
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [logs, setLogs] = useState<AuditLog[]>([]);
+  const cachedLogs = apiGetCachedAuditLogs();
+  const [loading, setLoading] = useState(cachedLogs.length === 0);
+  const [logs, setLogs] = useState<AuditLog[]>(() => cachedLogs);
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [selectionNotice, setSelectionNotice] = useState(false);
@@ -279,12 +281,14 @@ export default function AuditLogsPage() {
   }, [canViewAudit, navigate]);
 
   const loadLogs = useCallback(async () => {
-    setLoading(true);
+    if (logs.length === 0) {
+      setLoading(true);
+    }
     const data = await apiGetAuditLogs();
     setLogs(data.slice(0, 150));
     setLoading(false);
     setSelected(new Set());
-  }, []);
+  }, [logs.length]);
 
   useEffect(() => {
     loadLogs();

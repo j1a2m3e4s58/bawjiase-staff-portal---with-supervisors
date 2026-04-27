@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  apiGetCachedTrashedAnnouncements,
   apiDeleteAnnouncement,
   apiEmptyAnnouncementTrash,
   apiGetTrashedAnnouncements,
@@ -154,8 +155,9 @@ function TrashedCard({
 export default function AnnouncementsTrashPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [trashed, setTrashed] = useState<Announcement[]>([]);
-  const [loading, setLoading] = useState(true);
+  const cachedTrashed = apiGetCachedTrashedAnnouncements();
+  const [trashed, setTrashed] = useState<Announcement[]>(() => cachedTrashed);
+  const [loading, setLoading] = useState(cachedTrashed.length === 0);
   const [emptyTrashOpen, setEmptyTrashOpen] = useState(false);
   const [branchFilter, setBranchFilter] = useState("ALL");
   const [departmentFilter, setDepartmentFilter] = useState("ALL");
@@ -165,6 +167,9 @@ export default function AnnouncementsTrashPage() {
     let cancelled = false;
 
     async function loadTrash() {
+      if (trashed.length === 0) {
+        setLoading(true);
+      }
       try {
         const data = await apiGetTrashedAnnouncements();
         if (cancelled) return;
@@ -182,7 +187,7 @@ export default function AnnouncementsTrashPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [trashed.length]);
 
   async function handleRestore(id: number) {
     const result = await apiRestoreAnnouncement(id);
