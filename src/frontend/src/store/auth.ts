@@ -273,8 +273,17 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     const intervalId = window.setInterval(() => {
       if (cancelled || authSessionRef.current !== sessionId) return;
-      const lastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
-      if (!lastActivity || Date.now() - lastActivity > INACTIVITY_LIMIT_MS) {
+      const storedLastActivity = Number(localStorage.getItem(AUTH_ACTIVITY_KEY) ?? "0");
+      const effectiveLastActivity =
+        Number.isFinite(storedLastActivity) && storedLastActivity > 0
+          ? storedLastActivity
+          : lastActivityAt;
+
+      if (!storedLastActivity) {
+        markActivity(lastActivityAt);
+      }
+
+      if (Date.now() - effectiveLastActivity > INACTIVITY_LIMIT_MS) {
         void setPresenceOffline();
         setUser(null);
         clearStoredUser();

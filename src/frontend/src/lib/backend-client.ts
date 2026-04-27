@@ -286,6 +286,9 @@ function withCacheBuster(url: string): string {
 
 function handleSessionExpired(sessionToken?: string | null) {
   const activeToken = getStoredSessionToken();
+  if (activeToken && !sessionToken) {
+    return;
+  }
   if (sessionToken && activeToken && sessionToken !== activeToken) {
     return;
   }
