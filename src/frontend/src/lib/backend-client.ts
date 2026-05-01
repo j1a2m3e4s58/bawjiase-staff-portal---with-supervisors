@@ -173,8 +173,15 @@ function persistStaffStatsCache(stats: StaffStats) {
   }
 }
 
+function getEffectiveActiveStaffSync(): User[] {
+  return _mockUsers.filter(
+    (user) => isPortalStaff(user) && user.isActive && !user.isArchived,
+  );
+}
+
 function deriveLocalStaffStats(): StaffStats {
-  const active = _mockUsers.filter((u) => !u.isArchived && u.isActive);
+  const portalUsers = _mockUsers.filter((user) => isPortalStaff(user));
+  const active = getEffectiveActiveStaffSync();
   const byDept: Record<string, number> = {};
   const byBranch: Record<string, number> = {};
   const byRole: Record<string, number> = {};
@@ -184,13 +191,46 @@ function deriveLocalStaffStats(): StaffStats {
     byRole[u.role] = (byRole[u.role] ?? 0) + 1;
   }
   return {
-    total: _mockUsers.length,
+    total: portalUsers.length,
     active: active.length,
-    archived: _mockUsers.filter((u) => u.isArchived).length,
+    archived: portalUsers.filter((user) => user.isArchived).length,
     byDepartment: byDept,
     byBranch: byBranch,
     byRole: byRole,
   };
+}
+
+function getEffectiveStaffStatsSync(): StaffStats {
+  return loadStaffStatsCache() ?? deriveLocalStaffStats();
+}
+
+function buildBranchDistribution(
+  stats: StaffStats,
+): Array<{ name: string; value: number }> {
+  const branchOrder = [
+    "HEAD OFFICE",
+    "BAWJIASE",
+    "ADEISO",
+    "OFAAKOR",
+    "KASOA NEW MARKET",
+    "KASOA MAIN",
+  ];
+
+  return branchOrder.map((name) => ({
+    name,
+    value: Number(stats.byBranch?.[name] ?? 0),
+  }));
+}
+
+function buildDepartmentDistribution(
+  stats: StaffStats,
+): Array<{ name: string; value: number }> {
+  return Object.entries(stats.byDepartment ?? {})
+    .map(([name, value]) => ({
+      name,
+      value: Number(value ?? 0),
+    }))
+    .sort((a, b) => b.value - a.value);
 }
 
 function serializeContentCache<T>(items: T[]): string {
@@ -1757,11 +1797,11 @@ export async function apiGetStaffStats(): Promise<StaffStats> {
 export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   await delay(350);
   await refreshUsersCache();
-  let staffStats: StaffStats | null = null;
+  let staffStats: StaffStats;
   try {
     staffStats = await apiGetStaffStats();
   } catch {
-    staffStats = null;
+    staffStats = getEffectiveStaffStatsSync();
   }
   try {
     const payload = await getMailApiJson("/content/announcements");
@@ -1772,29 +1812,8 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   } catch {
     // Keep local seeded content if shared announcements are unavailable.
   }
-  const branchOrder = [
-    "HEAD OFFICE",
-    "BAWJIASE",
-    "ADEISO",
-    "OFAAKOR",
-    "KASOA NEW MARKET",
-    "KASOA MAIN",
-  ];
-  const activeStaff = _mockUsers.filter(
-    (u) =>
-      u.isActive &&
-      !u.isArchived &&
-      !["MASTER ADMIN", "System Admin"].includes(u.fullname),
-  );
-  const branchDistribution = branchOrder.map((name) => ({
-    name,
-    value: staffStats?.byBranch?.[name] ?? 0,
-  }));
-  const departmentDistribution = staffStats
-    ? Object.entries(staffStats.byDepartment ?? {})
-        .sort(([, a], [, b]) => b - a)
-        .map(([name, value]) => ({ name, value }))
-    : [];
+  const branchDistribution = buildBranchDistribution(staffStats);
+  const departmentDistribution = buildDepartmentDistribution(staffStats);
   const supportPending =
     _incidents.filter((i) => i.status !== "resolved").length +
     _amendments.filter((a) => a.status === "pending").length;
@@ -1812,7 +1831,7 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
   );
 
   return {
-    totalStaff: staffStats?.active ?? activeStaff.length,
+    totalStaff: staffStats.active,
     activeBranches: branchDistribution.filter((item) => item.value > 0).length,
     openOperations: supportPending,
     resolutionRate: ticketFlow
@@ -1826,68 +1845,16 @@ export async function apiGetDashboardOverview(): Promise<DashboardOverview> {
     topDepartmentCount: topDepartment.value,
     branchDistribution,
     departmentDistribution:
-      departmentDistribution.length > 0
-        ? departmentDistribution
-        : [{ name: "No Data", value: 0 }],
+      departmentDistribution.length > 0 ? departmentDistribution : [{ name: "No Data", value: 0 }],
     supportPending,
     supportResolved,
   };
 }
 
 export function apiGetCachedDashboardOverview(): DashboardOverview {
-  const cachedStats = loadStaffStatsCache();
-  const activeStaff = _mockUsers.filter(
-    (u) =>
-      u.isActive &&
-      !u.isArchived &&
-      !["MASTER ADMIN", "System Admin"].includes(u.fullname),
-  );
-  const branchOrder = [
-    "HEAD OFFICE",
-    "BAWJIASE",
-    "ADEISO",
-    "OFAAKOR",
-    "KASOA NEW MARKET",
-    "KASOA MAIN",
-  ];
-  const branchCounts = new Map<string, number>(
-    branchOrder.map((branch) => [branch, 0]),
-  );
-  const departmentCounts = new Map<string, number>();
-
-  if (cachedStats) {
-    for (const [branch, value] of Object.entries(cachedStats.byBranch ?? {})) {
-      branchCounts.set(branch.trim().toUpperCase(), Number(value ?? 0));
-    }
-    for (const [department, value] of Object.entries(
-      cachedStats.byDepartment ?? {},
-    )) {
-      departmentCounts.set(
-        department.trim().toUpperCase() || "OTHER",
-        Number(value ?? 0),
-      );
-    }
-  } else {
-    for (const user of activeStaff) {
-      const branch = user.branch.trim().toUpperCase();
-      branchCounts.set(branch, (branchCounts.get(branch) ?? 0) + 1);
-      if (user.role !== "SuperAdmin") {
-        const department = user.department.trim().toUpperCase() || "OTHER";
-        departmentCounts.set(
-          department,
-          (departmentCounts.get(department) ?? 0) + 1,
-        );
-      }
-    }
-  }
-
-  const branchDistribution = branchOrder.map((name) => ({
-    name,
-    value: branchCounts.get(name) ?? 0,
-  }));
-  const departmentDistribution = [...departmentCounts.entries()]
-    .sort(([, a], [, b]) => b - a)
-    .map(([name, value]) => ({ name, value }));
+  const cachedStats = getEffectiveStaffStatsSync();
+  const branchDistribution = buildBranchDistribution(cachedStats);
+  const departmentDistribution = buildDepartmentDistribution(cachedStats);
   const supportPending =
     _incidents.filter((i) => i.status !== "resolved").length +
     _amendments.filter((a) => a.status === "pending").length;
@@ -1905,7 +1872,7 @@ export function apiGetCachedDashboardOverview(): DashboardOverview {
   );
 
   return {
-    totalStaff: cachedStats?.active ?? activeStaff.length,
+    totalStaff: cachedStats.active,
     activeBranches: branchDistribution.filter((item) => item.value > 0).length,
     openOperations: supportPending,
     resolutionRate: ticketFlow
@@ -1919,9 +1886,7 @@ export function apiGetCachedDashboardOverview(): DashboardOverview {
     topDepartmentCount: topDepartment.value,
     branchDistribution,
     departmentDistribution:
-      departmentDistribution.length > 0
-        ? departmentDistribution
-        : [{ name: "No Data", value: 0 }],
+      departmentDistribution.length > 0 ? departmentDistribution : [{ name: "No Data", value: 0 }],
     supportPending,
     supportResolved,
   };
@@ -2799,9 +2764,7 @@ function getStoredAuthUser(): User | null {
 }
 
 function getPortalActiveUsers() {
-  return _mockUsers.filter(
-    (u) => isPortalStaff(u) && u.isActive && !u.isArchived,
-  );
+  return getEffectiveActiveStaffSync();
 }
 
 function isTrainingManager(user: User | null | undefined) {
@@ -3587,7 +3550,7 @@ export async function apiGetAdminTrainingOverview(): Promise<AdminTrainingOvervi
     // Fall back to local state below.
   }
   await Promise.all([apiGetTrainingVideos(), apiGetTrainingDocuments()]);
-  const totalStaff = getPortalActiveUsers().length;
+  const totalStaff = getEffectiveStaffStatsSync().active;
   return {
     totalVideos: _trainingVideos.filter((v) => !v.isArchived).length,
     totalDocuments: _trainingDocuments.filter((d) => !d.isArchived).length,
