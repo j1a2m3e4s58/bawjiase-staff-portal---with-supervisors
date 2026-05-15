@@ -24,8 +24,9 @@ services:
       - key: ALLOWED_ORIGINS
         sync: false
 
-  - type: static
+  - type: web
     name: bawjiase-staff-portal
+    runtime: static
     buildCommand: pnpm install --frozen-lockfile --ignore-scripts && cd src/frontend && pnpm build
     staticPublishPath: src/frontend/dist
     envVars:
