@@ -98,12 +98,6 @@ const NAV_ITEMS: NavItem[] = [
     icon: <HeadphonesIcon className="h-5 w-5" />,
   },
   {
-    to: "/audit",
-    label: "Audit Logs",
-    icon: <ClipboardList className="h-5 w-5" />,
-    departments: ["IT"],
-  },
-  {
     to: "/backup",
     label: "Backup Center",
     icon: <Download className="h-5 w-5" />,
@@ -591,12 +585,6 @@ function DesktopTopNav() {
       to: "/handbook",
       label: "Handbook",
       icon: <BookOpen className="h-4 w-4" />,
-    },
-    {
-      to: "/audit",
-      label: "Audit Logs",
-      icon: <ClipboardList className="h-4 w-4" />,
-      departments: ["IT"],
     },
   ];
   const visibleItems = topNavItems.filter((item) => canSeeNavItem(user, item));

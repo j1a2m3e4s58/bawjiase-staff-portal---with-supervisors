@@ -217,6 +217,152 @@ function normalizeRemoteState(raw: unknown): AgmPortalState | null {
   if (!raw || typeof raw !== "object") return null;
   const source = raw as Record<string, unknown>;
   const fallback = createDefaultAgmState();
+  const normalizedShareholders = Array.isArray(source.shareholders)
+    ? (source.shareholders as unknown[])
+        .map((item, index) => {
+          if (!item || typeof item !== "object") return null;
+          const entry = item as Record<string, unknown>;
+          const fullName =
+            typeof entry.fullName === "string" ? entry.fullName.trim() : "";
+          const shareholderNumber =
+            typeof entry.shareholderNumber === "string"
+              ? entry.shareholderNumber.trim()
+              : "";
+          if (!fullName || !shareholderNumber) return null;
+          return {
+            id:
+              typeof entry.id === "string" && entry.id.trim()
+                ? entry.id.trim()
+                : `agm-shareholder-${index + 1}`,
+            fullName,
+            shareholderNumber,
+            shareholding: Number(entry.shareholding) || 0,
+            phone: typeof entry.phone === "string" ? entry.phone.trim() : "",
+          } satisfies AgmShareholderSeed;
+        })
+        .filter((item): item is AgmShareholderSeed => item !== null)
+    : [];
+
+  const normalizedRegistrations = Array.isArray(source.registrations)
+    ? (source.registrations as unknown[])
+        .map((item, index) => {
+          if (!item || typeof item !== "object") return null;
+          const entry = item as Record<string, unknown>;
+          const shareholderId =
+            typeof entry.shareholderId === "string" ? entry.shareholderId.trim() : "";
+          const shareholderName =
+            typeof entry.shareholderName === "string"
+              ? entry.shareholderName.trim()
+              : "";
+          const shareholderNumber =
+            typeof entry.shareholderNumber === "string"
+              ? entry.shareholderNumber.trim()
+              : "";
+          const attendeeName =
+            typeof entry.attendeeName === "string" ? entry.attendeeName.trim() : "";
+          const attendeePhone =
+            typeof entry.attendeePhone === "string"
+              ? entry.attendeePhone.trim()
+              : "";
+          const verificationCode =
+            typeof entry.verificationCode === "string"
+              ? entry.verificationCode.trim()
+              : "";
+          if (!shareholderId || !shareholderName || !shareholderNumber || !attendeeName) {
+            return null;
+          }
+          return {
+            id:
+              typeof entry.id === "string" && entry.id.trim()
+                ? entry.id.trim()
+                : `agm-registration-${index + 1}`,
+            shareholderId,
+            shareholderName,
+            shareholderNumber,
+            shareholding: Number(entry.shareholding) || 0,
+            attendeeName,
+            attendeePhone,
+            mode: entry.mode === "Proxy" ? "Proxy" : "In Person",
+            proxyReason:
+              typeof entry.proxyReason === "string" ? entry.proxyReason : "",
+            verificationCode,
+            registeredAt:
+              typeof entry.registeredAt === "string" && entry.registeredAt
+                ? entry.registeredAt
+                : new Date(0).toISOString(),
+            checkedIn: Boolean(entry.checkedIn),
+          } satisfies AgmRegistrationRecord;
+        })
+        .filter((item): item is AgmRegistrationRecord => item !== null)
+    : [];
+
+  const normalizedArchives = Array.isArray(source.archives)
+    ? (source.archives as unknown[])
+        .map((item, index) => {
+          if (!item || typeof item !== "object") return null;
+          const entry = item as Record<string, unknown>;
+          const settingsSource =
+            entry.settings && typeof entry.settings === "object"
+              ? (entry.settings as Record<string, unknown>)
+              : {};
+          return {
+            id:
+              typeof entry.id === "string" && entry.id.trim()
+                ? entry.id.trim()
+                : `agm-archive-${index + 1}`,
+            archivedAt:
+              typeof entry.archivedAt === "string" && entry.archivedAt
+                ? entry.archivedAt
+                : new Date(0).toISOString(),
+            note: typeof entry.note === "string" ? entry.note : "",
+            settings: {
+              ...DEFAULT_AGM_SETTINGS,
+              agmName:
+                typeof settingsSource.agmName === "string" && settingsSource.agmName.trim()
+                  ? settingsSource.agmName.trim()
+                  : DEFAULT_AGM_SETTINGS.agmName,
+              agmDate:
+                typeof settingsSource.agmDate === "string" && settingsSource.agmDate
+                  ? settingsSource.agmDate
+                  : DEFAULT_AGM_SETTINGS.agmDate,
+              venue:
+                typeof settingsSource.venue === "string" && settingsSource.venue.trim()
+                  ? settingsSource.venue.trim()
+                  : DEFAULT_AGM_SETTINGS.venue,
+              quorumThreshold:
+                Number(settingsSource.quorumThreshold) || DEFAULT_AGM_SETTINGS.quorumThreshold,
+              yearLabel:
+                typeof settingsSource.yearLabel === "string" && settingsSource.yearLabel.trim()
+                  ? settingsSource.yearLabel.trim()
+                  : DEFAULT_AGM_SETTINGS.yearLabel,
+              yearLocked: Boolean(settingsSource.yearLocked),
+              yearArchived: Boolean(settingsSource.yearArchived),
+              boardAutoRefresh:
+                typeof settingsSource.boardAutoRefresh === "boolean"
+                  ? settingsSource.boardAutoRefresh
+                  : DEFAULT_AGM_SETTINGS.boardAutoRefresh,
+            },
+            shareholders: Array.isArray(entry.shareholders)
+              ? ((normalizeRemoteState({
+                  shareholders: entry.shareholders,
+                  registrations: [],
+                  archives: [],
+                  settings: DEFAULT_AGM_SETTINGS,
+                })?.shareholders ?? []) as AgmShareholderSeed[])
+              : [],
+            registrations: Array.isArray(entry.registrations)
+              ? ((normalizeRemoteState({
+                  shareholders: [],
+                  registrations: entry.registrations,
+                  archives: [],
+                  settings: DEFAULT_AGM_SETTINGS,
+                })?.registrations ?? []) as AgmRegistrationRecord[])
+              : [],
+          } satisfies AgmYearArchive;
+        })
+        .filter((item): item is AgmYearArchive => item !== null)
+    : [];
+
   return {
     settings: {
       ...DEFAULT_AGM_SETTINGS,
@@ -225,15 +371,9 @@ function normalizeRemoteState(raw: unknown): AgmPortalState | null {
         : {}),
     },
     shareholders:
-      Array.isArray(source.shareholders) && source.shareholders.length > 0
-        ? (source.shareholders as AgmShareholderSeed[])
-        : fallback.shareholders,
-    registrations: Array.isArray(source.registrations)
-      ? (source.registrations as AgmRegistrationRecord[])
-      : [],
-    archives: Array.isArray(source.archives)
-      ? (source.archives as AgmYearArchive[])
-      : [],
+      normalizedShareholders.length > 0 ? normalizedShareholders : fallback.shareholders,
+    registrations: normalizedRegistrations,
+    archives: normalizedArchives,
   };
 }
 
