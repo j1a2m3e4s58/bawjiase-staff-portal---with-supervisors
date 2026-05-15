@@ -6,9 +6,13 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: python app.py
     healthCheckPath: /api/health
+    disk:
+      name: portal-data
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: PORTAL_DATA_DIR
-        sync: false
+        value: /var/data/portal_data
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT
