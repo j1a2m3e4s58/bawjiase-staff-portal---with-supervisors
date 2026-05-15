@@ -35,6 +35,7 @@ TRAINING_VIDEO_PROGRESS_STORE_PATH = os.path.join(DATA_DIR, "training_video_prog
 TRAINING_DOCUMENT_OPENS_STORE_PATH = os.path.join(DATA_DIR, "training_document_opens_store.json")
 TRAINING_REMINDERS_STORE_PATH = os.path.join(DATA_DIR, "training_reminders_store.json")
 AUDIT_LOGS_STORE_PATH = os.path.join(DATA_DIR, "audit_logs_store.json")
+AGM_STATE_STORE_PATH = os.path.join(DATA_DIR, "agm_state_store.json")
 UPLOADS_DIR = os.path.join(DATA_DIR, "uploads")
 PRESENCE_TTL_SECONDS = 20
 ONLINE_WINDOW_SECONDS = 20
@@ -203,6 +204,7 @@ STORE_DEFAULTS: dict[str, object] = {
     TRAINING_DOCUMENT_OPENS_STORE_PATH: [],
     TRAINING_REMINDERS_STORE_PATH: [],
     AUDIT_LOGS_STORE_PATH: [],
+    AGM_STATE_STORE_PATH: {},
 }
 
 
@@ -666,6 +668,191 @@ def read_json_file(path: str, default):
             return json.load(handle)
     except Exception:
         return default
+
+
+def default_agm_shareholder_seeds() -> list[dict]:
+    return [
+        {
+            "id": "agm-001",
+            "fullName": "Kwabena Asare",
+            "shareholderNumber": "SH-1042",
+            "shareholding": 15400,
+            "phone": "0599779664",
+        },
+        {
+            "id": "agm-002",
+            "fullName": "Jane Afua Bruku",
+            "shareholderNumber": "SH-1059",
+            "shareholding": 9300,
+            "phone": "0248154869",
+        },
+        {
+            "id": "agm-003",
+            "fullName": "Nathaniel Oglie Narh",
+            "shareholderNumber": "SH-1108",
+            "shareholding": 22850,
+            "phone": "0246377830",
+        },
+        {
+            "id": "agm-004",
+            "fullName": "Ato Asiedu Mensah",
+            "shareholderNumber": "SH-1116",
+            "shareholding": 12000,
+            "phone": "0247554428",
+        },
+        {
+            "id": "agm-005",
+            "fullName": "Desmond Tettey Quarshie",
+            "shareholderNumber": "SH-1133",
+            "shareholding": 17640,
+            "phone": "0243670230",
+        },
+    ]
+
+
+def default_agm_settings() -> dict:
+    return {
+        "agmName": "Bawjiase Community Bank AGM",
+        "agmDate": "2026-06-15",
+        "venue": "Head Office Auditorium",
+        "quorumThreshold": 50,
+        "yearLabel": "2026",
+        "yearLocked": False,
+        "yearArchived": False,
+        "boardAutoRefresh": True,
+    }
+
+
+def default_agm_state() -> dict:
+    return {
+        "settings": default_agm_settings(),
+        "shareholders": default_agm_shareholder_seeds(),
+        "registrations": [],
+        "archives": [],
+    }
+
+
+def normalize_agm_settings(raw: object) -> dict:
+    source = raw if isinstance(raw, dict) else {}
+    defaults = default_agm_settings()
+    return {
+        "agmName": str(source.get("agmName", defaults["agmName"]) or defaults["agmName"]).strip()
+        or defaults["agmName"],
+        "agmDate": str(source.get("agmDate", defaults["agmDate"]) or defaults["agmDate"]).strip()
+        or defaults["agmDate"],
+        "venue": str(source.get("venue", defaults["venue"]) or defaults["venue"]).strip()
+        or defaults["venue"],
+        "quorumThreshold": max(
+            1,
+            min(100, int(source.get("quorumThreshold", defaults["quorumThreshold"]) or defaults["quorumThreshold"])),
+        ),
+        "yearLabel": str(source.get("yearLabel", defaults["yearLabel"]) or defaults["yearLabel"]).strip()
+        or defaults["yearLabel"],
+        "yearLocked": bool(source.get("yearLocked", defaults["yearLocked"])),
+        "yearArchived": bool(source.get("yearArchived", defaults["yearArchived"])),
+        "boardAutoRefresh": bool(source.get("boardAutoRefresh", defaults["boardAutoRefresh"])),
+    }
+
+
+def normalize_agm_shareholder_seed(raw: object, index: int) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    shareholder_number = str(raw.get("shareholderNumber", "") or "").strip()
+    full_name = str(raw.get("fullName", "") or "").strip()
+    if not shareholder_number or not full_name:
+        return None
+    return {
+        "id": str(raw.get("id", "") or "").strip() or f"agm-import-{index + 1}",
+        "fullName": full_name,
+        "shareholderNumber": shareholder_number,
+        "shareholding": max(0, int(raw.get("shareholding", 0) or 0)),
+        "phone": str(raw.get("phone", "") or "").strip(),
+    }
+
+
+def normalize_agm_registration_record(raw: object) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    shareholder_id = str(raw.get("shareholderId", "") or "").strip()
+    if not shareholder_id:
+        return None
+    mode = str(raw.get("mode", "In Person") or "In Person").strip()
+    if mode not in {"In Person", "Proxy"}:
+        mode = "In Person"
+    return {
+        "id": str(raw.get("id", "") or "").strip() or f"agm-reg-{secrets.token_hex(4)}",
+        "shareholderId": shareholder_id,
+        "shareholderName": str(raw.get("shareholderName", "") or "").strip(),
+        "shareholderNumber": str(raw.get("shareholderNumber", "") or "").strip(),
+        "shareholding": max(0, int(raw.get("shareholding", 0) or 0)),
+        "attendeeName": str(raw.get("attendeeName", "") or "").strip(),
+        "attendeePhone": str(raw.get("attendeePhone", "") or "").strip(),
+        "mode": mode,
+        "proxyReason": str(raw.get("proxyReason", "") or "").strip(),
+        "verificationCode": str(raw.get("verificationCode", "") or "").strip(),
+        "registeredAt": str(raw.get("registeredAt", "") or "").strip() or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "checkedIn": bool(raw.get("checkedIn", False)),
+    }
+
+
+def normalize_agm_archive(raw: object, index: int) -> dict | None:
+    if not isinstance(raw, dict):
+        return None
+    settings = normalize_agm_settings(raw.get("settings"))
+    shareholders = []
+    for idx, candidate in enumerate(raw.get("shareholders", [])):
+        normalized = normalize_agm_shareholder_seed(candidate, idx)
+        if normalized is not None:
+            shareholders.append(normalized)
+    registrations = []
+    for candidate in raw.get("registrations", []):
+        normalized = normalize_agm_registration_record(candidate)
+        if normalized is not None:
+            registrations.append(normalized)
+    return {
+        "id": str(raw.get("id", "") or "").strip() or f"agm-archive-{index + 1}",
+        "archivedAt": str(raw.get("archivedAt", "") or "").strip()
+        or time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+        "note": str(raw.get("note", "") or "").strip(),
+        "settings": settings,
+        "shareholders": shareholders or default_agm_shareholder_seeds(),
+        "registrations": registrations,
+    }
+
+
+def normalize_agm_state(raw: object) -> dict:
+    source = raw if isinstance(raw, dict) else {}
+    shareholders = []
+    for idx, candidate in enumerate(source.get("shareholders", [])):
+        normalized = normalize_agm_shareholder_seed(candidate, idx)
+        if normalized is not None:
+            shareholders.append(normalized)
+    registrations = []
+    for candidate in source.get("registrations", []):
+        normalized = normalize_agm_registration_record(candidate)
+        if normalized is not None:
+            registrations.append(normalized)
+    archives = []
+    for idx, candidate in enumerate(source.get("archives", [])):
+        normalized = normalize_agm_archive(candidate, idx)
+        if normalized is not None:
+            archives.append(normalized)
+    return {
+        "settings": normalize_agm_settings(source.get("settings")),
+        "shareholders": shareholders or default_agm_shareholder_seeds(),
+        "registrations": registrations,
+        "archives": archives,
+    }
+
+
+def load_agm_state() -> dict:
+    return normalize_agm_state(read_json_file(AGM_STATE_STORE_PATH, {}))
+
+
+def save_agm_state(state: dict) -> dict:
+    normalized = normalize_agm_state(state)
+    atomic_write_json(AGM_STATE_STORE_PATH, normalized)
+    return normalized
 
 
 def normalize_user(raw: dict) -> dict:
@@ -1904,6 +2091,29 @@ def legacy_mail_api(path: str):
     if query:
         destination = f"{destination}?{query}"
     return redirect(destination, code=307)
+
+
+@app.route("/api/agm/state", methods=["GET"])
+def get_agm_state():
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    return jsonify({"state": load_agm_state()})
+
+
+@app.route("/api/agm/state", methods=["POST", "OPTIONS"])
+def store_agm_state():
+    preflight = handle_options()
+    if preflight:
+        return preflight
+    _, _, error = require_authenticated_user()
+    if error:
+        return error
+    data, error = require_json()
+    if error:
+        return error
+    state = save_agm_state(data.get("state", {}))
+    return jsonify({"ok": True, "state": state})
 
 
 @app.route("/api/presence", methods=["GET"])

@@ -76,6 +76,7 @@ function lazyPage<TModule extends { default: React.ComponentType<any> }>(
 
 const LoginPage = lazyPage("login", () => import("@/pages/LoginPage"));
 const RegisterPage = lazyPage("register", () => import("@/pages/RegisterPage"));
+const PlaceholderPage = lazyPage("placeholder", () => import("@/pages/PlaceholderPage"));
 const ForgotPasswordPage = lazyPage(
   "forgot-password",
   () => import("@/pages/ForgotPasswordPage"),
@@ -89,6 +90,22 @@ const VerifyEmailPage = lazyPage(
   () => import("@/pages/VerifyEmailPage"),
 );
 const DashboardPage = lazyPage("dashboard", () => import("@/pages/DashboardPage"));
+const AgmPortalPage = lazyPage("agm-portal", () => import("@/pages/AgmPortalPage"));
+const AgmRegistrationPage = lazyPage(
+  "agm-registration",
+  () => import("@/pages/AgmRegistrationPage"),
+);
+const AgmShareholdersPage = lazyPage(
+  "agm-shareholders",
+  () => import("@/pages/AgmShareholdersPage"),
+);
+const AgmImportPage = lazyPage("agm-import", () => import("@/pages/AgmImportPage"));
+const AgmReportsPage = lazyPage("agm-reports", () => import("@/pages/AgmReportsPage"));
+const AgmBoardViewPage = lazyPage(
+  "agm-board",
+  () => import("@/pages/AgmBoardViewPage"),
+);
+const AgmAdminPage = lazyPage("agm-admin", () => import("@/pages/AgmAdminPage"));
 const AnnouncementsPage = lazyPage(
   "announcements",
   () => import("@/pages/AnnouncementsPage"),
@@ -336,6 +353,12 @@ const dashboardRoute = createRoute({
   component: DashboardPage,
 });
 
+const agmRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm",
+  component: AgmPortalPage,
+});
+
 const announcementsRoute = createRoute({
   getParentRoute: () => protectedRoute,
   path: "/announcements",
@@ -468,6 +491,42 @@ const profileRoute = createRoute({
   component: ProfilePage,
 });
 
+const agmShareholdersRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm/shareholders",
+  component: AgmShareholdersPage,
+});
+
+const agmRegistrationRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm/registration",
+  component: AgmRegistrationPage,
+});
+
+const agmImportRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm/import",
+  component: AgmImportPage,
+});
+
+const agmReportsRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm/reports",
+  component: AgmReportsPage,
+});
+
+const agmBoardRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm/board",
+  component: AgmBoardViewPage,
+});
+
+const agmAdminRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: "/agm/admin",
+  component: AgmAdminPage,
+});
+
 // ── Router ────────────────────────────────────────────────────────────────────
 
 const routeTree = rootRoute.addChildren([
@@ -480,6 +539,7 @@ const routeTree = rootRoute.addChildren([
   ]),
   protectedRoute.addChildren([
     dashboardRoute,
+    agmRoute,
     announcementsRoute,
     newsPortalRoute,
     announcementsTrashRoute,
@@ -502,6 +562,12 @@ const routeTree = rootRoute.addChildren([
     auditRoute,
     backupRoute,
     profileRoute,
+    agmShareholdersRoute,
+    agmRegistrationRoute,
+    agmImportRoute,
+    agmReportsRoute,
+    agmBoardRoute,
+    agmAdminRoute,
   ]),
 ]);
 

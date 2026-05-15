@@ -26,6 +26,7 @@ import {
   FileText,
   GraduationCap,
   HeadphonesIcon,
+  Landmark,
   LayoutDashboard,
   LogOut,
   Megaphone,
@@ -79,6 +80,11 @@ const NAV_ITEMS: NavItem[] = [
     to: "/forms",
     label: "Forms Centre",
     icon: <FileText className="h-5 w-5" />,
+  },
+  {
+    to: "/agm",
+    label: "AGM Portal",
+    icon: <Landmark className="h-5 w-5" />,
   },
   {
     to: "/notifications",
@@ -575,6 +581,11 @@ function DesktopTopNav() {
       to: "/forms",
       label: "Forms Centre",
       icon: <FileText className="h-4 w-4" />,
+    },
+    {
+      to: "/agm",
+      label: "AGM Portal",
+      icon: <Landmark className="h-4 w-4" />,
     },
     {
       to: "/handbook",

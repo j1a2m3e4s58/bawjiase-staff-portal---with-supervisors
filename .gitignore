@@ -1,6 +1,8 @@
 .env
 *.env
 src/mail-api/.env
+__pycache__/
+*.pyc
 node_modules/
 dist/
 *.log
