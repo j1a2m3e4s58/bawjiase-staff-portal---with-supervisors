@@ -1,17 +1,14 @@
 services:
   - type: web
-    name: bawjiase-staff-api
-    runtime: python
-    plan: free
+    name: bawjiase-mail-api
+    env: python
     rootDir: src/mail-api
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app
+    startCommand: python app.py
     healthCheckPath: /api/health
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
-      - key: ALLOWED_ORIGINS
-        value: "*"
+      - key: PORTAL_DATA_DIR
+        sync: false
       - key: MAIL_SERVER
         sync: false
       - key: MAIL_PORT
@@ -24,24 +21,25 @@ services:
         sync: false
       - key: PORTAL_PUBLIC_URL
         sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
 
-  - type: web
-    name: bawjiase-staff-preview
-    runtime: static
-    rootDir: src/frontend
-    buildCommand: corepack enable && corepack pnpm install --frozen-lockfile && corepack pnpm build
-    staticPublishPath: dist
+  - type: static
+    name: bawjiase-staff-portal
+    buildCommand: pnpm install --frozen-lockfile --ignore-scripts && cd src/frontend && pnpm build
+    staticPublishPath: src/frontend/dist
     envVars:
-      - key: VITE_MAIL_API_URL
-        value: https://bawjiase-staff-api.onrender.com/api
       - key: HUSKY
         value: "0"
-      - key: NPM_CONFIG_IGNORE_SCRIPTS
-        value: "true"
+      - key: VITE_MAIL_API_URL
+        sync: false
+      - key: VITE_IT_ACCESS_CODE
+        sync: false
+      - key: VITE_HR_ACCESS_CODE
+        sync: false
+      - key: VITE_ENABLE_SEEDED_FALLBACK
+        value: "false"
     routes:
-      - type: rewrite
-        source: /mail-api/*
-        destination: https://bawjiase-staff-api.onrender.com/*
       - type: rewrite
         source: /*
         destination: /index.html
